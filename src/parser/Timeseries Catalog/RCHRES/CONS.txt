@@ -1,0 +1,7 @@
+CON    NCONS   1    *  concid    concid     Concentration of conservative constituents
+ICON   NCONS   1    -  qty/ivld  qty/ivld   Sum of inflows of conservative constituents
+COADDR NCONS   1    -  qty/ivld  qty/ivld   Dry atmospheric deposition of conservative
+COADWT NCONS   1    -  qty/ivld  qty/ivld   Wet atmospheric deposition of conservative
+COADEP NCONS   1    -  qty/ivld  qty/ivld   Total atmospheric deposition of conservative
+ROCON  NCONS   1    -  qty/ivld  qty/ivld   Total outflow of conservatives
+OCON  NEXITS NCONS  -  qty/ivld  qty/ivld   Outflow of conservatives through individual exits (available only if NEXITS > 1)

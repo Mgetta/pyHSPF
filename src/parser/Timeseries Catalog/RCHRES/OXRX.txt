@@ -1,0 +1,8 @@
+DOX       1    1    *  mg/l      mg/l       DO concentration
+BOD       1    1    *  mg/l      mg/l       BOD concentration
+SATDO     1    1    *  mg/l      mg/l       Saturation DO concentration
+OXIF      2    1    -  lb/ivld   kg/ivld    Sum of inflows of: 1-DO,  2-BOD
+OXCF1     2    1    -  lb/ivld   kg/ivld    Total outflows of DO (OXCF1(1,1))and BOD (OXCF1(2,1)) from the RCHRES
+OXCF2  NEXITS  2    -  lb/ivld   kg/ivld    Outflows of DO and BOD through individual exits (available only if NEXITS > 1)The first subscript selects the exit. The second selects theconstituent: 1 means DO, 2 means BOD.
+OXCF3     8    1    -  lb/ivld   kg/ivld    Dissolved oxygen process fluxes: 1- reaeration (+/-) 2- BOD decay (-) 3- benthal demand (-) 4- nitrification (-) 5- phytoplankton (+/-) 6- zooplankton (-) 7- benthic algae (+/-) 8- total (+/-)
+OXCF4     8    1    -  lb/ivld   kg/ivld    Process fluxes are reported as positive if they increase the consituent, and negative if they decrease it. BOD process fluxes: 1- BOD decay (-) 2- benthal release (+) 3- sinking (-) 4- denitrification (+) 5- phytoplankton (+) 6- zooplankton (+) 7- benthic algae (+) 8- total (+/-)

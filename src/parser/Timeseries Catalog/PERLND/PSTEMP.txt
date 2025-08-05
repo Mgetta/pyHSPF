@@ -1,0 +1,4 @@
+AIRTC     1    1    -  DegF     DegC      Air temperature on the PLS
+SLTMP     1    1    -  DegF     DegC      Surface layer soil temperature
+ULTMP     1    1    -  DegF     DegC      Upper layer soil temperature
+LGTMP     1    1    -  DegF     DegC      Lower and groundwater layer soil temperature

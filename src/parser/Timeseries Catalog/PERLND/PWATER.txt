@@ -1,0 +1,39 @@
+PERS      1    1    *  in        mm         Total water stored in the PLS
+CEPS      1    1    *  in        mm         Interception storage
+SURS      1    1    *  in        mm         Surface (overland flow) storage
+UZS       1    1    *  in        mm         Upper zone storage
+IFWS      1    1    *  in        mm         Interflow storage
+LZS       1    1    *  in        mm         Lower zone storage
+AGWS      1    1    *  in        mm         Active groundwater storage
+TGWS      1    1    *  in        mm         Total groundwater storage (HWTFG=1)
+GWEL      1    1    *  ft        m          Groundwater elevation (HWTFG=1)
+GWVS      1    1    *  in        mm         Groundwater variable storage index
+INFFAC    1    1    *  none      none       Adjustment factor for infiltration index due to frozen ground (CSNOFG=1)
+PETADJ    1    1    *  none      none       Adjustment factor for potential ET
+RZWS      1    1    *  in        mm         Root zone water storage (IRRGFG=2)
+RPARM     1    1    -  in/ivld   mm/ivld    Current value of maximum lower zone E-T opportunity
+SUPY      1    1    -  in/ivld   mm/ivld    Water supply to soil surface (If CSNOFG = 0, same as precipitation.)
+SURO      1    1    -  in/ivld   mm/ivld    Surface outflow
+IFWO      1    1    -  in/ivld   mm/ivld    Interflow outflow
+AGWO      1    1    -  in/ivld   mm/ivld    Active groundwater outflow
+PERO      1    1    -  in/ivld   mm/ivld    Total outflow from PLS
+IGWI      1    1    -  in/ivld   mm/ivld    Inflow to inactive (deep) GW
+PET       1    1    -  in/ivld   mm/ivld    Potential E-T, adjusted for snow cover and air temperature
+CEPE      1    1    -  in/ivld   mm/ivld    Evap. from interception storage
+SURET     1    1    -  in/ivld   mm/ivld    Evap. from surface storage (HWTFG=1)
+UZET      1    1    -  in/ivld   mm/ivld    E-T from upper zone
+LZET      1    1    -  in/ivld   mm/ivld    E-T from lower zone
+AGWET     1    1    -  in/ivld   mm/ivld    E-T from active groundwater storage
+BASET     1    1    -  in/ivld   mm/ivld    E-T taken from active groundwater outflow (baseflow)
+TAET      1    1    -  in/ivld   mm/ivld    Total simulated E-T
+IFWI      1    1    -  in/ivld   mm/ivld    Interflow inflow (excluding any lateral inflow)
+UZI       1    1    -  in/ivld   mm/ivld    Upper zone inflow
+INFIL     1    1    -  in/ivld   mm/ivld    Infiltration to the soil
+PERC      1    1    -  in/ivld   mm/ivld    Percolation from upper to lower zone
+LZI       1    1    -  in/ivld   mm/ivld    Lower zone inflow
+AGWI      1    1    -  in/ivld   mm/ivld    Active groundwater inflow (excluding any lateral inflow)
+SURI      1    1    -  in/ivld   mm/ivld    Surface inflow (including any lateral inflow)
+IRRDEM    1    1    -  in/ivld   mm/ivld    Irrigation demand (IRRGFG > 0)
+IRSHRT    1    1    -  in/ivld   mm/ivld    Irrigation shortfall (IRRGFG > 0)
+IRDRAW    3    1    -  in/ivld   mm/ivld    Withdrawal of irrigation water from: 1) imports; 2) groundwater; 3) RCHRES (IRRGFG > 0)
+IRRAPP    6    1    -  in/ivld   mm/ivld    Application of irrigation water to: 1) interception storage; 2) soil surface; 3) upper zone; 4) lower zone; 5) groundwater; 6) total

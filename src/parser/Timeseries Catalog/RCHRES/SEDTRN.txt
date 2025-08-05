@@ -1,0 +1,8 @@
+SSED      4    1    *  mg/l      mg/l       Suspended sediment concentrations
+RSED     10    1    *  ton       tonne      Sediment storages
+TSED      3    1    *  ton       tonne      Total sediment storages by fraction
+BEDDEP    1    1    *  ft        m          Bed depth (thickness)
+ISED      4    1    -  ton/ivld  tonne/ivld Sum of inflows of sediment
+DEPSCR    4    1    -  ton/ivld  tonne/ivld Deposition (positive) or scour (negative)
+ROSED     4    1    -  ton/ivld  tonne/ivld Total outflows of sediment from the RCHRES
+OSED    NEXITS 4    -  ton/ivld  tonne/ivld Outflows of sediment through individual exits (available only if NEXITS > 1)

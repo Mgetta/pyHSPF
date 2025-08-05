@@ -1,0 +1,24 @@
+PHYTO     1    1    *  mg/l      mg/l       Phytoplankton concentration
+ZOO       1    1    *  organism/l organism/l Zooplankton population
+BENAL     4    1    *  mg/m2     mg/m2      Benthic algae biomass (species 1-4)
+TBENAL    2    1    *  mg/m2     mg/m2      Total benthic algae (1-biomass mg/m2, ug/m2     ug/m2      2-chlorophyll a ug/m2)
+PHYCLA    1    1    *  ug/l      ug/l       Phytoplankton as chlorophyll a
+BALCLA    4    1    *  ug/m2     ug/m2      Benthic algae as chlorophyll a
+PKST3     7    1    *  mg/l      mg/l       Concentrations of organics: 1- dead refractory organic N  (ORN) 2- dead refractory organic P  (ORP) 3- dead refractory organic C  (ORC) 4- total organic N  (TORN) 5- total organic P  (TORP) 6- total organic C  (TORC) 7- potential BOD  (POTBOD)
+PKST4     2    1    *  mg/l      mg/l       Concentrations of 1=Total N and 2=Total P
+PKIF      5    1    -  lb/ivld   kg/ivld    Sum of inflows of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC
+TPKIF     5    1    -  lb/ivld   kg/ivld    Sum of inflows of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P
+PKCF1     5    1    -  lb/ivld   kg/ivld    Total outflows from the RCHRES of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC
+TPKCF1    5    1    -  lb/ivld   kg/ivld    Total outflows from the RCHRES of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P
+PKCF2  NEXITS  5    -  lb/ivld   kg/ivld    Outflows through individual exits of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC (available only if NEXITS > 1)
+TPKCF2 NEXITS  5    -  lb/ivld   kg/ivld    Outflows through individual exits of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P (available only if NEXITS > 1)
+PLADDR    3    1    -  lb/ivld   kg/ivld    Dry atmospheric deposition of organics the first subscript selects the constituent:1 for ORN, 2 for ORP, 3 for ORC
+PLADWT    3    1    -  lb/ivld   kg/ivld    Wet atmospheric deposition of organics the first subscript selects the constituent: 1 for ORN, 2 for ORP, 3 for ORC
+PLADEP    3    1    -  lb/ivld   kg/ivld    Total atmospheric deposition of organics. the first subscript selects the constituent: 1 for ORN, 2 for ORP, 3 for ORC
+PKCF5     5    1    -  lb/ivld   kg/ivld    Process fluxes for phytoplankton 1- sinking (-) 2- zoolankton predation (-) 3- death (-) 4- growth/respiration (+/-) 5- total (+/-)
+PKCF6     3    1    -  lb/ivld   kg/ivld    Process fluxes for zooplankton 1- growth/respiration (+/-) 2- death (-) 3- total (+/-)
+PKCF7     3    4    -  mg/m2/ivld    mg/m2/ivld     Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+TPKCF7    3    1    -  mg/m2/ivld    mg/m2/ivld     Total process fluxes for all species of benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-)
+PKCF8     5    1    -  lb/ivld   kg/ivld    Process fluxes for dead refractory organic N 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+PKCF9     5    1    -  lb/ivld   kg/ivld    Process fluxes for dead refractory organic P 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+PKCF10    5    1    -  lb/ivld   kg/ivld    Process fluxes for dead refractory organic C 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-) Process fluxes are reported as positive if they increase the constituent, and negative if they decrease it.

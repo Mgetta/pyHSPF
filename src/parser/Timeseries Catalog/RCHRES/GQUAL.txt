@@ -1,0 +1,22 @@
+DQAL   NGQUAL  1    *  concu/l   concu/l    Dissolved concentration of qual.
+SQAL      6  NGQUAL *  concu/mg  concu/mg   Concentration of qual on sediment. First subscript selects: 1 susp sand  2 susp silt 3 susp clay 4 bed sand   5 bed silt  6 bed clay
+RDQAL  NGQUAL  1    *  qty       qty        Total storage of qual in dissolved form
+RSQAL    12  NGQUAL *  qty       qty        Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total
+RRQAL  NGQUAL  1    *  qty       qty        Total storage of qual in the RCHRES
+IDQAL  NGQUAL  1    -  qty/ivld  qty/ivld   Sum of inflows of dissolved qual
+ISQAL    4   NGQUAL -  qty/ivld  qty/ivld   Sum of inflows of qual associated with: 1 Sand, 2 Silt, 3 Clay, 4 Total
+TIQAL  NGQUAL  1    -  qty/ivld  qty/ivld   Total inflow of qual
+PDQAL  NGQUAL  1    -  qty/ivld  qty/ivld   Input to this qual in this RCHRES, from decay of parent quals
+GQADDR NGQUAL  1    -  qty/ivld  qty/ivld   Dry atmospheric deposition of qual
+GQADWT NGQUAL  1    -  qty/ivld  qty/ivld   Wet atmospheric deposition of qual
+GQADEP NGQUAL  1    -  qty/ivld  qty/ivld   Total atmospheric deposition of qual
+DDQAL    7   NGQUAL -  qty/ivld  qty/ivld   Decay of dissolved qual. First subscript selects decay path: 1 hydrolysis  2 oxidation 3 photolysis  4 volatilization 5 biodegradation  6 general (other) 7 total of 1-6 .
+RODQAL NGQUAL  1    -  qty/ivld  qty/ivld   Total outflow of dissolved qual from the RCHRES
+DSQAL    4  NGQUAL  -  qty/ivld  qty/ivld   Deposition/scour of qual. First subscript selects carrier: 1 sand  2 silt  3 clay  4 total
+ROSQAL   4  NGQUAL  -  qty/ivld  qty/ivld   Total outflow of sediment-associated qual from RCHRES. First subscript selects carrier: 1 sand  2 silt  3 clay  4 total
+TROQAL NGQUAL  1    -  qty/ivld  qty/ivld   Total outflow of qual
+SQDEC    7  NGQUAL  -  qty/ivld  qty/ivld   Decay of sediment-associated qual on: 1 susp sand  2 susp silt 3 susp clay  4 bed sand 5 bed silt  6 bed clay  7 total
+ADQAL    7  NGQUAL  -  qty/ivld  qty/ivld   Adsorption/desorption between dissolved state and: 1 susp sand 2 susp silt  3 susp clay  4 bed sand 5 bed silt  6 bed clay  7 total
+ODQAL  NEXITS NGQUAL - qty/ivld  qty/ivld   Outflow of dissolved qual through individual exits. (available only if NEXITS > 1)
+OSQAL  NEXITS  NGQ3  - qty/ivld  qty/ivld   Outflows of sediment-associated qual through individual exits. Second subscript selects: 1 sand, first qual 2 silt, first qual 3 clay, first qual (NGQ3= 4 sand, second qual NGQUAL*3) etc. (available only if NEXITS > 1)
+TOSQAL NEXITS NGQUAL - qty/ivld  qty/ivld   Total outflows (sand+silt+clay) of sediment-associated qual through individual exits

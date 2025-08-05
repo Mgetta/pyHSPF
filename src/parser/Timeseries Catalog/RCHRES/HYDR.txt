@@ -1,0 +1,27 @@
+VOL       1    1    *  ac.ft     Mm3        Volume of water in the RCHRES
+CVOL     CAT   1    *  ac.ft     Mm3        Volume of water of each category
+DEP       1    1    *  ft        m          Depth at specified location, AUX1FG must be 1 to be computed
+STAGE     1    1    *  ft        m          Stage (DEP+STCOR), AUX1FG must be 1 to be computed
+AVDEP     1    1    *  ft        m          Average depth (volume/surface area), AUX1FG must be 1 to be computed
+TWID      1    1    *  ft        m          Mean topwidth (surface area/length), AUX1FG must be 1 to be computed
+HRAD      1    1    *  ft        m          Hydraulic radius, AUX1FG must be 1 to be computed
+SAREA     1    1    *  ac        ha         Surface area, AUX1FG must be 1 to be computed
+AVVEL     1    1    *  ft/s      m/s        Average velocity (RO/VOL)
+AVSECT    1    1    *  ft2       m2         Average cross-sectional area of RCHRES (VOL/length), AUX2FG must be 1 to be computed
+USTAR     1    1    *  ft/s      m/s        Shear velocity,AUX3FG must be 1 to be computed
+TAU       1    1    *  lb/ft2    kg/m2      Bed shear stress,AUX3FG must be 1 to be computed
+RO        1    1    *  ft3/s     m3/s       Total rate of outflow from RCHRES
+CRO      CAT   1    *  ft3/s     m3/s       Rates of outflow of each category
+O       NEXITS 1    *  ft3/s     m3/s       Rates of outflow through individual exits (available only if NEXITS > 1)
+CO      NEXITS CAT  *  ft3/s     m3/s       Rates of outflow through individual exits of each category (available only if NEXITS > 1)
+CDFVOL  NEXITS CAT  *  ac.ft     Mm3        Current cumulative deficit of each category demand by exit
+IVOL      1    1    -  ac.ft/ivld    Mm3/ivld       Sum of inflows to the RCHRES
+CIVOL    CAT   1    -  ac.ft/ivld    Mm3/ivld       Sum of inflows of water belonging to each category
+PRSUPY    1    1    -  ac.ft/ivld    Mm3/ivld       Volume of water contributed by precipitation on surface
+VOLEV     1    1    -  ac.ft/ivld    Mm3/ivld       Volume of water lost by evaporation
+ROVOL     1    1    -  ac.ft/ivld    Mm3/ivld       Total volume of outflow from RCHRES
+CROVOL   CAT   1    -  ac.ft/ivld    Mm3/ivld       Total volume of outflow from RCHRES of each category
+OVOL    NEXITS 1    -  ac.ft/ivld    Mm3/ivld       Volume of outflow through individual exits (available only if NEXITS > 1)
+COVOL   NEXITS CAT  -  ac.ft/ivld    Mm3/ivld       Volume of outflow through individual exits of each category (available onlyif NEXITS > 1)
+RIRDEM    1    1    -  ac.ft/ivld    Mm3/ivld       Irrigation withdrawal demanded by all PERLNDs from the RCHRES
+RIRSHT    1    1    -  ac.ft/ivld    Mm3/ivld       Shortage in irrigation withdrawal,i.e. total demand RIRDEM minus actualwithdrawal OVOL(IREXIT)

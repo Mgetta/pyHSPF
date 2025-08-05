@@ -1,0 +1,9 @@
+IMPS      1    1    *  in        mm         Total water stored in the ILS
+RETS      1    1    *  in        mm         Retention storage
+SURS      1    1    *  in        mm         Surface (overland flow) storage
+PETADJ    1    1    *  none      none       Adjustment factor for potential ET
+SUPY      1    1    -  in/ivld   mm/ivld    Water supply to soil surface (If CSNOFG is 0, same as precipitation.)
+SURO      1    1    -  in/ivld   mm/ivld    Surface outflow
+PET       1    1    -  in/ivld   mm/ivld    Potential E-T, adjusted for snow cover and air temperature
+IMPEV     1    1    -  in/ivld   mm/ivld    Total simulated E-T
+SURI      1    1    -  in/ivld   mm/ivld    Surface inflow (including any lateral inflow if RTLIFG=1)

@@ -1,0 +1,2 @@
+SLDS      1    1    *  tons/ac             tonnes/ha         Storage of solids on surface
+SOSLD     1    1    -  tons/ac.ivld        tonnes/ha.ivld    Washoff of solids from surface

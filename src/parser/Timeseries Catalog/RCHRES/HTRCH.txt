@@ -1,0 +1,8 @@
+TW        1    1    *  DegF      DegC       Simulated water temperature
+AIRTMP    1    1    *  DegF      DegC       Air temperature, adjusted for elev. difference between gage and RCHRES
+IHEAT     1    1    -  BTU/ivld  kcal/ivld  Sum of inflows of heat (relative to freezing)
+HTEXCH    1    1    -  BTU/ivld  kcal/ivld  Net heat exchanged with atmosphere and stream bed
+ROHEAT    1    1    -  BTU/ivld  kcal/ivld  Total outflow of thermal energy through active exits
+OHEAT  NEXITS  1    -  BTU/ivld  kcal/ivld  Outflow of thermal energy through individual exits (available only if NEXITS > 1)
+HTCF4     7    1    -  BTU/ft2/ivld  kcal/m2/ivld   Components of heat exchange per unit area of surface: 1) total, 2) solar radiation, 3) longwave radiation, 4) evaporation, 5) conduction, 6) percipitation, 7) bed exchange (positive = gain of heat).
+SHDFAC    1    1    *  none      none       Effective shading factor – computed by SHADE function

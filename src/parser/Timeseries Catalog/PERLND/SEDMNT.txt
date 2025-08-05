@@ -1,0 +1,8 @@
+DETS      1    1    *  tons/ac             tonnes/ha             Storage of detached sediment
+STCAP     1    1    *  tons/ac.ivld        tonnes/ha.ivld        Sediment transport capacity by surface runoff
+COVER     1    1    *  none                none                  Cover fraction
+WSSD      1    1    -  tons/ac.ivld        tonnes/ha.ivld        Washoff of detached sediment
+SCRSD     1    1    -  tons/ac.ivld        tonnes/ha.ivld        Scour of matrix (attached) soil
+SOSED     1    1    -  tons/ac.ivld        tonnes/ha.ivld        Total removal of soil and sediment
+DET       1    1    -  tons/ac.ivld        tonnes/ha.ivld        Quantity of sediment detached from soil matrix by rainfall impact
+NVSI      1    1    -  tons/ac.ivld        tonnes/ha.ivld        Net vertical sediment input

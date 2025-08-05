@@ -1,0 +1,19 @@
+SQO     NQOF   1    *  qty/ac    qty/ha     Storage of QUALOF on the surface
+IOQC    NQIF   1    -  qty/ft3   qty/l      QUALIF outflow concentration
+AOQC    NQGW   1    -  qty/ft3   qty/l      QUALGW outflow concentration
+SOQSP   NQSD   1    -  qty/ton   qty/tonne  QUALSD outflow potency factor
+WASHQS  NQSD   1    -  qty/ac.ivld      qty/ha.ivld       Removal of QUALSD by association with detached sediment washoff
+SCRQS   NQSD   1    -  qty/ac.ivld      qty/ha.ivld       Removal of QUALSD by association with scour of matrix soil
+SOQS    NQSD   1    -  qty/ac.ivld      qty/ha.ivld       Total flux of QUALSD from surface
+SOQO    NQOF   1    -  qty/ac.ivld      qty/ha.ivld       Washoff of QUALOF from surface
+SOQOC   NQOF   1    -  qty/ft3   qty/l      Concentration of QUALOF in surface outflow
+SOQUAL   NQ    1    -  qty/ac.ivld      qty/ha.ivld       Total outflow of QUAL from the surface
+SOQC     NQ    1    -  qty/ft3   qty/l      Concentration of QUAL (QUALSD+QUALOF) in surface outflow
+IOQUAL  NQIF   1    -  qty/ac.ivld      qty/ha.ivld       Outflow of QUAL in interflow(QUALIF)
+AOQUAL  NQGW   1    -  qty/ac.ivld      qty/ha.ivld       Outflow of QUAL in active ground-(QUALGW)
+POQUAL   NQ    1    -  qty/ac.ivld      qty/ha.ivld       Total flux of QUAL from the PLS
+POQC     NQ    1    -  qty/ft3   qty/l      Concentration of QUAL (total) in total outflow from PLS
+PQADDR   NQ    1    -  qty/ac.ivld      qty/ha.ivld       Dry atmospheric deposition of QUAL
+PQADWT   NQ    1    -  qty/ac.ivld      qty/ha.ivld       Wet atmospheric deposition of QUAL
+PQADEP   NQ    1    -  qty/ac.ivld      qty/ha.ivld       Total atmospheric deposition of QUAL
+ISQO     NQ    1    -  qty/ac.ivld      qty/ha.ivld       Total inflow of QUAL

@@ -1,0 +1,50 @@
+DNUST     6    1    *  mg/l      mg/l       Dissolved nutrient concentrations;Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4, 5=NH4+, 6=NH3.
+SNH4      3    1    *  mg/kg     mg/kg      Particulate NH4-N concentrations; Subscript 1: 1=sand, 2=silt, 3=clay
+SPO4      3    1    *  mg/kg     mg/kg      Particulate PO4-P concentrations; Subscript 1: 1=sand, 2=silt, 3=clay
+DNUST2    6    1    *  lbs       kg         Dissolved nutrient storages; same subscript values as DNUST
+RSNH4    12    1    *  lbs       kg         Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total
+RSPO4    12    1    *  lbs       kg         Particulate PO4-P storages; same subscript values as RSNH4
+NUST      4    1    *  lbs       kg         Total nutrient storages in RCHRES,(dissolved + particulate);Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4Same subscript values as NUST
+NUIF2     4    2    -  lb/ivld   kg/ivld    Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total
+TNUIF     4    1    -  lb/ivld   kg/ivld    Sum of total inflows of nutrient: Same subscript values as NUST
+NUADDR    3    1    -  lb/ivld   kg/ivld    Dry atmospheric deposition of nutrient; Subscript 1: 1=NO3, 2=TAM, 3=PO4
+NUADWT    3    1    -  lb/ivld   kg/ivld    Wet atmospheric deposition of nutrient; Subscript same as NUADDR
+NUADEP    3    1    -  lb/ivld   kg/ivld    Total atmospheric deposition of nutrient; Subscript same as NUADDR
+NUCF1     4    1    -  lb/ivld   kg/ivld    Total outflow of dissolved nutrient; Same subscript values as NUST
+NUCF2     4    2    -  lb/ivld   kg/ivld    Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4
+TNUCF1    4    1    -  lb/ivld   kg/ivld    Total outflow of nutrient; Same subscript values as NUST
+NUCF3     4    2    -  lb/ivld   kg/ivld    Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2
+NUCF4     7    1    -  lb/ivld   kg/ivld    Process fluxes for NO3;1- nitrification (+)2- denitrification (-)3- BOD decay (+)4- phytoplankton growth/respir. (+/-)5- zooplankton death/respir. (+)6- benthic algae growth/respir. (+/-)7- total (+/-)
+NUCF5     8    1    -  lb/ivld   kg/ivld    Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+NUCF6     1    1    -  lb/ivld   kg/ivld    Process flux for NO2; Nitrification (+/-)
+NUCF7     6    1    -  lb/ivld   kg/ivld    Process fluxes for PO4; 1- benthal release (+) 2- BOD decay (+) 3- phytoplankton growth/respir. (+/-) 4- zooplankton death/respir. (+) 5- benthic algae growth/respir. (+/-) 6- total (+/-) DNUST     6    1    *  mg/l      mg/l       Dissolved nutrient concentrations; Subscript 1: 1=NO3, 2=TAM, 3=NO2, 4=PO4, 5=NH4+, 6=NH3.
+SNH4      3    1    *  mg/kg     mg/kg      Particulate NH4-N concentrations;Subscript 1: 1=sand, 2=silt, 3=clay
+SPO4      3    1    *  mg/kg     mg/kg      Particulate PO4-P concentrations;Subscript 1: 1=sand, 2=silt, 3=clay
+DNUST2    6    1    *  lbs       kg         Dissolved nutrient storages; same subscript values as DNUST
+RSNH4    12    1    *  lbs       kg         Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total
+RSPO4    12    1    *  lbs       kg         Particulate PO4-P storages; samesubscript values as RSNH4
+NUST      4    1    *  lbs       kg         Total nutrient storages in RCHRES,(dissolved + particulate);Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4
+NUIF1     4    1    -  lb/ivld   kg/ivld    Sum of dissolved inflows of nutrient Same subscript values as NUST
+NUIF2     4    2    -  lb/ivld   kg/ivld    Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total
+TNUIF     4    1    -  lb/ivld   kg/ivld    Sum of total inflows of nutrient: Same subscript values as NUST
+NUADDR    3    1    -  lb/ivld   kg/ivld    Dry atmospheric deposition of nutrient; Subscript 1: 1=NO3, 2=TAM, 3=PO4
+NUADWT    3    1    -  lb/ivld   kg/ivld    Wet atmospheric deposition of nutrient; Subscript same as NUADDR
+NUADEP    3    1    -  lb/ivld   kg/ivld    Total atmospheric deposition of nutrient; Subscript same as NUADDR
+NUCF1     4    1    -  lb/ivld   kg/ivld    Total outflow of dissolved nutrient; Same subscript values as NUST
+NUCF2     4    2    -  lb/ivld   kg/ivld    Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4
+TNUCF1    4    1    -  lb/ivld   kg/ivld    Total outflow of nutrient; Same subscript values as NUST
+NUCF3     4    2    -  lb/ivld   kg/ivld    Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2
+NUCF4     7    1    -  lb/ivld   kg/ivld    Process fluxes for NO3; 1- nitrification (+) 2- denitrification (-) 3- BOD decay (+) 4- phytoplankton growth/respir. (+/-) 5- zooplankton death/respir. (+) 6- benthic algae growth/respir. (+/-) 7- total (+/-)
+NUCF5     8    1    -  lb/ivld   kg/ivld    Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+NUCF6     1    1    -  lb/ivld   kg/ivld    Process flux for NO2; Nitrification (+/-)
+NUCF7     6    1    -  lb/ivld   kg/ivld    Process fluxes for PO4; 1- benthal release (+) 2- BOD decay (+) 3- phytoplankton growth/respir. (+/-) 4- zooplankton death/respir. (+) 5- benthic algae growth/respir. (+/-) 6- total (+/-) Process fluxes are reported as positive if they increase the constituent, and negative if they decrease it.
+NUCF8     4    2    -  lb/ivld   kg/ivld    Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4
+NUCF9  NEXITS  4    -  lb/ivld   kg/ivld    Outflow of dissolved nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)
+OSNH4  NEXITS  4    -  lb/ivld   kg/ivld    Outflows of particulate NH4; Subscript 1 selects exit, Subscript 2: 1=sand, 2=silt, 3=clay, 4=total (available only if NEXITS > 1)
+OSPO4  NEXITS  4    -  lb/ivld   kg/ivld    Outflows of particulate PO4-P; Subscript values same as OSNH4 (available only if NEXITS > 1)
+TNUCF2 NEXITS  4    -  lb/ivld   kg/ivld    Total outflows of nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)
+NUCF8     4    2    -  lb/ivld   kg/ivld    Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4
+NUCF9  NEXITS  4    -  lb/ivld   kg/ivld    Outflow of dissolved nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)
+OSNH4  NEXITS  4    -  lb/ivld   kg/ivld    Outflows of particulate NH4; Subscript 1 selects exit, Subscript 2: 1=sand, 2=silt, 3=clay, 4=total (available only if NEXITS > 1)
+OSPO4  NEXITS  4    -  lb/ivld   kg/ivld    Outflows of particulate PO4-P; Subscript values same as OSNH4 (available only if NEXITS > 1)
+TNUCF2 NEXITS  4    -  lb/ivld   kg/ivld    Total outflows of nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)

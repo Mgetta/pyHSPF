@@ -1,0 +1,10 @@
+SQO     NQOF   1    *  qty/ac              qty/ha            Storage of QUALOF on the surface
+SOQSP   NQSD   1    -  qty/ton             qty/tonne         QUALSD outflow potency factor\tonne
+SOQS    NQSD   1    -  qty/ac.ivld         qty/ha.ivld       Total flux of QUALSD from surface
+SOQO    NQOF   1    -  qty/ac.ivld         qty/ha.ivld       Washoff of QUALOF from surface
+SOQOC   NQOF   1    -  qty/ft3             qty/l             Concentration of QUALOF in surface outflow
+SOQUAL   NQ    1    -  qty/ac.ivld         qty/ha.ivld       Total outflow of QUAL from the surface
+SOQC     NQ    1    -  qty/ft3             qty/l             Concentration of QUAL in surface outflow (QUALSD+QUALOF)
+IQADDR   NQ    1    -  qty/ac.ivld         qty/ha.ivld       Dry atmospheric deposition of QUAL
+IQADWT   NQ    1    -  qty/ac.ivld         qty/ha.ivld       Wet atmospheric deposition of QUAL
+IQADEP   NQ    1    -  qty/ac.ivld         qty/ha.ivld       Total atmospheric deposition of QUAL

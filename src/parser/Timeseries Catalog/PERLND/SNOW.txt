@@ -1,0 +1,22 @@
+PACK      1    1    *  in        mm         Total contents of pack (water equiv)
+PACKF     1    1    *  in        mm         Frozen contents of pack, ie. snow + ice (water equivalent)
+PACKW     1    1    *  in        mm         Liquid water in pack
+PACKI     1    1    *  in        mm         Ice in pack (water equivalent)
+PDEPTH    1    1    *  in        mm         Pack depth
+COVINX    1    1    *  in        mm         Snow cover index (water equivalent)
+NEGHTS    1    1    *  in        mm         Negative heat storage (water equivalent)
+XLNMLT    1    1    *  in        mm         Maximum increment to ice in pack
+RDENPF    1    1    *  none      none       Relative density of frozen contents of pack (PACKF/PDEPTH)
+SKYCLR    1    1    *  none      none       Fraction of sky assumed clear
+SNOCOV    1    1    *  none      none       Fraction of Land-segment covered by pack
+DULL      1    1    *  none      none       Dullness index of the pack (available only if SNOPFG= 0)
+ALBEDO    1    1    *  none      none       Albedo of the pack (available only if SNOPFG= 0)
+PAKTMP    1    1    *  DegF      DegC       Mean temperature of the pack
+SNOTMP    1    1    *  DegF      DegC       Max air temperature for snowfall to occur
+DEWTMP    1    1    *  DegF      DegC       Effective dewpoint temperature
+SNOWF     1    1    -  in/ivld   mm/ivld    Snowfall, water equivalent
+PRAIN     1    1    -  in/ivld   mm/ivld    Rainfall directly onto the snowpack
+SNOWE     1    1    -  in/ivld   mm/ivld    Evaporation from PACKF (sublimation), water equivalent (available only if SNOPFG= 0)
+WYIELD    1    1    -  in/ivld   mm/ivld    Water yielded by the pack (released to the land-surface)
+MELT      1    1    -  in/ivld   mm/ivld    Quantity of melt from PACKF (water equivalent)
+RAINF     1    1    -  in/ivld   mm/ivld    Rainfall

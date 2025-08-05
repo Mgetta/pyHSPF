@@ -1,0 +1,21 @@
+SOTMP     1    1    *  DegF      DegC       Temperature of surface outflow
+IOTMP     1    1    *  DegF      DegC       Temperature of interflow outflow
+AOTMP     1    1    *  DegF      DegC       Temperature of active groundwater outflow
+SODOX     1    1    *  mg/l      mg/l       DO concentration in surface outflow
+SOCO2     1    1    *  mg/l      mg/l       CO2 concentration in surface outflow
+IODOX     1    1    *  mg/l      mg/l       DO concentration in interflow outflow
+IOCO2     1    1    *  mg/l      mg/l       CO2 concentration in interflow outflow
+AODOX     1    1    *  mg/l      mg/l       DO concentration in active groundwater outflow
+AOCO2     1    1    *  mg/l      mg/l       CO2 concentration in active groundwater outflow
+SOHT      1    1    -  BTU/ac.ivld      kcal/ha.ivld      Heat energy in surface outflow (relative to freezing point)
+IOHT      1    1    -  BTU/ac.ivld      kcal/ha.ivld      Heat energy in interflow outflow 
+AOHT      1    1    -  BTU/ac.ivld      kcal/ha.ivld      Heat energy in active groundwater outflow
+POHT      1    1    -  BTU/ac.ivld      kcal/ha.ivld      Heat energy in total outflow from PLS
+SODOXM    1    1    -  lb/ac.ivld       kg/ha.ivld        Flux of DO in surface outflow 
+SOCO2M    1    1    -  lb/ac.ivld       kg/ha.ivld        Flux of CO2 in surface outflow 
+IODOXM    1    1    -  lb/ac.ivld       kg/ha.ivld        Flux of DO in interflow outflow 
+IOCO2M    1    1    -  lb/ac.ivld       kg/ha.ivld        Flux of CO2 in interflow outflow 
+AODOXM    1    1    -  lb/ac.ivld       kg/ha.ivld        Flux of DO in active groundwater outflow
+AOCO2M    1    1    -  lb/ac.ivld       kg/ha.ivld        Flux of CO2 in active groundwater outflow
+PODOXM    1    1    -  lb/ac.ivld       kg/ha.ivld        DO in total outflow from PLS 
+POCO2M    1    1    -  lb/ac.ivld       kg/ha.ivld        CO2 in total outflow from PLS 

@@ -1,0 +1,6 @@
+SOTMP     1    1    *  DegF                DegC              Temperature of surface outflow
+SODOX     1    1    *  mg/l                mg/l              DO concentration in surface outflow
+SOCO2     1    1    *  mg/l                mg/l              CO2 concentration in surface outflow
+SOHT      1    1    -  BTU/ac.ivld         kcal/ha.ivld      Heat energy in surface outflow (relative to freezing point)
+SODOXM    1    1    -  lb/ac.ivld          kg/ha.ivld        Flux of DO in surface outflow
+SOCO2M    1    1    -  lb/ac.ivld          kg/ha.ivld        Flux of CO2 in surface outflow

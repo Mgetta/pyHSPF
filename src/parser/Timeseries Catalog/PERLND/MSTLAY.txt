@@ -1,0 +1,2 @@
+MST  5 1 * lb/ac kg/ha Water in surface, upper principal,upper auxiliary, lower, andgroundwater storages
+FRAC 8 1 * /ivl /ivl Fractional fluxes through soil: FSO,FSP,FII,FUP,FIO,FLP,FLDP,FAO

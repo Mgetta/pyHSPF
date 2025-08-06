@@ -5,17 +5,18 @@ Created on Thu Oct 13 09:26:05 2022
 @author: mfratki
 """
 from pathlib import Path
-#import shutil
-from parser.uci import UCI
-import hbn
-from reports import Reports
-from wdm import wdmInterface
-import wdmReader
-
-
-
 import os.path
 import subprocess
+
+from pyhspf.uci import UCI
+from pyhspf import hbn
+from pyhspf.reports import Reports
+from pyhspf.wdm import wdmInterface
+from pyhspf import wdmReader
+
+
+
+
 
 
 

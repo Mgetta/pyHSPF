@@ -12,11 +12,11 @@ from pathlib import Path
 import math
 
 # Read in table used to parse UCI file #RespectRespec
-parseTable = pd.read_csv(Path(__file__).parent/'ParseTable.csv',
+parseTable = pd.read_csv(Path(__file__).parent.parent/'data/ParseTable.csv',
                           dtype = {'width': 'Int64',
                                   'start': 'Int64',
                                   'stop': 'Int64',
-                                  'space': 'Int64'})
+                                  'space': 'Int64'})                                  
 # parseTable = pd.read_csv('C:/Users/mfratki/Documents/GitHub/hspf_tools/parser/ParseTable.csv',
 #                             dtype = {'width': 'Int64',
 #                                       'start': 'Int64',

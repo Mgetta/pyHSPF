@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyHSPF"
+urls = { "Homepage" = "https://github.com/mfratkin1/mpcaHydro" }  # ? Add this!
+version = "2.0.0"
+dependencies = [
+  "pandas",
+  "requests",
+  "pathlib",
+  "networkx",
+  "numba",
+  "tables",
+  "numpy"
+]
+requires-python = ">=3.8"
+authors = [
+  {name = "Mulu Fratkin", email = "michael.fratkin@state.mn.us"},
+]
+maintainers = [
+  {name = "Mulu Fratkin", email = "michael.fratkin@state.mn.us"},
+]
+description = "Python package for downloading and running HSPF models"
+license = "MIT"
+license-files = ["LICEN[CS]E.*"]
+keywords = ["HSPF","Hydrology"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python"
+]

@@ -6,7 +6,7 @@ Created on Mon Apr 11 08:26:04 2022
 """
 import numpy as np
 import pandas as pd
-import helpers
+from pyhspf import helpers
 from pathlib import Path
 
 #timeseries_catalog = pd.read_csv(Path(__file__).parent/'TIMESERIES_CATALOG.csv')
@@ -521,11 +521,10 @@ def losses(uci,hbn,constituent, t_code = 5):
                                        t_cons,
                                        opnids = list(upstream_reachs.keys()))
                for t_cons in allocation_selector[constituent]['input']])
+     
     
-    totout = pd.concat(totout)
-    #totin = pd.concat([totout[reach_ids].sum(axis=1) 
-    totin = totout.copy().astype('Float64')
-    totin[:] = pd.NA
+    #totin = totout.copy().astype('Float64')
+    #totin[:] = pd.NA
 
     for reach_id in totin.columns:
         reach_ids = upstream_reachs[reach_id]
@@ -533,7 +532,7 @@ def losses(uci,hbn,constituent, t_code = 5):
             totin[reach_id] = totout[reach_ids].sum(axis=1) 
     
     #totin.columns = totout.columns
-    return 1-(totin-totout)/totin
+    return (totout-totin)/totin*100
     
 def allocations(uci,hbn,constituent,reach_id,t_code,group_landcover = True):
     p = uci.network.paths(reach_id)

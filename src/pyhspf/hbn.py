@@ -6,7 +6,7 @@ nutrients relevant for our current calibration methods. (See calibration_helpers
 
 @author: mfratki
 """
-from hspf_tools.calibrator import calibration_helpers as ch 
+from pyhspf import helpers
 import pandas as pd
 import math
 from struct import unpack
@@ -80,7 +80,7 @@ UNIT_DEFAULTS = {'Q': 'cfs',
 
 #agg_func = AGG_DEFAULTS[unit]
 def get_simulated_implnd_constituent(hbn,constituent,time_step):
-    t_cons = ch.get_tcons2(constituent,'IMPLND')
+    t_cons = helpers.get_tcons(constituent,'IMPLND')
     df = sum([hbn.get_multiple_timeseries(t_opn='IMPLND', 
                                        t_con= t_con, 
                                        t_code = time_step) for t_con in t_cons])
@@ -93,7 +93,7 @@ def get_simulated_implnd_constituent(hbn,constituent,time_step):
 
 
 def get_simulated_perlnd_constituent(hbn,constituent,time_step):
-    t_cons = ch.get_tcons2(constituent,'PERLND')
+    t_cons = helpers.get_tcons(constituent,'PERLND')
     df = sum([hbn.get_multiple_timeseries(t_opn='PERLND', 
                                        t_con= t_con, 
                                        t_code = time_step) for t_con in t_cons])
@@ -143,7 +143,7 @@ def get_simulated_reach_constituent(hbn,constituent,time_step,reach_ids,unit = N
     else:
         assert(unit in ['mg/l','lb','cfs','degF'])
         
-    t_cons = ch.get_tcons2(constituent,'RCHRES','lb')
+    t_cons = helpers.get_tcons(constituent,'RCHRES','lb')
     
     # Correct instances when a flow needs to be subtracted (rare)
     df = pd.concat([hbn.get_multiple_timeseries('RCHRES',time_step,t_con,[abs(reach_id) for reach_id in reach_ids])*sign for t_con in t_cons],axis=1).sum(axis=1)
@@ -200,7 +200,7 @@ class hbnInterface:
         return dd
 
     def get_perlnd_data(self,constituent,t_code = 'yearly'):
-        t_cons = ch.get_tcons2(constituent,'PERLND')
+        t_cons = helpers.get_tcons(constituent,'PERLND')
         
         df = pd.concat([self.get_multiple_timeseries(t_opn = 'PERLND',
                                      t_code = t_code,
@@ -236,7 +236,7 @@ class hbnInterface:
         
         
         
-        t_cons = ch.get_tcons2(constituent,'RCHRES',units)
+        t_cons = helpers.get_tcons(constituent,'RCHRES',units)
         
 
         
@@ -485,54 +485,3 @@ class hbnClass:
          return perlands
      
  
-# Helper functions for linking hbn file and nutrient ids    
-def get_perlnd_data(hbn,nutrient_id,flux = None):
-    t_cons = ch.get_tcons(nutrient_id,'PERLND')
- 
-    df = pd.concat([hbn.get_multiple_timeseries(t_opn = 'PERLND',
-                                 t_code = 'yearly',
-                                 t_con = t_con,
-                                 opnids = None)
-                     for t_con in t_cons],axis = 0)
-    
-    return df
-     
-     
-def get_rchres_data(hbn,nutrient_id,reach_ids,method = 'Load'):
-    '''
-    Convience function for accessing the hbn time series associated with our current
-    calibration method. Assumes you are summing across all dataframes.
-
-    Parameters
-    ----------
-    hbn : TYPE
-        DESCRIPTION.
-    nutrient_id : TYPE
-        DESCRIPTION.
-    reach_ids : TYPE
-        DESCRIPTION.
-    flux : TYPE, optional
-        DESCRIPTION. The default is None.
-
-    Returns
-    -------
-    df : TYPE
-        DESCRIPTION.
-
-    '''
-    opnids = reach_ids # list of integer values
-    t_cons = ch.get_tcons(nutrient_id,'RCHRES',method)
-    
-    
-    df = pd.concat([hbn.get_multiple_timeseries(t_opn = 'RCHRES',
-                                 t_code = 'daily',
-                                 t_con = t_con,
-                                 opnids = opnids)
-                     for t_con in t_cons],axis = 1).sum(1).to_frame()
-    
-
-    return df
-
-    
-    
-    

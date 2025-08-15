@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pyHSPF"
-urls = { "Homepage" = "https://github.com/mfratkin1/mpcaHydro" }  # ? Add this!
+name = "hspf"
+urls = { "Homepage" = "https://github.com/mfratkin1/pyHSPF" }  # ? Add this!
 version = "2.0.0"
 dependencies = [
   "pandas",

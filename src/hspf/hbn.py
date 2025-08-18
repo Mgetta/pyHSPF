@@ -6,15 +6,14 @@ nutrients relevant for our current calibration methods. (See calibration_helpers
 
 @author: mfratki
 """
-from pyhspf import helpers
+from . import helpers
 import pandas as pd
 import math
 from struct import unpack
 from numpy import fromfile
 from pandas import DataFrame
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta #, timezone
 from collections import defaultdict
-import numpy as np
 #from pathlib import Path
 
 
@@ -350,11 +349,13 @@ class hbnClass:
         rows = []
         times = []
         nvals = len(self.mapn[operation, id, activity]) # number constituent timeseries
-        utc_offset = timezone(timedelta(hours=-6)) #UTC is 6hours ahead of CST
+        #utc_offset = timezone(timedelta(hours=-6)) #UTC is 6hours ahead of CST
         for (index, reclen) in self.mapd[operation, id, activity, tcode]:
             yr, mo, dy, hr, mn = unpack('5I', self.data[index + 36: index + 56])
             hr = hr-1
-            dt = datetime(yr, mo, dy, 0, mn ,tzinfo=utc_offset) + timedelta(hours=hr)
+            #dt = datetime(yr, mo, dy, 0, mn ,tzinfo=utc_offset) + timedelta(hours=hr)
+            dt = datetime(yr, mo, dy, 0, mn ) + timedelta(hours=hr)
+
             times.append(dt)
 
             index += 56

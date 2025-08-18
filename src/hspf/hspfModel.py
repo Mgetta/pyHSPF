@@ -8,11 +8,11 @@ from pathlib import Path
 import os.path
 import subprocess
 
-from pyhspf.uci import UCI
-from pyhspf import hbn
-from pyhspf.reports import Reports
-from pyhspf.wdm import wdmInterface
-from pyhspf import wdmReader
+from .uci import UCI
+from . import hbn
+from .reports import Reports
+from .wdm import wdmInterface
+from . import wdmReader
 
 
 

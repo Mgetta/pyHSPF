@@ -6,7 +6,7 @@ Created on Mon Apr 11 08:26:04 2022
 """
 import numpy as np
 import pandas as pd
-from pyhspf import helpers
+from . import helpers
 from pathlib import Path
 
 #timeseries_catalog = pd.read_csv(Path(__file__).parent/'TIMESERIES_CATALOG.csv')

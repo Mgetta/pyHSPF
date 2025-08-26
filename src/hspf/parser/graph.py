@@ -332,6 +332,14 @@ CREATE TABLE GenInfo (
 
 #%% Methods using universal node id
 
+# def bypass_node(G, node):
+#     preds = list(G.predecessors(node))
+#     succs = list(G.successors(node))
+#     for u in preds:
+#         for v in succs:
+#             if 
+#             G.add_edge(u, v)
+#     G.remove_node(node)
 
 def _add_subgraph_labels(G,G_sub):
     G_sub.labels = {label:node for label, node in G.labels.items() if node in G_sub.nodes}
@@ -519,7 +527,24 @@ def paths(G,reach_id,source_type = 'RCHRES'):
 def count_ancestors(G,node_type,ancestor_node_type):
     return {node['type_id']:len(ancestors(G,node['id'],ancestor_node_type)) for node in get_nodes(G,node_type)}
 
+# def catchment_ids(G):
+#     result = []
+#     for node in get_node_ids(G,'RCHRES'):
+#         upstream_nodes = G.predecessors(node)
+#         if any([G.nodes[up]['type'] in ['PERLND','IMPLND'] for up in upstream_nodes]):
+#             result.append(G.nodes[node]['type_id'])
+#     return result
 
+# Very expensive. Should probably standardize it so routing reaches have no implnds/perlnds
+def catchment_ids(G):
+    result = []
+    for node in get_node_ids(G,'RCHRES'):
+        upstream_nodes = G.predecessors(node)
+        if any([G.nodes[up]['type'] in ['PERLND','IMPLND'] for up in upstream_nodes]):
+            cat = make_catchment(G,G.nodes[node]['type_id'])
+            if area(cat) > 0:
+                result.append(G.nodes[node]['type_id'])
+    return result
 
 # Catchment constructor
 def make_catchment(G,reach_id):
@@ -550,8 +575,28 @@ def make_watershed(G,reach_ids):
     return watershed
 
 
-def catcments(G):
-    return None
+# def catcments(G):
+#     cats = [Catchment(graph.make_catchment(G,reach_id) for reach_id in graph.get_node_type_ids(G,'RCHRES'))]
+
+#     return 
+        
+#         for u, v, edge_data in graph.make_catchment(G,reach_id).edges(data=True):
+#             source_node_attributes = G.nodes[u]
+#             # Add or update edge attributes with source node attributes
+#             edge_data["source_type"] = source_node_attributes.get("type")
+#             edge_data["source_name"] = source_node_attributes.get("name")
+#             edge_data["source_type_id"] = source_node_attributes.get("type_id")
+#             cats.append(edge_data)
+        
+#     return pd.DataFrame(cats)
+                     
+                     
+#                      for node in G.nodes:
+#         upstream_nodes = G.predecessors(node)
+#         if any(G.nodes[up]['type'] in ['PELND','IMPLND'] for up in upstream_nodes):
+#             result.append(node)
+
+#     return None
 # Catchment selectors
 
 '''
@@ -637,9 +682,12 @@ class Catchment():
 #%% Legacy Methods for Backwards compatability
 class reachNetwork():
     def __init__(self,uci,reach_id = None):
-        self.G = create_graph(uci)
-        self.schematic = uci.table('SCHEMATIC').astype({'TVOLNO': int, "SVOLNO": int, 'AFACTR':float})
         self.uci = uci
+        self.G = create_graph(uci)
+        self.catchment_ids = catchment_ids(self.G)
+        self.routing_reaches = self._routing_reaches()
+        self.lakes = self._lakes()
+        self.schematic = uci.table('SCHEMATIC').astype({'TVOLNO': int, "SVOLNO": int, 'AFACTR':float})
     
     def get_node_type_ids(self,node_type):
         return get_node_type_ids(self.G, node_type)
@@ -709,15 +757,18 @@ class reachNetwork():
     
     def subwatersheds(self,reach_ids = None):
         df = subwatersheds(self.uci)
-        if reach_ids is not None:
-            df = df.loc[df.index.intersection(reach_ids)]
-        return df
+        if reach_ids is None:
+            reach_ids = get_node_type_ids(self.G,'RCHRES')
+        return df.loc[df.index.intersection(reach_ids)]
     
     def subwatershed(self,reach_id):
         return subwatershed(self.uci,reach_id) #.loc[reach_id]
     
     def subwatershed_area(self,reach_id):
-        return self.drainage(reach_id).query("source_type in ['PERLND','IMPLND']")['area'].sum()
+        area = self.drainage(reach_id).query("source_type in ['PERLND','IMPLND']")['area'].sum()
+        # if (reach_id in self.lakes()) & (f'FTABLE{reach_id}' in self.uci.table_names('FTABLES')):
+        #     area = area + self.lake_area(reach_id)
+        return area
     
     def reach_contributions(self,operation,opnids):
         return reach_contributions(self.uci,operation,opnids)
@@ -735,6 +786,15 @@ class reachNetwork():
 
     def outlets(self):
         return [self.G.nodes[node]['type_id'] for node, out_degree in self.G.out_degree() if (out_degree == 0) & (self.G.nodes[node]['type'] == 'RCHRES')]
+
+    def _lakes(self):
+        return list(self.uci.table('RCHRES','GEN-INFO').query('LKFG == 1',engine = 'python').index.astype(int))        
+    
+    def lake_area(self,reach_id):
+        return self.uci.table('FTABLES',f'FTABLE{reach_id}')['Area'].max()
+    
+    def _routing_reaches(self):
+        return [reach_id for reach_id in self.get_node_type_ids('RCHRES') if reach_id not in self.catchment_ids]
 
     def paths(self,reach_id):
         return paths(self.G,reach_id)
@@ -799,6 +859,7 @@ def subwatersheds(uci):
     schematic = schematic[schematic['TVOL'] == 'RCHRES'][['SVOLNO','TVOLNO','AFACTR','MLNO']].astype({'SVOLNO':int,'TVOLNO':int,'AFACTR':float,'MLNO':int})
     schematic.reset_index(inplace=True,drop=False)
     schematic.set_index('TVOLNO',inplace=True)
+    schematic = schematic.loc[catchment_ids(uci.network.G)]
     
     dfs = []
     for operation in ['PERLND','IMPLND']:

@@ -52,7 +52,10 @@ class Table():
     
         self.parser = parserSelector[self.block]
         #self.updater = Updater
-        
+    
+    def _delimiters(self):
+        return delimiters(self.block,self.name)
+    
     def parse(self):
         self.data = self.parser.parse(self.block,self.name,self.lines)
         

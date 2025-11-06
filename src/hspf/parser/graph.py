@@ -17,43 +17,7 @@ class Node(object):
 
     def __str__(self):
         return self._label
-    
-# class PerlndNode(Node):
-#     raise NotImplementedError
-
-# class ReachNode(Node):
-#     raise NotImplementedError
-
-# class ImplndNode(Node):
-#     raise NotImplementedError
-
-# class SourceNode(Node):
-#     raise NotImplementedError
-
-# class TargetNode(Node):
-#     raise NotImplementedError
-
-# class MetNode(Node):
-#     raise NotImplementedError
-
-
-
-# class wdmNode(Node):
-#     raise NotImplementedError
-
-
-# # Add Parameter Nodes Add edges at same time since it's expensive to determine associated plern/implnd/reach node
-# keys = [key for key in uci.uci.keys() if key[0] in ['IMPLND','RCHRES','PERLND']]
-# for operation,table_name,table_id in keys:  
-#     parms = uci.table(operation,table_name,table_id)
-#     for opnid, row in parms.iterrows():
-#         target_node = graph.get_node(G,operation,opnid)
-#         for parameter in row.index:
-#             G.add_node(max(G.nodes) + 1, type = 'Parameter', value = row[parameter], name = parameter, operation = operation, table_name = table_name, table_id = table_id) 
-#             #labels[(operation,parameter,table_id)] = [max(G.nodes)]  
-#             G.add_edge(max(G.nodes), target_node)
-
-    
+   
     
 def create_graph(uci):
     
@@ -101,27 +65,6 @@ def create_graph(uci):
                              tmemsb1 = row['TMEMSB1'],
                              tmemsb2 = row['TMEMSB2'])
         
-    # _ = [G.add_edge(row['snode'],row['tnode'],
-    #                  mlno = row['MLNO'],
-    #                  area = row['AFACTR'],
-    #                  tmemsb1 = row['TMEMSB1'],
-    #                  tmemsb2 = row['TMEMSB2']) for index, row in schematic.iterrows()]
-    
-    
-    
-    #Define edges from Ext Sources
-    # ext_sources['snode'] = ext_sources.index.map(labels)
-    # ext_sources.set_index(['TVOL','TOPFST'],inplace=True)
-    # ext_sources['tnode'] = ext_sources.index.map(labels)
-    # _ = [G.add_edge(row['snode'],row['tnode'],
-    #                  smemn = row['SMEMN'],
-    #                  smemsb = row['SMEMSB'],
-    #                  mfactor = row['MFACTOR'],
-    #                  tran = row['TRAN'],
-    #                  tmemn = row['TMEMN'],
-    #                  tmemsb1 = row['TMEMSB1'],
-    #                  tmemsb2 = row['TMEMSB2']) for index, row in ext_sources.iterrows()]
-    
  
 
     # Add property information
@@ -139,207 +82,9 @@ def create_graph(uci):
         G.nodes[labels[('RCHRES',index)]]['name'] = row['RCHID']
         G.nodes[labels[('RCHRES',index)]]['lkfg'] = row['LKFG']
 
-    
-    # # Add property information
-    # bininfo = uci.table('PERLND','BINARY-INFO')
-    # for index,row in geninfo.iterrows():
-    #     G.nodes[labels[('PERLND',index)]]['name'] = row['LSID']
-        
-    # bininfo = uci.table('IMPLND','BINARY-INFO')
-    # for index,row in geninfo.iterrows():
-    #     G.nodes[labels[('IMPLND',index)]]['name'] = row['LSID']
-        
-    # bininfo = uci.table('RCHRES','BINARY-INFO')
-    # for index,row in geninfo.iterrows():
-    #     G.nodes[labels[('RCHRES',index)]]['name'] = row['RCHID']
-    #     G.nodes[labels[('RCHRES',index)]]['lkfg'] = row['LKFG']
-
-
-    # labels = {}
-    # for n, d in G.nodes(data=True):
-    #     l = (d['operation'],d['opnid'])
-    #     labels[l] = labels.get(l, [])
-    #     labels[l].append(n)
-
-
-
     G.labels = labels
     return G
 
-
-# def create_subgraph(G,start_node):
-#     sub_G = nx.MultDiGraph()
-#     for n in G.successors_iter(start_node):
-#         sub_G.add_path([start_node,n])
-#         create_subgraph(G,sub_G,n)
-
-# Binary info
-
-"""
-CREATE TABLE Operation (
-    opn VARCHAR,
-    opnid INTEGER,
-    PRIMARY KEY (opn, opnid)
-
- 
-    
- )
-
-
-
-
-"""
-
-
-
-
-"""
-CREATE TABLE Files (
-    ftype VARCHAR,
-    unit INTEGER NOT NULL PRIMARY KEY,,
-    filename VARCHAR
-);
-
-"""
-
-
-"""
-CREATE TABLE GenInfo (
-    pk INTEGER NOT NULL,
-    opn VARCHAR,
-    opnid INTEGER,
-    PRIMARY KEY (opn, opnid)
-    iunits INTEGER,
-    ounits INTEGER,
-    punit1 INTEGER,
-    punit2 INTEGER,
-    BUNIT1 INTEGER,
-    BUNIT2 INTEGER
-);
-
-"""
-
-# # Files
-# files = uci.table('FILES')
-# files['FTYPE'] = files['FTYPE'].replace({'WDM': 'WDM1'})
-# dfs = []
-
-# # PerlndInfo
-# operation = 'PERLND'
-# geninfo = uci.table(operation,'GEN-INFO')
-# binaryinfo = uci.table(operation,'BINARY-INFO')
-# if operation == 'RCHRES':
-#     geninfo = geninfo.rename(columns = {'RCHID':'LSID',
-#                                         'BUNITE':'BUNIT1',
-#                                         'BUNITM': 'BUNIT2',
-#                                         'PUNITE': 'PUNIT1',
-#                                         'PUNITM': 'PUNIT2'})
-# df = pd.merge(geninfo,binaryinfo, left_index = True, right_index = True, how = 'outer').reset_index()
-# df.insert(0,'OPN',operation)
-# df = pd.merge(df,files, left_on = 'BUNIT1', right_on = 'UNIT')
-
-# # Schematic Table
-# schematic = uci.table('SCHEMATIC')
-
-# # Masslink Table
-# masslinks = []
-# for table_name in uci.table_names('MASS-LINK'):
-#     mlno = table_name.split('MASS-LINK')[1]
-#     masslink = uci.table('MASS-LINK',table_name)
-#     masslink.insert(0,'MLNO',mlno)
-#     masslinks.append(masslink)
-# masslinks = pd.concat(masslinks)
-
-# #masslinks['QUALID'] = (masslinks['SMEMSB1'].str.strip().replace('','0').astype(int)-1).replace(-1,pd.NA)
-
-
-
-# hbn_name = uci.table('PERLND','QUAL-PROPS', int(row['SMEMSB1']) - 1).iloc[0]['QUALID']
-
-# operation = row['SVOL']
-# activity = row['SGRPN']
-# ts_name = row['SMEMN']
-
-# hbn_name = row['SMEMN'] + hbn_name
-
-
-# schematic = uci.table('SCHEMATIC')
-# schematic = pd.merge(schematic,masslinks,left_on = 'MLNO',right_on = 'MLNO')
-
-# all(schematic['SVOL_x'] == schematic['SVOL_y'])
-# all(schematic['TVOL_x'] == schematic['TVOL_y'])
-# schematic.loc[schematic['TMEMSB1_x'] == '', 'TMEMSB1_y'] = schematic['TMEMSB1_x']
-# schematic.loc[schematic['TMEMSB2_x'] == '', 'TMEMSB2_y'] = schematic['TMEMSB2_x']
-
-# schematic = schematic.drop(columns=['TMEMSB1_y','TMEMSB2_y','TVOL_y','SVOL_y'])
-# schematic = schematic.rename(columns = {'SVOL_x':'SVOL',
-#                               'TVOL_x':'TVOL',
-#                               'TMEMSB2_x':'TMEMSB2',
-#                               'TMEMSB1_x':'TMEMSB1'})
-
-
-
-# # Watershed Weighted Mean 
-# subwatersheds = uci.network.subwatersheds()
-# subwatersheds = subwatersheds.loc[subwatersheds['SVOL'] == 'PERLND'].reset_index()
-# df = cal.model.hbns.get_multiple_timeseries('PERLND',5,'PERO',test['SVOLNO'].values).mean().reset_index()
-# df.columns = ['OPNID','value']
-# weighted_mean = df[['value','AFACTR']].groupby(df['LSID']).apply(lambda x: (x['value'] * x['AFACTR']).sum() / x['AFACTR'].sum())
-# weighted_mean.loc['combined'] =  (df['value'] * df['AFACTR']).sum() / df['AFACTR'].sum()
-
-
-# # annual weighted timeseries watershed
-# reach_ids = [103,119,104,118]
-# subwatersheds = uci.network.subwatersheds().loc[reach_ids]
-# subwatersheds = subwatersheds.loc[subwatersheds['SVOL'] == 'PERLND'].reset_index()
-# df = cal.model.hbns.get_multiple_timeseries('PERLND',5,'PERO',test['SVOLNO'].values).mean().reset_index()
-# df.columns = ['OPNID','value']
-# df = pd.merge(subwatersheds,df,left_on = 'SVOLNO', right_on='OPNID')
-# weighted_mean = (df['value'] * df['AFACTR']).sum() / df['AFACTR'].sum()
-# df[f'weighted_{ts_name}'] = df.groupby('LSID')[parameter].transform(lambda x: (x * df.loc[x.index, 'AFACTR']).sum() / df.loc[x.index, 'AFACTR'].sum())
-# weighted_mean.loc['combined'] =  (df['value'] * df['AFACTR']).sum() / df['AFACTR'].sum()
-
-
-
-# # parameter average weighted by landcover area
-# table_name = 'PWAT-PARM2'
-# parameter = 'LZSN'
-# table_id = 0
-# operation = 'PERLND'
-
-# subwatersheds = uci.network.subwatersheds()
-# subwatersheds = subwatersheds.loc[subwatersheds['SVOL'] == 'PERLND'].reset_index()
-# df = uci.table(operation,table_name,table_id)[parameter].reset_index()
-# df.columns = ['OPNID',parameter]
-# df = pd.merge(subwatersheds,df,left_on = 'SVOLNO', right_on='OPNID')
-# df[f'weighted_{parameter}'] = df.groupby('TVOLNO')[parameter].transform(lambda x: (x * df.loc[x.index, 'AFACTR']).sum() / df.loc[x.index, 'AFACTR'].sum())
-
-
-# #df[f'weighted_{parameter}'] = df.groupby('LSID')[parameter].transform(lambda x: (x * df.loc[x.index, 'AFACTR']).sum() / df.loc[x.index, 'AFACTR'].sum())
-
-
-
-
-# extsources = uci.table('EXT SOURCES')
-# extsources['SVOL'] = extsources['SVOL'].replace({'WDM': 'WDM1'})
-
-# df = pd.merge(extsources,df,left_on = 'SVOL',right_on = 'FTYPE',how = 'right')
-
-
-# exttargets = uci.table('EXT TARGETS')
-# schematic = uci.table('SCHEMATIC')
-
-
-#%% Methods using universal node id
-
-# def bypass_node(G, node):
-#     preds = list(G.predecessors(node))
-#     succs = list(G.successors(node))
-#     for u in preds:
-#         for v in succs:
-#             if 
-#             G.add_edge(u, v)
-#     G.remove_node(node)
 
 def _add_subgraph_labels(G,G_sub):
     G_sub.labels = {label:node for label, node in G.labels.items() if node in G_sub.nodes}
@@ -425,17 +170,19 @@ def nodes(G,node_type,node_type_id,adjacent_node_type):
 #%% Methods using node_type, node_type_id interface
 
 def upstream_network(G,reach_id):
-    return G.subgraph(nx.ancestors(G,get_node_id(G,'RCHRES',reach_id))).copy()
+    node_id = get_node_id(G,'RCHRES',reach_id)
+    return G.subgraph([node_id] + list(nx.ancestors(G,node_id))).copy()
 
 def downstream_network(G,reach_id):
-    return G.subgraph(nx.descendants(G,get_node_id(G,'RCHRES',reach_id))).copy()
+    node_id = get_node_id(G,'RCHRES',reach_id)
+    return G.subgraph([node_id] + list(nx.descendants(G,node_id))).copy()
 
 def subset_network(G,reach_id,upstream_reach_ids = None):
     G = upstream_network(G,reach_id)
     if upstream_reach_ids is not None:
-        [G.remove_nodes_from(nx.ancestors(G,upstream_reach_id)) for upstream_reach_id in upstream_reach_ids if upstream_reach_id in G.nodes]
-        [G.remove_nodes_from([upstream_reach_id]) for upstream_reach_id in upstream_reach_ids if upstream_reach_id in G.nodes]
-    #assert([len(sinks(G)) == 0,sinks(G)[0] == reach_id])
+        for upstream_reach_id in upstream_reach_ids:
+            G.remove_nodes_from(get_node_ids(upstream_network(G,upstream_reach_id),'RCHRES'))
+        #assert([len(sinks(G)) == 0,sinks(G)[0] == reach_id])
     return G
 
 def upstream_nodes(G,reach_id,upstream_node_type):
@@ -821,6 +568,7 @@ def calibration_order(G,reach_id,upstream_reach_ids = None):
 
 def get_opnids(G,operation,reach_id = None, upstream_reach_ids = None):
     G = subset_network(G,reach_id,upstream_reach_ids)
+    return ancestors(G,get_node_id(G,'RCHRES',reach_id),operation)
     perlnds = [node['type_id'] for node in get_nodes(G,'PERLND')]
     implnds = [node['type_id'] for node in get_nodes(G,'IMPLND')]
     reachs = [node['type_id'] for node in get_nodes(G,'RCHRES')]

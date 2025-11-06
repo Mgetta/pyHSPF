@@ -325,6 +325,7 @@ def ann_avg_subwatershed_loading(constituent,uci,hbn):
     return df
 
 def ann_avg_watershed_loading(constituent,reach_ids,uci,hbn, by_landcover = False):
+    reach_ids = [item for sublist in [uci.network._upstream(reach_id) for reach_id in reach_ids] for item in sublist]
     df = ann_avg_constituent_loading(constituent,uci,hbn)
     df = df.loc[df['TVOLNO'].isin(reach_ids)]
     if by_landcover:

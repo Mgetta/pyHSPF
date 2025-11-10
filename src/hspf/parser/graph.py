@@ -568,7 +568,10 @@ def calibration_order(G,reach_id,upstream_reach_ids = None):
 
 def get_opnids(G,operation,reach_id = None, upstream_reach_ids = None):
     G = subset_network(G,reach_id,upstream_reach_ids)
-    return ancestors(G,get_node_id(G,'RCHRES',reach_id),operation)
+    opnids = [node['type_id'] for node in ancestors(G,get_node_id(G,'RCHRES',reach_id),operation)]
+    if operation == 'RCHRES':
+        opnids.append(reach_id)
+    return opnids
     perlnds = [node['type_id'] for node in get_nodes(G,'PERLND')]
     implnds = [node['type_id'] for node in get_nodes(G,'IMPLND')]
     reachs = [node['type_id'] for node in get_nodes(G,'RCHRES')]

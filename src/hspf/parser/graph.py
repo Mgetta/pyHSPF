@@ -4,10 +4,12 @@ Created on Thu Feb  6 14:50:45 2025
 
 @author: mfratki
 """
+
 import networkx as nx
 import pandas as pd
 import numpy as np
 import math
+from itertools import chain
 
 class Node(object):
     nodes = []
@@ -18,7 +20,37 @@ class Node(object):
     def __str__(self):
         return self._label
    
-    
+
+
+# G = nx.MultiDiGraph()
+# reach_nodes = schematic[['TVOL','TVOLNO']].drop_duplicates().reset_index(drop=True).reset_index()
+# nodes = schematic.loc[schematic['SVOL'].isin(['IMPLND','PERLND','GENER'])][['SVOL','SVOLNO']].reset_index(drop=True).reset_index()
+
+
+# reach_nodes.rename(columns = {'index':'TNODE'},inplace=True)
+# nodes.rename(columns = {'index':'SNODE','TVOL':'OPERATION','TVOLNO':'OPNID'},inplace=True)
+# [G.add_node(row['TNODE'], id = row['TNODE'], category = 'OPERATION', type_id = row['TVOLNO'], type = row['RCHRES'] ) for node,label in reach_nodes.iterrows()] 
+
+# df = pd.merge(schematic,reach_nodes,right_on = ['TVOL','TVOLNO'],left_on = ['TVOL','TVOLNO']).reset_index()
+# df.rename(columns = {'index':'SNODE'},inplace=True)
+
+
+# for index, row in df.iterrows():
+#     if row['SVOL'] == 'GENER':
+#         G.add_edge(row['SNODE'],row['TNODE'],
+#                             mlno = row['MLNO'],
+#                             count = row['AFACTR'],
+#                             tmemsb1 = row['TMEMSB1'],
+#                             tmemsb2 = row['TMEMSB2'])
+#     else:
+#         G.add_edge(row['SNODE'],row['TNODE'],
+#                             mlno = row['MLNO'],
+#                             area = row['AFACTR'],
+#                             tmemsb1 = row['TMEMSB1'],
+#                             tmemsb2 = row['TMEMSB2'])
+
+# G = nx.from_pandas_edgelist(df,'SNODE','TNODE',edge_attr = True,edge_key = 'SNODE', create_using=nx.MultiDiGraph())
+
 def create_graph(uci):
     
     
@@ -169,19 +201,28 @@ def nodes(G,node_type,node_type_id,adjacent_node_type):
 
 #%% Methods using node_type, node_type_id interface
 
-def upstream_network(G,reach_id):
-    node_id = get_node_id(G,'RCHRES',reach_id)
-    return G.subgraph([node_id] + list(nx.ancestors(G,node_id))).copy()
+def upstream_network(G,reach_ids):
+    node_ids = [get_node_id(G,'RCHRES',reach_id) for reach_id in reach_ids]
+        # Initialize an empty set to store all unique ancestors
+    
+    all_ancestors = set()
+    # Iterate through the target nodes and find ancestors for each
+    for node_id in node_ids:
+        ancestors_of_node = nx.ancestors(G, node_id)
+        all_ancestors.update(ancestors_of_node) # Add ancestors to the combined set
+
+    all_ancestors.update(node_ids) # Include the target nodes themselves
+    return G.subgraph(all_ancestors).copy()
+    #return G.subgraph([node_id] + list(nx.ancestors(G,node_id))).copy()
 
 def downstream_network(G,reach_id):
     node_id = get_node_id(G,'RCHRES',reach_id)
     return G.subgraph([node_id] + list(nx.descendants(G,node_id))).copy()
 
-def subset_network(G,reach_id,upstream_reach_ids = None):
-    G = upstream_network(G,reach_id)
+def subset_network(G,reach_ids,upstream_reach_ids = None):
+    G = upstream_network(G,reach_ids)
     if upstream_reach_ids is not None:
-        for upstream_reach_id in upstream_reach_ids:
-            G.remove_nodes_from(get_node_ids(upstream_network(G,upstream_reach_id),'RCHRES'))
+        G.remove_nodes_from(get_node_ids(upstream_network(G,upstream_reach_ids),'RCHRES'))
         #assert([len(sinks(G)) == 0,sinks(G)[0] == reach_id])
     return G
 
@@ -259,8 +300,8 @@ def routing_reachs(G):
 def is_routing(G,reach_id):
     return all([node['type'] not in ['PERLND', 'IMPLND'] for node in adjacent_nodes(G,reach_id)])
 
-def watershed_area(G,reach_ids):
-    return float(np.nansum(list(nx.get_edge_attributes(make_watershed(G,reach_ids),'area').values())))
+def watershed_area(G,reach_ids,upstream_reach_ids = None):
+    return float(np.nansum(list(nx.get_edge_attributes(make_watershed(G,reach_ids,upstream_reach_ids),'area').values())))
 
 def catchment_area(G,reach_id):
     return float(np.nansum(list(nx.get_edge_attributes(make_catchment(G,reach_id),'area').values())))
@@ -300,22 +341,47 @@ def make_catchment(G,reach_id):
     nx.set_node_attributes(catchment,node_id,'catchment_id')
     return catchment
 
-from itertools import chain
-
-def make_watershed(G,reach_ids):
+def make_watershed(G,reach_ids,upstream_reach_ids = None):
     '''
     Creates a sugraph representing the the catchments upstream of the specified hspf model reaches. Note that a negative reach_ids indicate to subtract that area from the total.
     
     
     ''' 
-    node_ids = set([get_node_id(G,'RCHRES',reach_id) for reach_id in reach_ids if reach_id > 0])
-    nodes_to_exclude = set([get_node_id(G,'RCHRES',abs(reach_id)) for reach_id in reach_ids if reach_id < 0])
-    node_ids = node_ids - nodes_to_exclude
+
+    node_ids = set(get_node_id(G,'RCHRES',reach_id) for reach_id in reach_ids)
+
+    # Initialize an empty set to store all unique ancestors
+    
+    # Iterate through the target nodes and find ancestors for each
+    all_upstream_reaches = set()
+    for node_id in node_ids:
+        ancestors_of_node = [node['id'] for node in ancestors(G, node_id,'RCHRES')]
+        all_upstream_reaches.update(ancestors_of_node) # Add ancestors to the combined set
+    all_upstream_reaches.update(node_ids) # Include the target nodes themselves
+
+    if upstream_reach_ids is not None:
+        upstream_node_ids = set(get_node_id(G,'RCHRES',reach_id) for reach_id in upstream_reach_ids)
+        for node_id in upstream_node_ids:
+            ancestors_of_node = [node['id'] for node in ancestors(G, node_id,'RCHRES')]
+            all_upstream_reaches = all_upstream_reaches - set(ancestors_of_node)
+    else:
+        upstream_node_ids = set()
+
+    nodes = set(chain.from_iterable([list(G.predecessors(node_id)) for node_id in all_upstream_reaches])) | node_ids
+    nodes = nodes - upstream_node_ids # Include the target nodes themselves
+
+
+    return G.subgraph(nodes).copy()
     
     
-    nodes = [list(nx.ancestors(G,node_id)) for node_id in node_ids]
-    nodes.append(node_ids)
-    nodes = list(set(chain.from_iterable(nodes)))
+    # node_ids = set([get_node_id(G,'RCHRES',reach_id) for reach_id in reach_ids if reach_id > 0])
+    # nodes_to_exclude = set([get_node_id(G,'RCHRES',abs(reach_id)) for reach_id in reach_ids if reach_id < 0])
+    # node_ids = node_ids - nodes_to_exclude
+    
+    #nodes = get_opnids(G,'RCHRES',reach_ids,upstream_reach_ids) #[ancestors(G,node_id,'RCHRES')) for node_id in node_ids]
+    nodes = subset_network(G,reach_ids,upstream_reach_ids)
+    #nodes.append(node_ids)
+    #nodes = list(set(chain.from_iterable(nodes)))
     watershed = subgraph(G, nodes)
     catchment_id = '_'.join([str(reach_id) for reach_id in reach_ids])
     nx.set_node_attributes(watershed,node_ids,catchment_id)
@@ -401,8 +467,17 @@ class Catchment():
     def dsn(self,tmemn):
         return [self.catchment.nodes[k[0]]['id']  for k,v in nx.get_edge_attributes(self.catchment,'tmemn').items() if v == tmemn]
     
-    def to_dataframe():
-        return 
+    def to_dataframe(self):
+        edges = []
+        for u, v, edge_data in self.catchment.edges(data=True):
+            source_node_attributes = self.catchment.nodes[u]
+            # Add or update edge attributes with source node attributes
+            edge_data["source_type"] = source_node_attributes.get("type")
+            edge_data["source_name"] = source_node_attributes.get("name")
+            edge_data["source_type_id"] = source_node_attributes.get("type_id")
+            edges.append(edge_data)
+        
+        return pd.DataFrame(edges)
 # def _watershed(G,reach_id):
     
 #     predecessors = (list(G.predecessors(node)))
@@ -423,7 +498,17 @@ class Catchment():
     
 #     {source:[node for node in nx.shortest_path(G,source,reach_id)] for source in nx.ancestors(G,reach_id)}
 
-
+def to_dataframe(G):
+    edges = []
+    for u, v, edge_data in G.edges(data=True):
+        source_node_attributes = G.nodes[u]
+        # Add or update edge attributes with source node attributes
+        edge_data["source_type"] = source_node_attributes.get("type")
+        edge_data["source_name"] = source_node_attributes.get("name")
+        edge_data["source_type_id"] = source_node_attributes.get("type_id")
+        edges.append(edge_data)
+    
+    return pd.DataFrame(edges)
 
 
 #%% Legacy Methods for Backwards compatability
@@ -457,8 +542,16 @@ class reachNetwork():
         downstream.insert(0,reach_id)
         return downstream
         
-    def calibration_order(self,reach_id,upstream_reach_ids = None):
-        return calibration_order(self.G,reach_id,upstream_reach_ids)
+    def calibration_order(self,reach_ids,upstream_reach_ids = None):
+        '''
+        Calibration order of reaches to prevent upstream influences. Equivalent to iteritivlye pruning the network remving nodes with no upstream connections.
+        A list of lists is returned where each sublist contains reaches that can be calibrated in parallel.
+        
+        :param self: Description
+        :param reach_ids: Description
+        :param upstream_reach_ids: Description
+        '''
+        return calibration_order(make_watershed(self.G,reach_ids,upstream_reach_ids))
     
     def station_order(self,reach_ids):
         raise NotImplementedError()
@@ -478,30 +571,30 @@ class reachNetwork():
         '''
         return  [node['type_id'] for node in predecessors(self.G,'RCHRES',get_node_id(self.G,'RCHRES',reach_id))]
         
-    def get_opnids(self,operation,reach_id, upstream_reach_ids = None):
+    def get_opnids(self,operation,reach_ids, upstream_reach_ids = None):
         '''
         Operation IDs with a path to reach_id. Operations upstream of upstream_reach_ids will not be included
 
         '''
-        return get_opnids(self.G,operation=operation,reach_id = reach_id, upstream_reach_ids = upstream_reach_ids)
-    
+        return get_opnids(self.G,operation,reach_ids,upstream_reach_ids)    
     def operation_area(self,operation,opnids = None):
+        '''
+        Area of operation type for specified operation IDs. If None returns all operation areas.
+        Equivalent to the schematic table filtered by operation and opnids.
+        '''
+
         return operation_area(self.uci,operation)  
         
     def drainage(self,reach_id):
-        # Merge source node attributes into edge attributes
-    
-        edges = []
-        for u, v, edge_data in make_catchment(self.G,reach_id).edges(data=True):
-            source_node_attributes = self.G.nodes[u]
-            # Add or update edge attributes with source node attributes
-            edge_data["source_type"] = source_node_attributes.get("type")
-            edge_data["source_name"] = source_node_attributes.get("name")
-            edge_data["source_type_id"] = source_node_attributes.get("type_id")
-            edges.append(edge_data)
+        '''
+        Docstring for drainage
         
-        return pd.DataFrame(edges)
-    
+        :param self: Network class instance
+        :param reach_id: Target reach id 
+        '''
+        # Merge source node attributes into edge attributes
+        return to_dataframe(make_catchment(self.G,reach_id))
+
     def subwatersheds(self,reach_ids = None):
         df = subwatersheds(self.uci)
         if reach_ids is None:
@@ -520,15 +613,16 @@ class reachNetwork():
     def reach_contributions(self,operation,opnids):
         return reach_contributions(self.uci,operation,opnids)
     
-    def drainage_area(self,reach_ids):
-        return watershed_area(self.G,reach_ids)
+    def drainage_area(self,reach_ids,upstream_reach_ids = None):
+        return watershed_area(self.G,reach_ids,upstream_reach_ids)
     
-    def drainage_area_landcover(self,reach_id,group = True):
-        reach_ids = self._upstream(reach_id)
-        areas = pd.concat([self.subwatershed(reach_id) for reach_id in reach_ids]).groupby(['SVOL','SVOLNO'])['AFACTR'].sum()
-        
-        if group:    
-            areas = pd.concat([areas[operation].groupby(self.uci.opnid_dict[operation].loc[areas[operation].index,'LSID'].values).sum() for operation in ['PERLND','IMPLND']])
+    def drainage_area_landcover(self,reach_ids,upstream_reach_ids = None, group = True):
+        areas = to_dataframe(make_watershed(self.G,reach_ids,upstream_reach_ids))
+        areas = areas.groupby(['source_type','source_type_id','source_name'])['area'].sum()[['PERLND','IMPLND']]
+
+        if group:  
+            areas = pd.concat([areas[operation].groupby('source_name').sum()  for operation in ['PERLND','IMPLND']])
+            #areas = pd.concat([areas[operation].groupby(self.uci.opnid_dict[operation].loc[areas[operation].index,'LSID'].values).sum() for operation in ['PERLND','IMPLND']])
         return areas
 
     def outlets(self):
@@ -546,52 +640,28 @@ class reachNetwork():
     def paths(self,reach_id):
         return paths(self.G,reach_id)
     
-    
-def calibration_order(G,reach_id,upstream_reach_ids = None):
+
+def get_opnids(G,operation,reach_ids, upstream_reach_ids = None):
+    return get_node_type_ids(make_watershed(G,reach_ids,upstream_reach_ids),operation)
+
+
+def calibration_order(G):
     '''
-    Determines the order in which the specified reaches should be calibrated to
+    Determines the order in which the model reaches should be calibrated to
     prevent upstream influences. Primarily helpful when calibrating sediment and
     adjusting in channel erosion rates.
     '''
     
+    nodes = get_node_ids(G,'RCHRES')
+    G = G.subgraph(nodes).copy()
     order = []
-    Gsub = subgraph(G,get_node_ids(G,'RCHRES'))
-    while(len(Gsub.nodes)) > 0:
-   
-        nodes_to_remove = [node for node, in_degree in Gsub.in_degree() if in_degree == 0]
+    while(len(nodes)) > 0:
+        nodes_to_remove = [node for node in nodes if G.in_degree(node) == 0]
         order.append([G.nodes[node]['type_id'] for node in nodes_to_remove])
-        Gsub.remove_nodes_from(nodes_to_remove)         
+        nodes = [node for node in nodes if node not in nodes_to_remove]
+        G.remove_nodes_from(nodes_to_remove)
     return order
-    
-
-
-
-def get_opnids(G,operation,reach_id = None, upstream_reach_ids = None):
-    G = subset_network(G,reach_id,upstream_reach_ids)
-    opnids = [node['type_id'] for node in ancestors(G,get_node_id(G,'RCHRES',reach_id),operation)]
-    if operation == 'RCHRES':
-        opnids.append(reach_id)
-    return opnids
-    perlnds = [node['type_id'] for node in get_nodes(G,'PERLND')]
-    implnds = [node['type_id'] for node in get_nodes(G,'IMPLND')]
-    reachs = [node['type_id'] for node in get_nodes(G,'RCHRES')]
-    return {'RCHRES':reachs,'PERLND':perlnds,'IMPLND':implnds}[operation]
-    #return reachs,perlnds,implnds
-
-def drainage(uci,reach_ids):
-    return subwatersheds(uci).loc[reach_ids].reset_index()[['SVOL','LSID','AFACTR']].groupby(['LSID','SVOL']).sum()
-
-
-
-def drainage_area(uci,reach_ids,drng_area = 0):
-    if len(reach_ids) == 0:
-        return drng_area
-    else:
-        sign = math.copysign(1,reach_ids[0])
-        reach_id = int(reach_ids[0]*sign)
-        drng_area = drng_area + sign*uci.network.drainage_area(reach_id)
-        drainage_area(uci,reach_ids[1:],drng_area)
-                
+       
 
 def reach_contributions(uci,operation,opnids):
     schematic = uci.table('SCHEMATIC').set_index('SVOL')

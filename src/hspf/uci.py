@@ -8,6 +8,7 @@ Created on Mon Jul 11 08:39:57 2022
 
 #lines = reader('C:/Users/mfratki/Documents/Projects/LacQuiParle/ucis/LacQuiParle_0.uci')
 import subprocess
+import sys
 import numpy as np
 import pandas as pd
 from .parser.parsers import Table
@@ -103,7 +104,7 @@ class UCI():
         self.uci[(block,table_name,table_id)].replace(table)
 
     def table_lines(self,block,table_name = 'na',table_id = 0):
-        return self.uci[(block,table_name,table_id)].lines
+        return self.uci[(block,table_name,table_id)].lines.copy()
         
     def comments(block,table_name = None,table_id = 0): # comments of a table
         raise NotImplementedError()
@@ -177,6 +178,43 @@ class UCI():
         lines += ['END RUN']
         self.lines = lines       
 
+    def set_simulation_period(self,start_year,end_year):
+        # Update GLOBAL table with new start and end dates very janky implementation but not a priority.
+
+        # if start_hour < 10:
+        #     start_hour = f'0{int(start_hour+1)}:00'
+        # else:
+        #     start_hour = f'{int(start_hour+1)}:00'
+        
+        # if end_hour < 10:
+        #     end_hour = f'0{int(end_hour+1)}:00'
+        # else:
+        #     end_hour = f'{int(end_hour+1)}:00'
+
+        table_lines = self.table_lines('GLOBAL')  
+        for index, line in enumerate(table_lines):
+            if '***' in line: #in case there are comments in the global block
+                continue
+            elif line.strip().startswith('START'):
+                table_lines[index] = line[0:14] + f'{start_year}/01/01 00:00  ' + f'END    {end_year}/12/31 24:00'
+            else:
+                continue
+
+        self.uci[('GLOBAL','na',0)].lines = table_lines
+
+    def set_echo_flags(self,flag1,flag2):
+        table_lines = self.table_lines('GLOBAL')  
+        for index, line in enumerate(table_lines):
+            if '***' in line: #in case there are comments in the global block
+                continue
+            elif line.strip().startswith('RUN INTERP OUTPT LEVELS'):
+                table_lines[index] = f'  RUN INTERP OUTPT LEVELS    {flag1}    {flag2}'
+            else:
+                continue
+        
+
+        self.uci[('GLOBAL','na',0)].lines = table_lines
+
 
     def _write(self,filepath):
         with open(filepath, 'w') as the_file:
@@ -210,6 +248,9 @@ class UCI():
     def write(self,new_uci_path):
         self.merge_lines()
         self._write(new_uci_path) 
+
+    def _run(self,wait_for_completion=True):
+        run_model(self.filepath, wait_for_completion=wait_for_completion)
 
     def update_bino(self,name):
         #TODO: Move up to busniess/presentation layer
@@ -325,9 +366,25 @@ class UCI():
 
 #TODO: More conveince methods that should probably be in a separate module
 
-def run_model(uci_file):
-    winHSPF = str(Path(__file__).resolve().parent.parent) + '\\bin\\WinHSPFLt\\WinHspfLt.exe'     
-    subprocess.run([winHSPF,uci_file.as_posix()]) #, stdout=subprocess.PIPE, creationflags=0x08000000)
+def run_model(uci_file, wait_for_completion=True):
+    winHSPF = str(Path(__file__).resolve().parent.parent) + '\\bin\\WinHSPFlt\\WinHspfLt.exe'
+    
+    # Arguments for the subprocess
+    args = [winHSPF, uci_file.as_posix()]
+
+    if wait_for_completion:
+        # Use subprocess.run to wait for the process to complete (original behavior)
+        subprocess.run(args)
+    else:
+        # Use subprocess.Popen to run the process in the background without waiting
+        # On Windows, you can use creationflags to prevent a console window from appearing
+        if sys.platform.startswith('win'):
+            # Use a variable for the flag to ensure it's only used on Windows
+            creationflags = subprocess.CREATE_NO_WINDOW
+            subprocess.Popen(args, creationflags=creationflags)
+        else:
+            # For other platforms (like Linux/macOS), Popen without special flags works fine
+            subprocess.Popen(args)
 
 def get_filepaths(uci,file_extension):
     files = uci.table('FILES')

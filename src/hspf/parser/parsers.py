@@ -6,6 +6,7 @@ Created on Fri Oct  7 12:13:23 2022
 """
 
 from abc import abstractmethod
+from multiprocessing.util import info
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -289,7 +290,28 @@ class masslinkParser(Parser):
                 table_lines[index] = line[-1]
                 
         return table_lines       
-  
+
+class globalParser(Parser):
+    def parse(block,table_name,table_lines):
+        
+        data = {
+            'description' : table_lines[0].strip(),
+            'start_date' : table_lines[1].split('END')[0].split()[1],
+            'start_hour' :  int(table_lines[1].split('END')[0].split()[2][:2])-1,
+            'end_date' : table_lines[1].strip().split('END')[1].split()[0],
+            'end_hour' : int(table_lines[1].strip().split('END')[1].split()[1][:2])-1,
+            'echo_flag1' : int(table_lines[2].split()[-2]),
+            'echo_flag2' : int(table_lines[3].split()[-1]),
+            'units_flag' : int(table_lines[3].split()[5]),
+            'resume_flag': int(table_lines[3].split()[1]),
+            'run_flag': int(table_lines[3].split()[3]) 
+        }
+        df = pd.DataFrame([data])
+        return df
+    
+    def write(block,table_name,table):
+        raise NotImplementedError()
+
 class specactionsParser(Parser):
     def parse(block,table,lines):
         raise NotImplementedError()
@@ -304,7 +326,7 @@ class externalsourcesParser():
     def write(block,table,lines):
         raise NotImplementedError()
 
-parserSelector = {'GLOBAL':defaultParser,
+parserSelector = {'GLOBAL':globalParser,
                 'FILES':standardParser,
                 'OPN SEQUENCE':opnsequenceParser,
                 'PERLND':operationsParser,

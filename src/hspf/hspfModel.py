@@ -30,7 +30,7 @@ class hspfModel():
 
     # Imposed structures of an hspf model:
         # 1. all model files are located in the same directory as the uci file.
-    def __init__(self,uci_file:str):
+    def __init__(self,uci_file:str,run_model:bool = False):
                       #wdm_files:list = None,
                       #hbn_files:str = None):
         # Inputs
@@ -39,7 +39,7 @@ class hspfModel():
         self.wdm_paths = []
         self.uci_file = Path(uci_file).resolve()
         # Validate and load binary data
-        self.validate_uci()
+        self.validate_uci(run_model = run_model)
         
         
         self.hbns = hbn.hbnInterface(self.hbn_paths)
@@ -51,8 +51,28 @@ class hspfModel():
         # Compositions
         self.reports = Reports(self.uci,self.hbns,self.wdms)
         
+
+    def validate_wdms(self):
+        # Ensure wdm files exist and the folders for the other file types exist relative
+        # to the uci path   
+
+        for index, row in self.uci.table('FILES',drop_comments = False).iterrows():
+            file_path = self.uci_file.parent.joinpath(Path(row['FILENAME']))            
+            if file_path.suffix.lower() == '.wdm':
+                assert file_path.exists(),'File Specified in the UCI does not exist:' + file_path.as_posix()
+                self.wdm_paths.append(file_path)
   
-    def validate_uci(self):
+    def validate_pltgens(self):
+        raise NotImplementedError() 
+
+    def validate_folders(self):
+        for index, row in self.uci.table('FILES',drop_comments = False).iterrows():
+            file_path = self.uci_file.parent.joinpath(Path(row['FILENAME']))            
+            assert file_path.parent.exists(),'File folder Specified in the UCI does not exist: ' + file_path.as_posix()
+
+
+ 
+    def validate_uci(self,run_model:bool = False):
         # Ensure wdm files exist and the folders for the other file types exist relative
         # to the uci path   
 
@@ -63,14 +83,14 @@ class hspfModel():
                 self.wdm_paths.append(file_path)
             elif file_path.suffix.lower() == '.hbn':
                 assert file_path.parent.exists(),'File folder Specified in the UCI does not exist: ' + file_path.as_posix()
-                #self.hbns[file_path.name.split('.')[0]] = None
-                if file_path.exists():
-                    #self.hbns[file_path.name.split('.')[0]] = hbn.hbnClass(file_path)
-                    self.hbn_paths.append(file_path)
-                else:
-                    self.run_model()
+                self.hbn_paths.append(file_path)
             else:
                 assert file_path.parent.exists(),'File folder Specified in the UCI does not exist: ' + file_path.as_posix()
+
+        if (all(file_path.exists() for file_path in self.hbn_paths)) & (run_model == False):
+            pass
+        else:
+            self.run_model()
 
     def run_model(self,new_uci_file = None):
         
@@ -80,14 +100,14 @@ class hspfModel():
         # new_uci_file = self.model_path.joinpath(uci_name)
         # self.uci.write(new_uci_file)
         subprocess.run([self.winHSPF,self.uci_file.as_posix()]) #, stdout=subprocess.PIPE, creationflags=0x08000000)
-        self.load_uci(new_uci_file)
+        self.load_uci(new_uci_file,run_model = False)
 
     def load_hbn(self,hbn_name):
         self.hbns[hbn_name] = hbn.hbnClass(self.uci_file.parent.joinpath(hbn_name).as_posix())
 
-    def load_uci(self,uci_file):
+    def load_uci(self,uci_file,run_model:bool = False):
         self.uci = UCI(uci_file)
-        self.validate_uci()
+        self.validate_uci(run_model = run_model)
     
     def convert_wdms(self):
         for wdm_file in self.wdm_paths:

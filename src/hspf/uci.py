@@ -79,7 +79,7 @@ class UCI():
                  
     def table(self,block,table_name = 'na',table_id = 0,drop_comments = True):
         # Dynamic parsing of tables when called by user
-        assert block in ['FILES','PERLND','IMPLND','RCHRES','SCHEMATIC','OPN SEQUENCE','MASS-LINK','EXT SOURCES','NETWORK','GENER','MONTH-DATA','EXT TARGETS','COPY','FTABLES']
+        assert block in ['GLOBAL','FILES','PERLND','IMPLND','RCHRES','SCHEMATIC','OPN SEQUENCE','MASS-LINK','EXT SOURCES','NETWORK','GENER','MONTH-DATA','EXT TARGETS','COPY','FTABLES']
         
         table = self.uci[(block,table_name,table_id)] #[block][table_name][table_id]
         #TODO move the format_opnids into the Table class?

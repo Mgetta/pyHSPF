@@ -293,7 +293,7 @@ class masslinkParser(Parser):
 
 class globalParser(Parser):
     def parse(block,table_name,table_lines):
-        
+        table_lines = [line for line in table_lines if '***' not in line]
         data = {
             'description' : table_lines[0].strip(),
             'start_date' : table_lines[1].split('END')[0].split()[1],
@@ -307,6 +307,7 @@ class globalParser(Parser):
             'run_flag': int(table_lines[3].split()[3]) 
         }
         df = pd.DataFrame([data])
+        df['comments'] = ''
         return df
     
     def write(block,table_name,table):

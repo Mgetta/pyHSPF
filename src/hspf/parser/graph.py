@@ -78,9 +78,9 @@ def create_graph(uci):
     # Nodes in the schematic block that are missing from the opn sequence block (usually the outlet reach)
     #schematic.loc[schematic.index.map(labels).isna()]
     schematic = schematic.loc[schematic[['snode','tnode']].dropna().index] # For now remove that missing node
-    schematic.loc[:,'TMEMSB1'].replace('',pd.NA,inplace=True)
-    schematic.loc[:,'TMEMSB2'].replace('',pd.NA,inplace=True)
-    schematic.loc[:,'MLNO'].replace('',pd.NA,inplace=True)
+    schematic.loc[:,'TMEMSB1'] = schematic['TMEMSB1'].replace('',pd.NA)
+    schematic.loc[:,'TMEMSB2'] = schematic['TMEMSB2'].replace('',pd.NA)
+    schematic.loc[:,'MLNO'] = schematic['MLNO'].replace('',pd.NA)
 
     schematic = schematic.astype({'snode': int,'tnode':int,'MLNO':pd.Int64Dtype(),'TMEMSB1':pd.Int64Dtype(),'TMEMSB2':pd.Int64Dtype()})
     for index, row in schematic.iterrows():

@@ -176,6 +176,12 @@ class hbnInterface:
     def get_multiple_timeseries(self,t_opn,t_code,t_con,opnids = None,activity = None,axis = 1):
         return pd.concat([hbn.get_multiple_timeseries(t_opn,t_code,t_con,opnids,activity) for hbn in self.hbns],axis = 1)
 
+    def get_perlnd_constituent(self,constituent,perlnd_ids = None,time_step = 5):
+        return get_simulated_perlnd_constituent(self,constituent,time_step)
+
+    def get_implnd_constituent(self,constituent,implnd_ids = None,time_step = 5):
+        return get_simulated_implnd_constituent(self,constituent,time_step)
+
     def get_reach_constituent(self,constituent,reach_ids,time_step,unit = None):
         if constituent == 'Q':
             df = get_simulated_flow(self,time_step,reach_ids,unit = unit)
@@ -209,48 +215,17 @@ class hbnInterface:
         
         return df
          
-         
+          
     def get_rchres_data(self,constituent,reach_ids,units = 'mg/l',t_code = 'daily'):
         '''
         Convience function for accessing the hbn time series associated with our current
         calibration method. Assumes you are summing across all dataframes.
-
-        Parameters
-        ----------
-        hbn : TYPE
-            DESCRIPTION.
-        nutrient_id : TYPE
-            DESCRIPTION.
-        reach_ids : TYPE
-            DESCRIPTION.
-        flux : TYPE, optional
-            DESCRIPTION. The default is None.
-
-        Returns
-        -------
-        df : TYPE
-            DESCRIPTION.
-
-        '''
+       '''
         
-        
-        
-        t_cons = helpers.get_tcons(constituent,'RCHRES',units)
-        
-
-        
-        df = pd.concat([self.get_multiple_timeseries(t_opn = 'RCHRES',
-                                     t_code =t_code,
-                                     t_con = t_con,
-                                     opnids = reach_ids)
-                         for t_con in t_cons],axis = 1).sum(1).to_frame()
-        
-        if (constituent == 'Q') & (units == 'cfs'):            
-            df = df/CF2CFS[t_code]*43560 #Acrfeet/invl to cubic feet/s
-            
+        df = pd.concat([self.get_reach_constituent(constituent,[reach_id],t_code,units) for reach_id in reach_ids], axis = 1)
+        df.columns = reach_ids
         df.attrs['unit'] = units
         df.attrs['constituent'] = constituent
-        df.attrs['reach_ids'] = reach_ids
         return df
     
         

@@ -6,7 +6,7 @@ Created on Mon Apr 11 08:26:04 2022
 """
 import numpy as np
 import pandas as pd
-from . import helpers
+from hspf import helpers
 from pathlib import Path
 
 #timeseries_catalog = pd.read_csv(Path(__file__).parent/'TIMESERIES_CATALOG.csv')
@@ -37,22 +37,31 @@ class Reports():
         else:
             return annual_reach_water_budget(self.uci,self.hbns)
         
-    # def annual_runoff(self):
-    #     #assert operation in ['PERLND','IMPLND']
-    #     #if operation == 'PERLND':
-    #     return annual_perlnd_runoff(self.uci,self.hbns)
-    #     #else:
-    #     #    raise NotImplementedError()
+    def watershed_loading(self,constituent,reach_ids,upstream_reach_ids = None,by_landcover = False):
+        '''
+        Calculate the loading to channels from a watershed.
         
-    # def monthly_runoff(self,landcover=None):
-    #     df =  monthly_perlnd_runoff(self.uci,self.hbns).unstack().T
-    #     if landcover is None:
-    #         return df
-    #     else:
-    #         return df.loc[landcover]
-        
-    def annual_sediment_budget(self):
-        return annual_sediment_budget(self.uci,self.hbns)
+        Parameters
+        ----------
+        constituent : str
+            Constituent to calculate loading for (e.g. 'TP', 'TSS', 'N', 'OP', 'Q', 'TKN')
+        reach_ids : list
+            List of reach IDs defining the watershed outlet
+        upstream_reach_ids : list, optional
+            List of reach IDs defining the upstream boundary of the watershed. The default is None.
+        by_landcover : bool, optional
+            If True, returns loading by landcover type. The default is False.
+        '''
+        return get_watershed_loading(self.uci,self.hbns,reach_ids,constituent,upstream_reach_ids,by_landcover)
+    
+    def catchment_loading(self,constituent,by_landcover = False):
+        return get_catchment_loading(self.uci,self.hbns,constituent,by_landcover)
+    
+    def contributions(self,constituent,target_reach_id):
+        return total_contributions(constituent,self.uci,self.hbns,target_reach_id)
+
+    def landcover_contributions(self,constituent,target_reach_id,landcover = None):
+        return catchment_contributions(self.uci,self.hbns,constituent,target_reach_id)
     
     def ann_avg_subwatershed_loading(self,constituent):
         return ann_avg_subwatershed_loading(constituent,self.uci, self.hbns)
@@ -68,33 +77,17 @@ class Reports():
         total['share'] = total['volume_percent']/total['area_percent']
         return total
   
-    # def monthly_avg_subwatershed_loading(self,constituent,month):
-    #     return monthly_avg_subwatershed_loading(constituent,month,self.uci, self.hbns)
-    
-    # def monthly_avg_watershed_loading(self,constituent,reach_ids,month,by_landcover = True):
-    #     return monthly_avg_watershed_loading(constituent,reach_ids,month,self.uci, self.hbns,by_landcover = by_landcover)
-      
-    
-    def ann_avg_yield(self,constituent,reach_ids):
-        df= avg_ann_yield(self.uci,self.hbns,constituent,reach_ids)
+    def ann_avg_yield(self,constituent,reach_ids,upstream_reach_ids = None):
+        df= avg_ann_yield(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids)
         return df
     
     def annual_precip(self):
         return avg_annual_precip(self.uci,self.wdms)
     
-    # def water_balance(self,reach_ids = None):
-    #     if reach_ids is None:
-    #         reach_ids = self.uci.network.outlets()
-    #     return water_balance(self.uci,self.hbns,self.wdms,reach_ids)
-
     def simulated_et(self):
         return simulated_et(self.uci,self.hbns)
     
-    # def inflows(self):
-    #     return inflows(self.uci,self.wdms)
-     
-
-     
+ 
 
 #%% Channel Reports    
 def scour(hbn,uci,start_year = '1996',end_year = '2030'):
@@ -175,37 +168,218 @@ def get_catchments(uci,reach_ids):
     return landcover
     
 
-#%% Catchment Loading (ie. Direct contributions from perlnds/implnds, no losses)
+
+#%% Landscape Yields
+
+def yield_flow(uci,hbn,constituent,reach_id):
+    hbn.get_rchres_data('Q',reach_id,'cfs','yearly')/uci.network.drainage_area(reach_id)
+
+
+def yield_sediment(uci,hbn,constituent,reach_id):
+    hbn.get_rchres_data('TSS',reach_id,'lb','yearly').mean()*2000/uci.network.drainage_area(reach_id)
+
+def avg_ann_yield(uci,hbn,constituent,reach_ids,upstream_reach_ids = None):
+    #reach_ids = uci.network.G.nodes
+    
+    reach_ids = uci.network.get_opnids('RCHRES',reach_ids,upstream_reach_ids)
+    area = uci.network.drainage_area(reach_ids,upstream_reach_ids)
+    
+    if constituent == 'Q':
+        units = 'acrft'
+    else:
+        units = 'lb'
+        
+    df = hbn.get_reach_constituent(constituent,reach_ids,5,unit =units).mean() # Gross
+
+    return df/area
+
+#%% Catchment and Watershed Loading
+ 
+def landcover_areas(uci):
+    df = uci.network.operation_area('PERLND').groupby('LSID').sum()    
+    df['percent'] = 100*(df['AFACTR']/df['AFACTR'].sum())
+    return df
+
+def catchment_areas(uci):
+    df = uci.network.subwatersheds().reset_index()
+    df = df.groupby('TVOLNO')['AFACTR'].sum().reset_index()
+    df.rename(columns = {'AFACTR':'catchment_area'},inplace = True)
+    return df
+
+def get_constituent_loading(uci,hbn,constituent,time_step = 5):
+
+    
+    if constituent == 'TP':
+        perlnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'PERLND').reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
+        implnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'IMPLND').reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
+    else:
+        perlnds = hbn.get_perlnd_constituent(constituent,time_step = time_step).reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
+        implnds = hbn.get_implnd_constituent(constituent,time_step = time_step).reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
+    
+    perlnds['OPERATION'] = 'PERLND'
+    implnds['OPERATION'] = 'IMPLND'
+
+    df = pd.concat([perlnds,implnds],axis=0)
+
+    #df = df.groupby(['OPNID','OPERATION'])['value'].mean().reset_index()
+
+    
+    # units = 'lb/acre'  
+    if constituent == 'Q':
+        df.loc[:, 'value'] = df['value']/12  # convert to ft/acre/month
+        # units = 'ft/acre'
+    
+    # df['unit'] = units 
+    # df.rename(columns = {'index':'datetime','value': 'loading_rate'},inplace = True)
+    # df['constituent'] = constituent
+    # df['time_step'] = time_step
+    # df['year'] = pd.DatetimeIndex(df['datetime']).year
+    # df['month'] = pd.DatetimeIndex(df['datetime']).month
+
+
+    subwatersheds = uci.network.subwatersheds().reset_index()
+    subwatersheds = subwatersheds.loc[subwatersheds['SVOL'].isin(['PERLND','IMPLND'])]
+    areas = catchment_areas(uci)
+
+    df = pd.merge(subwatersheds,df,left_on = ['SVOL','SVOLNO'], right_on=['OPERATION','OPNID'],how='right')
+    df = pd.merge(df,areas,left_on = ['TVOLNO'], right_on='TVOLNO',how='left')
+    df['load'] = df['value']*df['AFACTR']
+    df = df.rename(columns = {'value':'loading_rate', 'AFACTR':'landcover_area','LSID':'landcover'})
+    df['constituent'] = constituent
+    return df[['index','constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']]
+
+
+def get_catchment_loading(uci,hbn,constituent,by_landcover = False):
+    df = get_constituent_loading(uci,hbn,constituent)
+    if not by_landcover:
+        df = df.groupby(['TVOLNO','constituent'])[['landcover_area','load']].sum().reset_index()
+        df['loading_rate'] = df['load']/df['landcover_area']
+    return df
+
+def get_watershed_loading(uci,hbn,reach_ids,constituent,upstream_reach_ids = None,by_landcover = False):
+    reach_ids = uci.network.get_opnids('RCHRES',reach_ids,upstream_reach_ids)
+
+    df = get_constituent_loading(uci,hbn,constituent)
+    df = df.loc[df['TVOLNO'].isin(reach_ids)]
+
+    if by_landcover:
+        df = df.groupby(['landcover','constituent'])[['landcover_area','load']].sum().reset_index()
+        df['loading_rate'] = df['load']/df['landcover_area']
+    else:
+        df = df.groupby(['constituent'])[['landcover_area','load']].sum().reset_index()
+        df['loading_rate'] = df['load']/df['landcover_area']
+
+    return df
+
+
+#%% Contributions
+allocation_selector = {'Q': {'input': ['IVOL'],
+                             'output': ['ROVOL']},
+                       'TP': {'input': ['PTOTIN'],
+                              'output': ['PTOTOUT']},
+                       'TSS': {'input': ['ISEDTOT'],
+                              'output': ['ROSEDTOT']},
+                       'OP': {'input': ['PO4INDIS'],
+                              'output': ['PO4OUTDIS']},                      
+                       'N': {'input': ['NO3INTOT','NO2INTOT'],
+                              'output': ['NO2OUTTOT','NO3OUTTOT']},
+                       'TKN': {'input': ['TAMINTOT','NTOTORGIN'],
+                              'output': ['TAMOUTTOT', 'NTOTORGOUT']}
+                       }
+
+def channel_inflows(constituent,uci,hbn,t_code,reach_ids = None):
+    load_in =  sum([hbn.get_multiple_timeseries('RCHRES',
+                                       t_code,
+                                       t_cons,
+                                       opnids = reach_ids)
+               for t_cons in allocation_selector[constituent]['input']])
+    
+    if constituent == 'TSS':
+        load_in = load_in*2000
+    
+    return load_in
+
+def channel_outflows(constituent,uci,hbn,t_code,reach_ids = None):
+    load_out =  sum([hbn.get_multiple_timeseries('RCHRES',
+                                       t_code,
+                                       t_cons,
+                                       opnids = reach_ids)
+               for t_cons in allocation_selector[constituent]['output']])
+    if constituent == 'TSS':
+        load_out = load_out*2000
+    return load_out
+
+def channel_fate(constituent,uci,hbn,t_code,reach_ids = None):
+    load_in = channel_inflows(constituent,uci,hbn,t_code,reach_ids)
+    load_out = channel_outflows(constituent,uci,hbn,t_code,reach_ids)
+    return load_out/load_in
+
+
+def local_loading(constituent,uci,hbn,t_code,reach_ids = None):
+    load_in = channel_inflows(constituent,uci,hbn,t_code,reach_ids)
+    load_out = channel_outflows(constituent,uci,hbn,t_code,reach_ids)    
+    df = pd.DataFrame({reach_id: load_in[reach_id] - load_out[uci.network.upstream(reach_id)].sum(axis=1) for reach_id in load_in.columns})
+    return df
+
+
+
+def catchment_contributions(uci,hbn,constituent,target_reach_id, landcover = None):
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    fate = channel_fate(constituent,uci,hbn,5)
+    fate_factors = pd.concat([fate[v].prod(axis=1) for k,v in p.items()],axis=1)
+    fate_factors.columns = list(p.keys())
+
+    fate_factors = fate_factors.reset_index().melt(id_vars = 'index')
+
+    df = get_catchment_loading(uci,hbn,constituent,by_landcover = True)
+    df = pd.merge(df,fate_factors,left_on = ['TVOLNO','index'],right_on = ['variable','index'])
+    
+    df['contribution'] = df['value']*df['load']
+
+    target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
+    
+    df = pd.merge(df,target_load.reset_index().melt(id_vars='index',var_name = 'target_reach',value_name = 'target_load'),left_on='index',right_on='index')
+    df['contribution_perc'] = df['contribution']/(df['target_load'])*100
+    
+    df = df.groupby(['TVOLNO','landcover','landcover_area'])[['load','contribution','contribution_perc','target_load']].mean().reset_index()
+
+    if landcover is not None:
+        df = df.loc[df['landcover'] == landcover]
+
+    else:
+        df = df.groupby(['TVOLNO',])[['landcover_area','load','contribution','contribution_perc']].sum().reset_index()
+
+    return df
+
+def total_contributions(constituent,uci,hbn,target_reach_id, as_percent = True):
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    fate = channel_fate(constituent,uci,hbn,5)
+    loads = local_loading(constituent,uci,hbn,5)
+    fate_factors = pd.concat([fate[v].prod(axis=1) for k,v in p.items()],axis=1)
+    fate_factors.columns = list(p.keys())
+    loads = loads[loads.columns.intersection(fate_factors.columns)]
+    contribution = loads[fate_factors.columns].mul(fate_factors.values)
+    #allocations = loads.mul(loss_factors[loads.columns.get_level_values('reach_id')].values)
+    
+    target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
+    
+    
+    df = contribution.mean().to_frame().reset_index()
+    df.columns = ['TVOLNO','contribution']
+
+    df['load'] = loads.mean().values
+    df['contribution_perc'] = (contribution.div(target_load.values)*100).mean().values
+    return df[['TVOLNO','load','contribution','contribution_perc']]
+
+#%% LEGACY Catchment Loading (ie. Direct contributions from perlnds/implnds, no losses)
 # Q
 # Subwatershed Weighted Mean Timeseries Output
 # operation = 'PERLND'
 # ts_name = 'PERO',
 # time_code = 5
 
-
-LOADING_MAP = {'Q' : [{'t_opn':'PERLND',
-                    't_con': 'PERO',
-                    't_code': 'yearly',
-                    'activity': 'PWATER'}],
-               'TSS': [{'t_opn':'PERLND',
-                        't_con': 'SOSED',
-                        't_code': 'yearly',
-                        'activity': 'SEDMNT'},
-                       {'t_opn':'IMPLND',
-                                't_con': 'SOSED',
-                                't_code': 'yearly',
-                                'activity': 'SEDMNT'}]}
-
-
-# def annual_average_subwatershed_loading(constituent,uci,hbn,reach_ids):
-#     '''
-    
-#     For each subwatershed the annual average loading rate
-    
-#     For each subwatershed the average loading rate for a specific month
-    
-    
-#     '''
 
 def avg_subwatershed_loading(constituent,t_code,uci,hbn):
     dfs = []
@@ -235,8 +409,7 @@ def avg_subwatershed_loading(constituent,t_code,uci,hbn):
         loading_rates.append(df.loc[subwatershed.index].sum().agg(agg_func)/subwatershed['AFACTR'].sum())
 
     
-    
-    
+        
 def weighted_describe(df, value_col, weight_col):
     weighted_mean = (df[value_col] * df[weight_col]).sum() / df[weight_col].sum()
     weighted_var = ((df[value_col] - weighted_mean) ** 2 * df[weight_col]).sum() / df[weight_col].sum()
@@ -335,244 +508,7 @@ def ann_avg_watershed_loading(constituent,reach_ids,uci,hbn, by_landcover = Fals
         df = weighted_describe(df,constituent,'AFACTR')
     
     return df
-    
 
-
-# ds = xr. 
-# coords = ['time']
-# dims = ['operation','activity','opnid','time_step','time','catchment_id']
-# def _insert_col(col_name,value,df):
-#     if col_name not in df.columns:
-#         df.insert(0,col_name,value)
-
-# dfs = []
-# for hbn in hbns.hbns:
-#     for key, df in hbn.data_frames.items():
-#         operation,activity,opnid,t_code = key.split('_')
-#         t_code = int(t_code)
-#         opnid = int(opnid)
-#         df = hbn.data_frames[key]
-#         df.index.name = 'date'
-#         df.index = df.index.tz_localize(None)
-#         _insert_col('t_code',t_code,df)
-#         _insert_col('OPNID',opnid,df)
-#         _insert_col('activity',activity,df)
-#         df = df.reset_index().set_index(['date','OPNID','t_code','activity'])
-#         dfs.append(xr.Dataset.from_dataframe(df))
-
-# ds = xr.merge(dfs)
-
-# query = {
-#     'date': (142.41, 142.51),
-#     'y': (-32.22, -32.32),
-#     'time': ('2015-01-01', '2016-12-31'),
-#     'measurements': ['nbart_nir', 'fmask'],
-#     'output_crs': 'EPSG:3577',
-#     'resolution': (-30, 30)
-# }
-
-# dfs = []
-# for activity, ts_names in hbn.output_names().items():
-#     dfs     
-
-# for hbn in hbn.hbns: data_frames['PERLND_SEDMNT_201_5']
-    
-
-# time_steps = [2,3,4,5]
-# operations = ['PERLND','IMPLND','RCHRES']
-
-
-
-# # def flow_loading(uci,hbn,reach_ids,time_step='yearly',weighted = True):
-    
-# t_con = 'PERO'
-# t_opn = 'PERLND'
-# time_step = 'yearly'
-# activity = 'PWATER'
-
-    
-
-#def total_phosphorous_loading:
-# def phosphorous_loading(uci,hbns,reach_ids,time_tep = 'yearly'):
-#     catchments = get_catchments(uci,reach_ids)
-#     df = total_phosphorous(uci,hbns)
-    
-#     subwatershed = uci.network.subwatershed(reach_id)
-#     perlnds = subwatershed.loc[subwatershed['SVOL'] == 'PERLND']
-#     perlnds = perlnds.set_index('SVOLNO').drop_duplicates()
-#     mlno = subwatershed.loc[subwatershed['SVOL'] == 'PERLND','MLNO'].iloc[0]
-#     total = total_phosphorous(uci,hbn,mlno,t_code,perlnds.index)
-    
-
-
-
-#%% Landscape Yields
-
-def yield_flow(uci,hbn,constituent,reach_id):
-    hbn.get_rchres_data('Q',reach_id,'cfs','yearly')/uci.network.drainage_area(reach_id)
-
-
-def yield_sediment(uci,hbn,constituent,reach_id):
-    hbn.get_rchres_data('TSS',reach_id,'lb','yearly').mean()*2000/uci.network.drainage_area(reach_id)
-
-def avg_ann_yield(uci,hbn,constituent,reach_ids):
-    #reach_ids = uci.network.G.nodes
-    
-    
-    _reach_ids = [uci.network._upstream(reach) for reach in reach_ids] 
-    _reach_ids = list(set([num for row in _reach_ids for num in row]))
-    subwatersheds = uci.network.subwatersheds().loc[_reach_ids]
-    area = subwatersheds['AFACTR'].sum()
-    
-    if constituent == 'Q':
-        units = 'acrft'
-    else:
-        units = 'lb'
-        
-    df = hbn.get_reach_constituent(constituent,reach_ids,5,unit =units).mean() # Gross
-
-    return df/area
-
-
-#%% Allocations
-allocation_selector = {'Q': {'input': ['IVOL'],
-                             'output': ['ROVOL']},
-                       'TP': {'input': ['PTOTIN'],
-                              'output': ['PTOTOUT']},
-                       'TSS': {'input': ['ISEDTOT'],
-                              'output': ['ROSEDTOT']},
-                       'OP': {'input': ['PO4INDIS'],
-                              'output': ['PO4OUTDIS']},                      
-                       'N': {'input': ['NO3INTOT','NO2INTOT'],
-                              'output': ['NO2OUTTOT','NO3OUTTOT']},
-                       'TKN': {'input': [],
-                              'output': ['TAMOUTTOT', 'NTOTORGOUT']}
-                       }
-
-def fate(hbn,constituent,t_code,reach_ids = None): 
-    if constituent == 'Q':
-        fate_in = hbn.get_multiple_timeseries('RCHRES',t_code,'ROVOL',opnids=reach_ids)
-        fate_out = hbn.get_multiple_timeseries('RCHRES',t_code,'IVOL',opnids=reach_ids)
-    elif constituent == 'TP':
-        fate_in = hbn.get_multiple_timeseries('RCHRES',t_code,'PTOTOUT',opnids = reach_ids)
-        fate_out = hbn.get_multiple_timeseries('RCHRES',t_code,'PTOTIN',opnids = reach_ids)
-    elif constituent == 'TSS':
-        fate_in = hbn.get_multiple_timeseries('RCHRES',t_code,'ISEDTOT',opnids = reach_ids)
-        fate_out = hbn.get_multiple_timeseries('RCHRES',t_code,'ROSEDTOT',opnids = reach_ids)
-    return fate_out/fate_in
-
-def loading(uci,hbn,constituent,t_code = 5):
-    if constituent =='TP':
-        loads = total_phosphorous(uci,hbn,t_code=t_code)
-    else:
-        #dfs = []
-        # df_implnd = hbn.get_implnd_constituent(constituent,t_code,'lb').T.reset_index().rename(columns = {'index':'OPNID'})
-        # df_implnd['SVOL'] = 'IMPLND'
-   
-        loads = hbn.get_perlnd_constituent(constituent,t_code,'lb')
-        
-        
-        # .T.reset_index().rename(columns = {'index':'OPNID'})
-        # df_perlnd['SVOL'] = 'PERLND'
-   
-        # df = pd.concat([df_perlnd,df_implnd])       
-        # df.set_index(['SVOL','OPNID'],inplace=True)
-        
-        if constituent == 'TSS':
-            loads = loads*2000
- 
-    return loads
-
-def subwatershed_loading(uci,hbn,constituent,t_code,group_landcover = True,as_load = True):
-    loads = loading(uci,hbn,constituent,t_code)
-
-    subwatersheds = uci.network.subwatersheds()
-    perlnds = subwatersheds.loc[subwatersheds['SVOL'] == 'PERLND'].reset_index()
-    
-    total = loads[perlnds['SVOLNO'].to_list()]
-    total = total.mul(perlnds['AFACTR'].values,axis=1)       
-    total = total.transpose()
-    total['reach_id'] = perlnds['TVOLNO'].values
-    total['landcover'] = uci.table('PERLND','GEN-INFO').loc[total.index,'LSID'].to_list()
-    total['area'] = perlnds['AFACTR'].to_list() #perlnds.loc[total.index,'AFACTR'].to_list()
-    total = total.reset_index().set_index(['index','landcover','area','reach_id']).transpose()
-    total.columns.names = ['perlnd_id','landcover','area','reach_id']
-    
-    if group_landcover:
-        total.columns = total.columns.droplevel(['landcover','perlnd_id'])
-        total = total.T.reset_index().groupby('reach_id').sum().reset_index().set_index(['reach_id','area']).T
-        
-    if not as_load:
-        total = total.div(total.columns.get_level_values('area').values,axis=1)       
-    
-    total.index = pd.to_datetime(total.index)
-    return total
-
-
-def losses(uci,hbn,constituent, t_code = 5):
-    upstream_reachs = {reach_id: uci.network.upstream(reach_id) for reach_id in uci.network.get_node_type_ids('RCHRES')}
-    totout =  sum([hbn.get_multiple_timeseries('RCHRES',
-                                       t_code,
-                                       t_cons,
-                                       opnids = list(upstream_reachs.keys()))
-               for t_cons in allocation_selector[constituent]['output']])
-    
-    totin =  sum([hbn.get_multiple_timeseries('RCHRES',
-                                       t_code,
-                                       t_cons,
-                                       opnids = list(upstream_reachs.keys()))
-               for t_cons in allocation_selector[constituent]['input']])
-     
-    
-    #totin = totout.copy().astype('Float64')
-    #totin[:] = pd.NA
-
-    for reach_id in totin.columns:
-        reach_ids = upstream_reachs[reach_id]
-        if len(reach_ids) > 0:
-            totin[reach_id] = totout[reach_ids].sum(axis=1) 
-    
-    #totin.columns = totout.columns
-    return (totout-totin)/totin*100
-    
-def allocations(uci,hbn,constituent,reach_id,t_code,group_landcover = True):
-    p = uci.network.paths(reach_id)
-    p[reach_id] = [reach_id]
-    loss = losses(uci,hbn,constituent,t_code)
-    loads = subwatershed_loading(uci,hbn,constituent,t_code,group_landcover = group_landcover)
-    loss_factors = pd.concat([loss[v].prod(axis=1) for k,v in p.items()],axis=1)
-    loss_factors.columns = list(p.keys())
-    allocations = loads.mul(loss_factors[loads.columns.get_level_values('reach_id')].values)
-    return allocations
-
-
-def total_phosphorous_losses(uci,hbn,t_code = 5):
-    upstream_reachs = {reach_id: [reach_id] + uci.network.upstream(reach_id) for reach_id in uci.network.get_node_type_ids('RCHRES')}
-    ptotout = hbn.get_multiple_timeseries('RCHRES',t_code,'PTOTOUT',opnids = list(upstream_reachs.keys()))
-    ptotin = pd.concat([ptotout[reach_ids].sum(axis=1) for reach_id,reach_ids in upstream_reachs.items()],axis=1)
-    ptotin.columns = list(upstream_reachs.keys())    
-    return 1-(ptotin-ptotout)/ptotin
-
-
-def total_phosphorous_allocations(uci,hbn,reach_id,t_code=5,group_landcover = True):
-    p = uci.network.paths(reach_id)
-    p[reach_id] = [reach_id]
-    losses = total_phosphorous_losses(uci,hbn,t_code)
-    loads = subwatershed_total_phosphorous_loading(uci,hbn,t_code=t_code,group_landcover = group_landcover)
-    loss_factors = pd.concat([losses[v].prod(axis=1) for k,v in p.items()],axis=1)
-    loss_factors.columns = list(p.keys())
-    allocations = loads.mul(loss_factors[loads.columns.get_level_values('reach_id')].values)
-    return allocations
-
-    #loads[loads.index.get_level_values('reach_id').isin(loss_factors.columns)].mul(loss_factors.values,axis=1)
-    #return loads[loss_factors.columns].mul(loss_factors.values,axis=1)
-
-
-def flow_allocations(uci,hbn,reach_id,t_code = 5):
-    raise NotImplementedError()
-
-def total_suspended_sediment_allocations(uci,hbn,reach_id,t_code):
-    raise NotImplementedError()
 
 #%% Water Balance
 def pevt_balance(mod,operation,opnid):
@@ -790,139 +726,9 @@ def avg_annual_precip(uci,wdm):
 
 
 #%%
-#%%% Report Tablewater_s
+#%%% Other Reports       
 
 
-def landcover_areas(uci):
-    df = uci.network.operation_area('PERLND').groupby('LSID').sum()    
-    df['percent'] = 100*(df['AFACTR']/df['AFACTR'].sum())
-    return df
-
-# def area_weighted_output(uci,hbn,ts_name,operation,time_step,opnids):
-#     assert(operation in ['PERLND','IMPLND'])
-#     df = hbn.get_multiple_timeseries(operation,5,ts_name,opnids = opnids).T
-#     df.index.name = 'SVOLNO'
-#     areas = uci.network.operation_area(operation)
-#     df = df.join(areas).reset_index().set_index(['SVOLNO','AFACTR','LSID'])
-#     df = df.T*df.index.get_level_values('AFACTR').values
-    
-#     if grouped:
-#         df.columns.get_level_values('AFACTR').groupby(df.get_level_values['LSIDE'])
-
-'''
-Output for each PERLND
-  - Sometimes a rate
-  - Sometimes a mass or volume
-  
-  - Group by Landcover no without weighting
-        - rate take the mean
-        - mass or volum us the sum
-  - Group by Landcover with weighting
-        - rate convert to mass/volume sum then divide by grouped area
-        - mass sum then divide by grouped area
-
-
-Output for a catchment
-   - For a single catchment
-       - if timeseries is a rate
-           - rate is raw output
-           - mass/volume is rate * area of contributing operations
-       - if timeseries is a mass/volume
-           - rate is mass/volume / area of contributing operations
-           - mass/volume is raw output
-       - No ability to aggregate by Landcover
-   - For 2 or more catchments
-       - if weighted
-           - if timeseries is a rate
-               - rate is rate*area of contributing operations summed by landcover and divided by each landcover area
-               - mass/volume is rate*area summed by landcover and area
-            - if timeseries is a mass/volume
-                - rate is mass/volume summed by landcover and divided by landcover area
-                - mass/volume is mass/volume summed by landcover
-        - if not weighted
-            - if timeseries is a rate
-                - rate is the raw output of each catchment concatenated
-                - mass/volume is rate*area of each contributing landcover and concatenated for each catchment
-            - if timeseries is a mass/volume
-                - rate is mass/volume / area of each contributing landcover and concatenated for each catchment
-                - mass/volume is raw output of each chatchment concatenated
-
-
-'''
-
-# class Catchment:
-#     def __init__(reach_id,uci,hbn = None):
-#         id = reach_id
-        
-#     def loading_rate(constituent):
-        
-#     def loading(constituent):
-        
-#     def yield(constituent):
-        
-#     def load(constituent):
-        
-        
-    
-        
-'''
-    The area of each landcategory in the catchment
-    
-    Loading rate of each landuse (lb/acre/intvl)
-        TSS, TP, N, TKN, BOD, OP
-    
-    Loading of from each landuse (lb/intvl)
-        TSS, TP, N, TKN, BOD, OP
-
-    Yield at the catchment outlet (lb/acr/intvl)
-        TSS, TP, N, TKN, BOD, OP
-
-    Load at the catchment outlet (lb/intvl)
-        TSS, TP, N, TKN, BOD, OP
-
-    In channel losses of a constituent (lb/intvl)
-        TSS, TP, N, TKN, BOD, OP
-
-    Allocation of a constituent from catchment to downstream catchment
-        TSS, TP, N, TKN, BOD, OP
-    
-    
-    
-    
-'''
-
-#reach_id = 103
-#def make_catchment(reach_id,uci,hbn):
-    
-
-
-    
-# class Reach:
-    
-    
-# class Perlnd():
-#     def __init__(catchment_id,perlnd_id,area,mlno,landcover,metzone):
-    
-    
-
-# # class Implnd:
-# def annual_weighted_perlnd_output(uci,hbn,ts_name,t_code = 4,opnids = None):
-    
-#     df = hbn.get_multiple_timeseries('PERLND',5,ts_name,opnids = opnids)
-#     subwatersheds = uci.network.subwatersheds().reset_index()
-#     subwatersheds = subwatersheds.loc[subwatersheds['SVOL'] == 'PERLND']
-#     df = df[subwatersheds['SVOLNO']].T
-#     df = pd.merge(df, subwatersheds, left_index = True, right_on='SVOLNO', how='inner')
-#     df = df.set_index(['TVOLNO','SVOL','SVOLNO','AFACTR','LSID','MLNO']).T
-
-# def annual_weighted_output(ts_name,operation,opnids):
-#     assert(operation in ['PERLND','IMPLND'])
-#     subwatersheds = uci.network.subwatersheds()
-#     subwatersheds = subwatersheds.loc[subwatersheds['SVOL'] == operation].reset_index()
-# df = cal.model.hbns.get_multiple_timeseries('PERLND',5,'PERO',test['SVOLNO'].values).mean().reset_index()
-# df.columns = ['OPNID','value']
-# df = pd.merge(subwatersheds,df,left_on = 'SVOLNO', right_on='OPNID')
-# weighted_mean = df.groupby('TVOLNO').apply(lambda x: (x['value'] * x['AFACTR']).sum() / x['AFACTR'].sum())
 
 
 def weighted_mean(df,value_col,weight_col):
@@ -931,9 +737,9 @@ def weighted_mean(df,value_col,weight_col):
        'AFACTR' : df[weight_col].sum(),
        value_col: [weighted_mean]})
                         
-def annual_weighted_output(uci,hbn,ts_name,operation = 'PERLND',opnids = None,group_by = None):
+def annual_weighted_output(uci,hbn,ts_name,operation = 'PERLND',t_code = 5,opnids = None,group_by = None):
     assert (group_by in [None,'landcover','opnid'])
-    df = hbn.get_multiple_timeseries(operation,5,ts_name,opnids = opnids).mean().reset_index()
+    df = hbn.get_multiple_timeseries(operation,t_code,ts_name,opnids = opnids).mean().reset_index()
     df.columns = ['SVOLNO',ts_name]
     subwatersheds = uci.network.subwatersheds().reset_index()
     subwatersheds = subwatersheds.loc[subwatersheds['SVOL'] == operation]
@@ -952,7 +758,6 @@ def annual_weighted_output(uci,hbn,ts_name,operation = 'PERLND',opnids = None,gr
     df = df.set_index([df.index,'AFACTR'])
     return df
 
-        
                         
 def monthly_weighted_output(uci,hbn,ts_name,operation = 'PERLND',opnids = None, as_rate = False, by_landcover = True, months = [1,2,3,4,5,6,7,8,9,10,11,12]):
     df = hbn.get_multiple_timeseries(operation,4,ts_name,opnids = opnids) 
@@ -1097,7 +902,7 @@ def subwatershed_weighted_output(uci,hbn,reach_ids,ts_name,time_step,by_landcove
     
 
 
-#%% Phosphorous Loading
+#%% Phosphorous Loading Calculations
 def subwatershed_total_phosphorous_loading(uci,hbn,reach_ids = None,t_code=5, as_load = True,group_landcover = True):
     tp_loading = total_phosphorous(uci,hbn,t_code)
     if reach_ids is None:
@@ -1131,20 +936,20 @@ def subwatershed_total_phosphorous_loading(uci,hbn,reach_ids = None,t_code=5, as
     total.index = pd.to_datetime(total.index)
     return total
 
-def total_phosphorous(uci,hbn,t_code):
+def total_phosphorous(uci,hbn,t_code,operation = 'PERLND'):
     #assert(isinstance(perlnd_ids (int,list,None)))
-    perlnds = uci.network.subwatersheds()
-    perlnds = perlnds.loc[perlnds['SVOL'] == 'PERLND'].drop_duplicates(subset = ['SVOLNO','MLNO'])
+    opnids = uci.network.subwatersheds()
+    opnids = opnids.loc[opnids['SVOL'] == operation].drop_duplicates(subset = ['SVOLNO','MLNO'])
     
     totals = []
-    for mlno in perlnds['MLNO'].unique():
-        perlnd_ids = perlnds['SVOLNO'].loc[perlnds['MLNO'] == mlno].to_list()
-        total = dissolved_orthophosphate(uci,hbn,mlno,t_code) + particulate_orthophosphate(uci,hbn,mlno, t_code) + organic_refactory_phosphorous(uci,hbn,mlno,t_code) + labile_oxygen_demand(uci,hbn,mlno,t_code)*0.007326 # Conversation factor to P
-        totals.append(total[perlnd_ids])
+    for mlno in opnids['MLNO'].unique():
+        total = dissolved_orthophosphate(uci,hbn,operation,mlno,t_code) + particulate_orthophosphate(uci,hbn,operation,mlno, t_code) + organic_refactory_phosphorous(uci,hbn,operation,mlno,t_code) + labile_oxygen_demand(uci,hbn,operation,mlno,t_code)*0.007326 # Conversation factor to P
+        totals.append(total[opnids['SVOLNO'].loc[opnids['MLNO'] == mlno].to_list()])
     
     total = pd.concat(totals,axis=1)
     total = total.T.groupby(total.columns).sum().T
     return total
+
 
 MASSLINK_SCHEME = {'dissolved_orthophosphate': {'tmemn': 'NUIF1',
                                                 'tmemsb1': '4',
@@ -1169,12 +974,13 @@ MASSLINK_SCHEME = {'dissolved_orthophosphate': {'tmemn': 'NUIF1',
                                          'tmemsb2':''}}
 
 
-def qualprop_transform(uci,hbn,mlno,tmemn,tmemsb1,tmemsb2 = '',t_code = 4):
+def qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2 = '',t_code = 4):
     masslink = uci.table('MASS-LINK',f'MASS-LINK{mlno}')
     masslink = masslink.loc[(masslink['TMEMN'] == tmemn) & (masslink['TMEMSB1'] == tmemsb1) & (masslink['TMEMSB2'] == tmemsb2)]
+    masslink.fillna({'MFACTOR': 1}, inplace=True)
     ts = 0
     for index,row in masslink.iterrows():
-        hbn_name = uci.table('PERLND','QUAL-PROPS', int(row['SMEMSB1']) - 1).iloc[0]['QUALID']
+        hbn_name = uci.table(operation,'QUAL-PROPS', int(row['SMEMSB1']) - 1).iloc[0]['QUALID']
         hbn_name = row['SMEMN'] + hbn_name
         mfactor = row['MFACTOR']
         ts = hbn.get_multiple_timeseries(row['SVOL'],t_code,hbn_name)*mfactor + ts
@@ -1183,49 +989,48 @@ def qualprop_transform(uci,hbn,mlno,tmemn,tmemsb1,tmemsb2 = '',t_code = 4):
 
 
 
-def dissolved_orthophosphate(uci,hbn,mlno,t_code = 4):
+def dissolved_orthophosphate(uci,hbn,operation,mlno,t_code = 4):
     tmemn = MASSLINK_SCHEME['dissolved_orthophosphate']['tmemn']
     tmemsb1 = MASSLINK_SCHEME['dissolved_orthophosphate']['tmemsb1']
     tmemsb2 = MASSLINK_SCHEME['dissolved_orthophosphate']['tmemsb2']
-    return qualprop_transform(uci,hbn,mlno,tmemn,tmemsb1,tmemsb2,t_code)
+    return qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2,t_code)
 
-def particulate_orthophosphate(uci,hbn,mlno,t_code = 4):
-    ts = particulate_orthophosphate_sand(uci,hbn,mlno,t_code) + particulate_orthophosphate_silt(uci,hbn,mlno,t_code) + particulate_orthophosphate_clay(uci,hbn,mlno,t_code)
-    return ts
-
-def particulate_orthophosphate_sand(uci,hbn, mlno,t_code = 4):
+def particulate_orthophosphate_sand(uci,hbn,operation,mlno,t_code = 4):
     tmemn = MASSLINK_SCHEME['particulate_orthophosphate_sand']['tmemn']
     tmemsb1 = MASSLINK_SCHEME['particulate_orthophosphate_sand']['tmemsb1']
     tmemsb2 = MASSLINK_SCHEME['particulate_orthophosphate_sand']['tmemsb2']
-    return qualprop_transform(uci,hbn,mlno,tmemn,tmemsb1,tmemsb2,t_code)
+    return qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2,t_code)
 
-def particulate_orthophosphate_silt(uci,hbn, mlno,t_code = 4):
+def particulate_orthophosphate_silt(uci,hbn,operation, mlno,t_code = 4):
     tmemn = MASSLINK_SCHEME['particulate_orthophosphate_silt']['tmemn']
     tmemsb1 = MASSLINK_SCHEME['particulate_orthophosphate_silt']['tmemsb1']
     tmemsb2 = MASSLINK_SCHEME['particulate_orthophosphate_silt']['tmemsb2']
-    return qualprop_transform(uci,hbn,mlno,tmemn,tmemsb1,tmemsb2,t_code)
+    return qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2,t_code)
 
-def particulate_orthophosphate_clay(uci,hbn, mlno,t_code = 4):
+def particulate_orthophosphate_clay(uci,hbn, operation,mlno,t_code = 4):
     tmemn = MASSLINK_SCHEME['particulate_orthophosphate_clay']['tmemn']
     tmemsb1 = MASSLINK_SCHEME['particulate_orthophosphate_clay']['tmemsb1']
     tmemsb2 = MASSLINK_SCHEME['particulate_orthophosphate_clay']['tmemsb2']
-    return qualprop_transform(uci,hbn,mlno,tmemn,tmemsb1,tmemsb2,t_code)
+    return qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2,t_code)
 
-def organic_refactory_phosphorous(uci,hbn, mlno,t_code = 4):
+def organic_refactory_phosphorous(uci,hbn, operation,mlno,t_code = 4):
     tmemn = MASSLINK_SCHEME['organic_refactory_phosphorous']['tmemn']
     tmemsb1 = MASSLINK_SCHEME['organic_refactory_phosphorous']['tmemsb1']
     tmemsb2 = MASSLINK_SCHEME['organic_refactory_phosphorous']['tmemsb2']
-    return qualprop_transform(uci,hbn,mlno,tmemn,tmemsb1,tmemsb2,t_code)
+    return qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2,t_code)
 
-def organic_refactory_carbon(uci,hbn, mlno,t_code = 4):
+def organic_refactory_carbon(uci,hbn, operation,mlno,t_code = 4):
     tmemn = MASSLINK_SCHEME['organic_refactory_carbon']['tmemn']
     tmemsb1 = MASSLINK_SCHEME['organic_refactory_carbon']['tmemsb1']
     tmemsb2 = MASSLINK_SCHEME['organic_refactory_carbon']['tmemsb2']
-    return qualprop_transform(uci,hbn,mlno,tmemn,tmemsb1,tmemsb2,t_code)
+    return qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2,t_code)
   
-def labile_oxygen_demand(uci,hbn,mlno,t_code = 4):
+def labile_oxygen_demand(uci,hbn,operation,mlno,t_code = 4):
     tmemn = MASSLINK_SCHEME['labile_oxygen_demand']['tmemn']
     tmemsb1 = MASSLINK_SCHEME['labile_oxygen_demand']['tmemsb1']
     tmemsb2 = MASSLINK_SCHEME['labile_oxygen_demand']['tmemsb2']
-    return qualprop_transform(uci,hbn,mlno,tmemn,tmemsb1,tmemsb2,t_code)
+    return qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2,t_code)
 
+def particulate_orthophosphate(uci,hbn,operation,mlno,t_code = 4):
+    ts = particulate_orthophosphate_sand(uci,hbn,operation,mlno,t_code) + particulate_orthophosphate_silt(uci,hbn,operation,mlno,t_code) + particulate_orthophosphate_clay(uci,hbn,operation,mlno,t_code)
+    return ts

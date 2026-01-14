@@ -53,21 +53,22 @@ def get_tcons(nutrient_name,operation,units = 'mg/l'):
         'acrft' : {'Q': ['ROVOL']}}
         
         t_cons = MAP[units]
-    if operation == 'PERLND':
+    elif operation == 'PERLND':
         t_cons = {'TSS' :['SOSED'],
                   'TKN' :['POQUALNH3+NH4'],
                   'N' :['POQUALNO3'],
                   'OP' :['POQUALORTHO P'],
                   'BOD' :['POQUALBOD'],
                   'Q' : ['PERO']} # BOD is the difference of ptot and ortho
-    if operation == 'IMPLND':
+    elif operation == 'IMPLND':
         t_cons = {'TSS' :['SLDS'],
-                  'TKN' :['POQUALNH3+NH4'],
-                  'N' :['POQUALNO3'],
-                  'OP' :['POQUALORTHO P'],
-                  'BOD' :['POQUALBOD'],
+                  'TKN' :['SOQUALNH3+NH4'],
+                  'N' :['SOQUALNO3'],
+                  'OP' :['SOQUALORTHO P'],
+                  'BOD' :['SOQUALBOD'],
                   'Q' : ['SURO']} # BOD is the difference of ptot and ortho
-        
+    else:
+        raise ValueError(f'Operation {operation} not recognized for nutrient time constituent lookup.')
     return t_cons[nutrient_name]
 
 

@@ -103,10 +103,22 @@ def get_simulated_perlnd_constituent(hbn,constituent,time_step):
 
     return df
 
-def get_simulated_catchment_constituent(hbn,constituent,time_step):
-    return pd.concat([get_simulated_perlnd_constituent(hbn,constituent,time_step),
-                      get_simulated_implnd_constituent(hbn,constituent,time_step)])
-        
+def get_catchment_constituent(hbn,constituent,catchment_ids = None,time_step = 5):
+    if constituent == 'Q':
+        units = 'in/acre'
+    else:
+        units = 'lb/acre'
+    
+    perlnds = hbn.get_perlnd_constituent(constituent).reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
+    perlnds['OPERATION'] = 'PERLND'
+    implnds = hbn.get_implnd_constituent(constituent).reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
+    implnds['OPERATION'] = 'IMPLND'
+
+    df = pd.concat([perlnds,implnds],axis=0)
+    df['unit'] = units 
+    df.rename(columns = {'index':'datetime','value':constituent},inplace = True)
+    return df
+
         
 def get_simulated_flow(hbn,time_step,reach_ids,unit = None):
     
@@ -182,6 +194,7 @@ class hbnInterface:
     def get_implnd_constituent(self,constituent,implnd_ids = None,time_step = 5):
         return get_simulated_implnd_constituent(self,constituent,time_step)
 
+        
     def get_reach_constituent(self,constituent,reach_ids,time_step,unit = None):
         if constituent == 'Q':
             df = get_simulated_flow(self,time_step,reach_ids,unit = unit)

@@ -263,6 +263,9 @@ def get_implnd_node(G,implnd_id):
 def get_node_type_ids(G,node_type = 'RCHRES'):
     return [data['type_id'] for node, data in G.nodes(data = True) if data['type'] == node_type]
 
+def get_node_type_id(G,node_id):
+    return G.nodes[node_id]['type_id']
+
 def get_reaches(G):
     return get_node_type_ids(G, node_type = 'RCHRES')
     
@@ -372,7 +375,8 @@ def make_watershed(G,reach_ids,upstream_reach_ids = None):
 
 
     return G.subgraph(nodes).copy()
-    
+
+
     
     # node_ids = set([get_node_id(G,'RCHRES',reach_id) for reach_id in reach_ids if reach_id > 0])
     # nodes_to_exclude = set([get_node_id(G,'RCHRES',abs(reach_id)) for reach_id in reach_ids if reach_id < 0])
@@ -520,10 +524,20 @@ class reachNetwork():
         self.routing_reaches = self._routing_reaches()
         self.lakes = self._lakes()
         self.schematic = uci.table('SCHEMATIC').astype({'TVOLNO': int, "SVOLNO": int, 'AFACTR':float})
-    
+        #self.subwatersheds = self._subwatersheds(self.uci)
+
     def get_node_type_ids(self,node_type):
         return get_node_type_ids(self.G, node_type)
     
+    def watershed_outlets(self):
+        reach_ids = []
+        for reach_id in self.get_node_type_ids('RCHRES'):
+            upstream = self.upstream(reach_id)
+            reach_ids.append([reach_id])
+            if len(upstream) > 1:
+                reach_ids.append(upstream)
+        return reach_ids
+
     def _upstream(self,reach_id,node_type = 'RCHRES'):
         '''
         Returns list of model reaches upstream of inclusive of reach_id
@@ -690,6 +704,7 @@ def subwatersheds(uci):
     
     df = pd.concat(dfs).reset_index()
     df = df.set_index('TVOLNO')
+    
     return df
 
 def subwatershed(uci,reach_id):

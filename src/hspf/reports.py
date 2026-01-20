@@ -125,6 +125,8 @@ def scour(hbn,uci,start_year = '1996',end_year = '2030'):
     # schematic block will have all the possible perlands while sosed only has perlands that were simulated
     # in other words information from sosed is a subset of schematic
     for tvolno in lakeflag.index: #schematic['TVOLNO'].unique():
+        implnd_load = 0
+        prlnd_load = 0
         reach_load = depscr.loc[tvolno].values[0]
         schem_sub = schematic[schematic['TVOLNO'] == tvolno]
         if len(schem_sub) == 0:

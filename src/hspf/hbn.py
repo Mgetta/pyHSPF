@@ -141,6 +141,15 @@ def get_simulated_flow(hbn,time_step,reach_ids,unit = None):
     return flows
 
 def get_simulated_temperature(hbn,units,time_step,reach_ids):
+    # sign = [math.copysign(1,reach_id) for reach_id in reach_ids]
+    # reach_ids = [abs(reach_id) for reach_id in reach_ids]
+
+    # flow = get_simulated_flow(hbn,time_step,reach_ids,'acrft')*325851 #acrft to gallsons)
+    # flow = flow*8.34 # gallons to pounds assuming water density of 8.34 lb/gal
+
+    # t_cons = ['ROHEAT']
+    # df = pd.concat([hbn.get_multiple_timeseries('RCHRES',time_step,t_con,[abs(reach_id) for reach_id in reach_ids])*sign for t_con in t_cons],axis=1).sum(axis=1)
+
     raise NotImplementedError()
     
 
@@ -152,7 +161,7 @@ def get_simulated_reach_constituent(hbn,constituent,time_step,reach_ids,unit = N
     if unit is None:
         unit = UNIT_DEFAULTS[constituent]
     else:
-        assert(unit in ['mg/l','lb','cfs','degF'])
+        assert(unit in ['mg/l','lb','cfs','degf'])
         
     t_cons = helpers.get_tcons(constituent,'RCHRES','lb')
     

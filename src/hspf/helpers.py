@@ -48,9 +48,10 @@ def get_tcons(nutrient_name,operation,units = 'mg/l'):
                   'N' :['NO3OUTTOT','NO2OUTTOT'], # N
                   'OP' :['PO4OUTDIS'], # Ortho
                   'TP' :['PTOTOUT'],
-                  'BOD' :['BODOUTTOT']},
+                  'BOD' :['BODOUTTOT'],},
         'cfs': {'Q': ['ROVOL']},
-        'acrft' : {'Q': ['ROVOL']}}
+        'acrft' : {'Q': ['ROVOL']},
+        'degf' : {'WT': ['TW']}}
         
         t_cons = MAP[units]
     elif operation == 'PERLND':

@@ -946,7 +946,8 @@ def total_phosphorous(uci,hbn,t_code,operation = 'PERLND'):
     totals = []
     for mlno in opnids['MLNO'].unique():
         total = dissolved_orthophosphate(uci,hbn,operation,mlno,t_code) + particulate_orthophosphate(uci,hbn,operation,mlno, t_code) + organic_refactory_phosphorous(uci,hbn,operation,mlno,t_code) + labile_oxygen_demand(uci,hbn,operation,mlno,t_code)*0.007326 # Conversation factor to P
-        totals.append(total[opnids['SVOLNO'].loc[opnids['MLNO'] == mlno].to_list()])
+        if not isinstance(total,float): #TODO fix for when no data is present. Don't like this workaround.
+            totals.append(total[opnids['SVOLNO'].loc[opnids['MLNO'] == mlno].to_list()])
     
     total = pd.concat(totals,axis=1)
     total = total.T.groupby(total.columns).sum().T
@@ -974,6 +975,7 @@ MASSLINK_SCHEME = {'dissolved_orthophosphate': {'tmemn': 'NUIF1',
                 'labile_oxygen_demand': {'tmemn': 'OXIF',
                                          'tmemsb1': '2',
                                          'tmemsb2':''}}
+
 
 
 def qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2 = '',t_code = 4):

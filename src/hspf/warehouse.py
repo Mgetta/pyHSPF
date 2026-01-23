@@ -13,12 +13,11 @@ def init_hspf_db(db_path: str, reset: bool = False):
         con.execute("CREATE SCHEMA IF NOT EXISTS hspf")
         
         # Create tables for HSPF model data
-        create_model_tables(con)
+        create_hspf_model_hierarchy_tables(con)
         create_model_run_table(con)
         create_structure_tables(con)
         create_parameter_tables(con)
         create_timeseries_tables(con)
-        # ...and so on for all HSPF tables...
 
 def load_df_to_table(con: duckdb.DuckDBPyConnection, df: pd.DataFrame, table_name: str, replace: bool = True):
     """
@@ -202,6 +201,7 @@ def create_parameter_tables(con: duckdb.DuckDBPyConnection):
 def create_timeseries_tables(con: duckdb.DuckDBPyConnection):
     """
     Creates tables for storing model output timeseries, linking them to a specific model run.
+    Note: Simplified schema without foreign keys to avoid cross-schema issues.
     """
     con.execute(
     '''
@@ -211,19 +211,20 @@ def create_timeseries_tables(con: duckdb.DuckDBPyConnection):
     -- Purpose: Metadata for each unique timeseries produced by a model run.
     CREATE TABLE IF NOT EXISTS hspf.timeseries_metadata (
         timeseries_pk     BIGINT PRIMARY KEY DEFAULT nextval('timeseries_metadata_seq'),
-        model_run_pk      BIGINT NOT NULL REFERENCES model_runs(model_run_pk),
-        operation_pk      BIGINT NOT NULL REFERENCES operations(operation_pk),
-        ts_name           VARCHAR NOT NULL,     -- e.g., 'ROVOL','SOSED'
-        activity          VARCHAR NOT NULL,     -- e.g., 'SEDTRN','HYDR'
-        timestep          VARCHAR NOT NULL,     -- e.g., 'hourly','daily'
-        unit              VARCHAR NOT NULL,     -- e.g., 'cfs','mg/L'
-        timeseries_type   VARCHAR NOT NULL  -- e.g., 'cumulative', 'instantaneous'
+        model_run_pk      BIGINT NOT NULL,  -- References model_runs(model_run_pk)
+        operation_id      INTEGER,           -- Operation ID (e.g., PERLND number)
+        operation_type    VARCHAR,           -- e.g., 'PERLND', 'RCHRES'
+        ts_name           VARCHAR NOT NULL,  -- e.g., 'ROVOL','SOSED'
+        activity          VARCHAR,           -- e.g., 'SEDTRN','HYDR'
+        timestep          VARCHAR,           -- e.g., 'hourly','daily'
+        unit              VARCHAR,           -- e.g., 'cfs','mg/L'
+        timeseries_type   VARCHAR            -- e.g., 'cumulative', 'instantaneous'
     );
 
     -- Table: hspf.timeseries
     -- Purpose: Stores the actual timeseries data points in a narrow/long format.
     CREATE TABLE IF NOT EXISTS hspf.timeseries (
-        timeseries_pk BIGINT NOT NULL REFERENCES timeseries_metadata(timeseries_pk),
+        timeseries_pk BIGINT NOT NULL,  -- References hspf.timeseries_metadata(timeseries_pk)
         datetime      TIMESTAMP NOT NULL,
         value         DOUBLE,
         UNIQUE(timeseries_pk, datetime)
@@ -273,3 +274,190 @@ def insert_df_into_table(con: duckdb.DuckDBPyConnection, df: pd.DataFrame, table
         con.unregister(temp_view_name)
     else:
         print(f"  DataFrame is empty. Skipping insertion into {target_table}.")
+
+
+class OutputWarehouse:
+    """
+    A loosely coupled class for managing HSPF model outputs in a warehouse.
+    
+    This class follows composition over inheritance and provides methods to:
+    - Store model run outputs
+    - Query stored outputs
+    - Manage multiple models and scenarios
+    
+    Example:
+        warehouse = OutputWarehouse("/path/to/warehouse.duckdb")
+        warehouse.store_model_run("MyModel", "v1.0", "Baseline", run_data)
+        results = warehouse.query_timeseries("MyModel", "v1.0", "Baseline")
+    """
+    
+    def __init__(self, db_path: str, initialize: bool = True):
+        """
+        Initialize the output warehouse.
+        
+        Args:
+            db_path: Path to the DuckDB database file
+            initialize: If True, creates tables if they don't exist
+        """
+        self.db_path = Path(db_path)
+        if initialize:
+            self._initialize_schema()
+    
+    def _initialize_schema(self):
+        """Initialize database schema if it doesn't exist."""
+        init_hspf_db(str(self.db_path), reset=False)
+    
+    def get_connection(self, read_only: bool = False):
+        """
+        Get a connection to the warehouse database.
+        
+        Args:
+            read_only: If True, opens in read-only mode
+            
+        Returns:
+            DuckDB connection context manager
+        """
+        return connect(str(self.db_path), read_only=read_only)
+    
+    def store_model_run(self, model_name: str, run_id: int, 
+                       run_name: str = None, notes: str = None):
+        """
+        Register a new model run in the warehouse.
+        
+        Args:
+            model_name: Name of the model
+            run_id: Unique identifier for this run
+            run_name: Optional descriptive name
+            notes: Optional notes about this run
+            
+        Returns:
+            model_run_pk: Primary key of the inserted run
+        """
+        with self.get_connection() as con:
+            insert_model_run(con, model_name, run_id, run_name, notes)
+            # Get the PK of the inserted run
+            result = con.execute(
+                "SELECT model_run_pk FROM model_runs WHERE model_name = ? AND run_id = ? ORDER BY model_run_pk DESC LIMIT 1",
+                (model_name, run_id)
+            ).fetchone()
+            return result[0] if result else None
+    
+    def store_timeseries_data(self, df: pd.DataFrame, clear_before: bool = False):
+        """
+        Store timeseries data in the warehouse.
+        
+        Args:
+            df: DataFrame with timeseries data
+            clear_before: If True, clears existing data before insertion
+        """
+        with self.get_connection() as con:
+            insert_df_into_table(con, df, 'timeseries', schema='hspf', 
+                               clear_before_insert=clear_before)
+    
+    def query_timeseries(self, model_name: str = None, run_id: int = None,
+                        operation_type: str = None, ts_name: str = None) -> pd.DataFrame:
+        """
+        Query timeseries data from the warehouse.
+        
+        Args:
+            model_name: Optional filter by model name
+            run_id: Optional filter by run ID
+            operation_type: Optional filter by operation type (e.g., 'PERLND', 'RCHRES')
+            ts_name: Optional filter by timeseries name
+            
+        Returns:
+            DataFrame with filtered timeseries data
+        """
+        query = """
+            SELECT 
+                mr.model_name,
+                mr.run_id,
+                mr.run_name,
+                tm.ts_name,
+                tm.activity,
+                tm.timestep,
+                tm.unit,
+                ts.datetime,
+                ts.value
+            FROM hspf.timeseries ts
+            JOIN hspf.timeseries_metadata tm ON ts.timeseries_pk = tm.timeseries_pk
+            JOIN model_runs mr ON tm.model_run_pk = mr.model_run_pk
+            WHERE 1=1
+        """
+        
+        params = []
+        if model_name:
+            query += " AND mr.model_name = ?"
+            params.append(model_name)
+        if run_id is not None:
+            query += " AND mr.run_id = ?"
+            params.append(run_id)
+        if ts_name:
+            query += " AND tm.ts_name = ?"
+            params.append(ts_name)
+            
+        with self.get_connection(read_only=True) as con:
+            return con.execute(query, params).df()
+    
+    def list_models(self) -> pd.DataFrame:
+        """
+        List all models in the warehouse.
+        
+        Returns:
+            DataFrame with model information
+        """
+        query = """
+            SELECT DISTINCT model_name, COUNT(DISTINCT run_id) as num_runs
+            FROM model_runs
+            GROUP BY model_name
+            ORDER BY model_name
+        """
+        with self.get_connection(read_only=True) as con:
+            return con.execute(query).df()
+    
+    def list_runs(self, model_name: str = None) -> pd.DataFrame:
+        """
+        List all runs for a model.
+        
+        Args:
+            model_name: Optional model name to filter by
+            
+        Returns:
+            DataFrame with run information
+        """
+        query = "SELECT * FROM model_runs"
+        params = []
+        
+        if model_name:
+            query += " WHERE model_name = ?"
+            params.append(model_name)
+            
+        query += " ORDER BY model_name, run_id"
+        
+        with self.get_connection(read_only=True) as con:
+            return con.execute(query, params).df()
+    
+    def export_run_data(self, model_name: str, run_id: int, 
+                       output_path: str, format: str = 'parquet'):
+        """
+        Export data for a specific run to a file.
+        
+        Args:
+            model_name: Name of the model
+            run_id: Run identifier
+            output_path: Path where to save the export
+            format: Export format ('parquet', 'csv', 'json')
+        """
+        df = self.query_timeseries(model_name=model_name, run_id=run_id)
+        
+        output_path = Path(output_path)
+        if format == 'parquet':
+            df.to_parquet(output_path)
+        elif format == 'csv':
+            df.to_csv(output_path, index=False)
+        elif format == 'json':
+            df.to_json(output_path, orient='records')
+        else:
+            raise ValueError(f"Unsupported format: {format}")
+        
+        return len(df)

@@ -12,12 +12,13 @@ def init_hspf_db(db_path: str, reset: bool = False):
         # Create schema
         con.execute("CREATE SCHEMA IF NOT EXISTS hspf")
         
-        # Create tables for HSPF model data
-        create_hspf_model_hierarchy_tables(con)
+        # Create core tables for model runs and timeseries
         create_model_run_table(con)
-        create_structure_tables(con)
-        create_parameter_tables(con)
         create_timeseries_tables(con)
+        
+        # Note: Additional tables (structure, parameters) reference the
+        # hierarchical schema and are preserved for future expansion.
+        # To use them, call create_hspf_model_hierarchy_tables() first.
 
 def load_df_to_table(con: duckdb.DuckDBPyConnection, df: pd.DataFrame, table_name: str, replace: bool = True):
     """
@@ -35,6 +36,13 @@ def load_df_to_table(con: duckdb.DuckDBPyConnection, df: pd.DataFrame, table_nam
 def create_hspf_model_hierarchy_tables(con: duckdb.DuckDBPyConnection):
     """
     Creates the tables that define the model -> version -> scenario -> run hierarchy.
+    
+    NOTE: This function is preserved for future expansion to support a more complex
+    hierarchical schema. Currently, the simplified create_model_run_table() is used
+    to avoid foreign key constraints across schemas.
+    
+    To use this hierarchical schema instead, call this function in init_hspf_db()
+    and update queries to reference hspf.model_runs instead of model_runs.
     """
     con.execute('''
     CREATE SEQUENCE IF NOT EXISTS hspf.model_seq START 1;

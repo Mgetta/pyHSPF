@@ -59,6 +59,14 @@ def example_timeseries_storage():
     
     warehouse = OutputWarehouse("example_warehouse.duckdb")
     
+    # First, create a model run
+    run_pk = warehouse.store_model_run(
+        model_name="Example Model",
+        run_id=1,
+        run_name="Demonstration Run"
+    )
+    print(f"Created model run with pk={run_pk}")
+    
     # Create sample timeseries data
     # In real usage, this would come from parsing HBN files
     dates = pd.date_range(start='2020-01-01', periods=10, freq='D')
@@ -69,8 +77,29 @@ def example_timeseries_storage():
         'value': [100.5, 105.2, 98.3, 103.7, 110.1, 115.8, 108.9, 102.3, 99.7, 104.2]
     })
     
-    print("Sample timeseries data:")
+    print("\nSample timeseries data:")
     print(sample_data.head())
+    
+    # Store the timeseries with metadata
+    ts_pk = warehouse.store_timeseries(
+        model_run_pk=run_pk,
+        ts_name="ROVOL",
+        df=sample_data,
+        operation_id=101,
+        operation_type="RCHRES",
+        activity="HYDR",
+        timestep="daily",
+        unit="cfs",
+        timeseries_type="instantaneous"
+    )
+    
+    print(f"\nStored timeseries with metadata, timeseries_pk={ts_pk}")
+    
+    # Query the stored data
+    result = warehouse.query_timeseries(model_name="Example Model", ts_name="ROVOL")
+    print(f"\nQueried {len(result)} data points")
+    print(result[['datetime', 'value', 'ts_name', 'unit']].head())
+    
     print("\n✓ Timeseries storage example complete!")
 
 

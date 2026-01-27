@@ -350,6 +350,45 @@ class OutputWarehouse:
             ).fetchone()
             return result[0] if result else None
     
+    def store_timeseries_metadata(self, model_run_pk: int, ts_name: str,
+                                  operation_id: int = None, operation_type: str = None,
+                                  activity: str = None, timestep: str = None,
+                                  unit: str = None, timeseries_type: str = None):
+        """
+        Store metadata for a timeseries in the warehouse.
+        
+        This method stores information about a timeseries (what it represents, units, etc.)
+        and returns a timeseries_pk that should be used when storing the actual data points.
+        
+        Args:
+            model_run_pk: Primary key of the model run this timeseries belongs to
+            ts_name: Name of the timeseries (e.g., 'ROVOL', 'SOSED')
+            operation_id: Optional operation ID (e.g., PERLND number 101)
+            operation_type: Optional operation type (e.g., 'PERLND', 'RCHRES')
+            activity: Optional activity name (e.g., 'SEDTRN', 'HYDR')
+            timestep: Optional timestep (e.g., 'hourly', 'daily')
+            unit: Optional unit (e.g., 'cfs', 'mg/L')
+            timeseries_type: Optional type (e.g., 'cumulative', 'instantaneous')
+            
+        Returns:
+            timeseries_pk: Primary key of the inserted metadata record
+        """
+        with self.get_connection() as con:
+            con.execute(
+                '''
+                INSERT INTO hspf.timeseries_metadata 
+                (model_run_pk, operation_id, operation_type, ts_name, activity, timestep, unit, timeseries_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (model_run_pk, operation_id, operation_type, ts_name, activity, timestep, unit, timeseries_type)
+            )
+            # Get the PK of the inserted metadata
+            result = con.execute(
+                "SELECT timeseries_pk FROM hspf.timeseries_metadata WHERE model_run_pk = ? AND ts_name = ? ORDER BY timeseries_pk DESC LIMIT 1",
+                (model_run_pk, ts_name)
+            ).fetchone()
+            return result[0] if result else None
+    
     def store_timeseries_data(self, df: pd.DataFrame, clear_before: bool = False):
         """
         Store timeseries data in the warehouse.
@@ -361,6 +400,53 @@ class OutputWarehouse:
         with self.get_connection() as con:
             insert_df_into_table(con, df, 'timeseries', schema='hspf', 
                                clear_before_insert=clear_before)
+    
+    def store_timeseries(self, model_run_pk: int, ts_name: str, df: pd.DataFrame,
+                        operation_id: int = None, operation_type: str = None,
+                        activity: str = None, timestep: str = None,
+                        unit: str = None, timeseries_type: str = None):
+        """
+        Store both timeseries metadata and data in a single operation.
+        
+        This is a convenience method that combines store_timeseries_metadata() and
+        store_timeseries_data(). The DataFrame should have 'datetime' and 'value' columns.
+        
+        Args:
+            model_run_pk: Primary key of the model run
+            ts_name: Name of the timeseries (e.g., 'ROVOL', 'SOSED')
+            df: DataFrame with 'datetime' and 'value' columns
+            operation_id: Optional operation ID (e.g., PERLND number 101)
+            operation_type: Optional operation type (e.g., 'PERLND', 'RCHRES')
+            activity: Optional activity name (e.g., 'SEDTRN', 'HYDR')
+            timestep: Optional timestep (e.g., 'hourly', 'daily')
+            unit: Optional unit (e.g., 'cfs', 'mg/L')
+            timeseries_type: Optional type (e.g., 'cumulative', 'instantaneous')
+            
+        Returns:
+            timeseries_pk: Primary key of the inserted metadata record
+        """
+        # Store metadata first
+        timeseries_pk = self.store_timeseries_metadata(
+            model_run_pk=model_run_pk,
+            ts_name=ts_name,
+            operation_id=operation_id,
+            operation_type=operation_type,
+            activity=activity,
+            timestep=timestep,
+            unit=unit,
+            timeseries_type=timeseries_type
+        )
+        
+        # Add timeseries_pk to the dataframe
+        df_with_pk = df.copy()
+        df_with_pk['timeseries_pk'] = timeseries_pk
+        
+        # Store the data
+        with self.get_connection() as con:
+            insert_df_into_table(con, df_with_pk, 'timeseries', schema='hspf', 
+                               clear_before_insert=False)
+        
+        return timeseries_pk
     
     def query_timeseries(self, model_name: str = None, run_id: int = None,
                         operation_type: str = None, ts_name: str = None) -> pd.DataFrame:

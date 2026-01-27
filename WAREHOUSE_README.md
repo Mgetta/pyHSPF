@@ -7,6 +7,7 @@ This module provides a database/warehouse solution for storing and managing HSPF
 - **Loosely Coupled Design**: The `OutputWarehouse` class uses composition over inheritance and can be used independently
 - **Multi-Model Support**: Store outputs from different models in a single warehouse
 - **Multi-Run Storage**: Track multiple runs for each model/scenario (ideal for calibration)
+- **Timeseries Storage**: Store both metadata and data for timeseries outputs
 - **Flexible Querying**: Query and filter stored outputs by model, run, operation type, and timeseries name
 - **Multiple Export Formats**: Export data to CSV, JSON, or Parquet formats
 - **DuckDB Backend**: Fast, embedded analytical database requiring no separate server
@@ -15,17 +16,39 @@ This module provides a database/warehouse solution for storing and managing HSPF
 
 ```python
 from hspf import OutputWarehouse
+import pandas as pd
 
 # Create or connect to a warehouse
 warehouse = OutputWarehouse("my_models.duckdb")
 
 # Store a model run
-warehouse.store_model_run(
+run_pk = warehouse.store_model_run(
     model_name="Nemadji River Basin",
     run_id=1,
     run_name="Baseline Calibration",
     notes="Initial calibration run for 2010-2020"
 )
+
+# Store timeseries data with metadata
+dates = pd.date_range(start='2020-01-01', periods=365, freq='D')
+df = pd.DataFrame({
+    'datetime': dates,
+    'value': [...]  # Your timeseries values
+})
+
+ts_pk = warehouse.store_timeseries(
+    model_run_pk=run_pk,
+    ts_name="ROVOL",
+    df=df,
+    operation_id=101,
+    operation_type="RCHRES",
+    activity="HYDR",
+    timestep="daily",
+    unit="cfs"
+)
+
+# Query timeseries data
+data = warehouse.query_timeseries(model_name="Nemadji River Basin", ts_name="ROVOL")
 
 # List all models in the warehouse
 models = warehouse.list_models()
@@ -34,6 +57,41 @@ print(models)
 # List runs for a specific model
 runs = warehouse.list_runs(model_name="Nemadji River Basin")
 print(runs)
+```
+
+## Storing Timeseries Data
+
+The warehouse supports storing timeseries with full metadata tracking:
+
+```python
+# Option 1: Store metadata and data separately
+ts_pk = warehouse.store_timeseries_metadata(
+    model_run_pk=run_pk,
+    ts_name="ROVOL",
+    operation_id=101,
+    operation_type="RCHRES",
+    activity="HYDR",
+    timestep="daily",
+    unit="cfs",
+    timeseries_type="instantaneous"
+)
+
+# Then store the data with the timeseries_pk
+df_with_pk = df.copy()
+df_with_pk['timeseries_pk'] = ts_pk
+warehouse.store_timeseries_data(df_with_pk)
+
+# Option 2: Store both metadata and data together (recommended)
+ts_pk = warehouse.store_timeseries(
+    model_run_pk=run_pk,
+    ts_name="ROVOL",
+    df=df,  # DataFrame with 'datetime' and 'value' columns
+    operation_id=101,
+    operation_type="RCHRES",
+    activity="HYDR",
+    timestep="daily",
+    unit="cfs"
+)
 ```
 
 ## Use Cases

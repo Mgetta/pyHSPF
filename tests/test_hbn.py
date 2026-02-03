@@ -374,10 +374,20 @@ class TestGetSimulatedReachConstituentLogic:
 class TestGetSimulatedTemperature:
     """Test the get_simulated_temperature function."""
 
-    def test_not_implemented_error(self):
-        """Test that get_simulated_temperature raises NotImplementedError."""
-        with pytest.raises(NotImplementedError):
-            hbn.get_simulated_temperature(None, None, None, None)
+    def test_multiple_reach_ids_raises_assertion(self):
+        """Test that get_simulated_temperature raises AssertionError for multiple reach IDs.
+        
+        The function asserts len(reach_ids) == 1 since temperature can only
+        be retrieved for one reach at a time.
+        """
+        # Create a mock hbn object
+        mock_hbn = Mock()
+        
+        # Test with multiple reach IDs should raise AssertionError
+        with pytest.raises(AssertionError) as exc_info:
+            hbn.get_simulated_temperature(mock_hbn, 'daily', [1, 2, 3])
+        
+        assert "one reach at a time" in str(exc_info.value).lower()
 
 
 # =============================================================================
@@ -388,13 +398,21 @@ class TestHbnInterfaceOutputNames:
     """Test hbnInterface.output_names method."""
 
     def test_output_names_merges_multiple_hbns(self):
-        """Test that output_names correctly merges outputs from multiple HBN files."""
-        # Create mock hbn objects
+        """Test that output_names correctly merges outputs from multiple HBN files.
+        
+        Note: The dev branch changed output_names to return a nested dict structure:
+        {operation: {activity: set(timeseries_names)}}
+        """
+        # Create mock hbn objects with the new structure
         mock_hbn1 = Mock()
-        mock_hbn1.output_names.return_value = {'HYDR': ['ROVOL', 'IVOL']}
+        mock_hbn1.output_names.return_value = {
+            'RCHRES': {'HYDR': {'ROVOL', 'IVOL'}}
+        }
         
         mock_hbn2 = Mock()
-        mock_hbn2.output_names.return_value = {'HYDR': ['ROVOL', 'OVOL']}
+        mock_hbn2.output_names.return_value = {
+            'RCHRES': {'HYDR': {'ROVOL', 'OVOL'}}
+        }
         
         # Create interface with mocked __init__
         with patch.object(hbn.hbnInterface, '__init__', lambda self, *args, **kwargs: None):
@@ -403,12 +421,13 @@ class TestHbnInterfaceOutputNames:
             
             result = interface.output_names()
             
-            # Result should be a defaultdict with sets
-            assert 'HYDR' in result
+            # Result should be a nested dict with sets at the leaf level
+            assert 'RCHRES' in result
+            assert 'HYDR' in result['RCHRES']
             # Should contain union of both outputs
-            assert 'ROVOL' in result['HYDR']
-            assert 'IVOL' in result['HYDR']
-            assert 'OVOL' in result['HYDR']
+            assert 'ROVOL' in result['RCHRES']['HYDR']
+            assert 'IVOL' in result['RCHRES']['HYDR']
+            assert 'OVOL' in result['RCHRES']['HYDR']
 
 
 # =============================================================================

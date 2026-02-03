@@ -6,7 +6,7 @@ nutrients relevant for our current calibration methods. (See calibration_helpers
 
 @author: mfratki
 """
-from . import helpers
+from hspf import helpers
 import pandas as pd
 import math
 from struct import unpack
@@ -14,6 +14,7 @@ from numpy import fromfile
 from pandas import DataFrame
 from datetime import datetime, timedelta #, timezone
 from collections import defaultdict
+from collections.abc import MutableMapping
 #from pathlib import Path
 
 
@@ -189,11 +190,30 @@ class hbnInterface:
     def _clear_cache(self):
         [hbn._clear_cache() for hbn in self.hbns]
         
-    def get_time_series(self, t_opn, t_cons, t_code, opnid, activity = None):
-        return pd.concat([hbn.get_time_series(t_opn, t_cons, t_code, opnid, activity) for hbn in self.hbns],axis = 1)
+
         
-    def get_multiple_timeseries(self,t_opn,t_code,t_con,opnids = None,activity = None,axis = 1):
-        return pd.concat([hbn.get_multiple_timeseries(t_opn,t_code,t_con,opnids,activity) for hbn in self.hbns],axis = 1)
+    def get_time_series(self, t_opn, t_cons, t_code, opnid, activity = None):
+        df = pd.concat([hbn._get_time_series(t_opn, t_cons, t_code, opnid, activity) for hbn in self.hbns],axis = 1)
+        if df.empty:
+            raise ValueError(f"No data found for {t_opn} {t_cons} {t_code} {opnid} {activity}")
+        
+        if long_format:
+            df = df.reset_index().melt(id_vars = ['index'],var_name = 'OPNID',value_name = t_con)
+            df.rename(columns = {'index':'datetime'},inplace = True)
+            df['OPERATION'] = t_opn
+        return df
+        
+    def get_multiple_timeseries(self,t_opn,t_code,t_con,opnids = None,activity = None,axis = 1,long_format = False):
+        df = pd.concat([hbn._get_multiple_timeseries(t_opn,t_code,t_con,opnids,activity) for hbn in self.hbns],axis = 1)
+        if df.empty:
+            raise ValueError(f"No data found for {t_opn} {t_con} {t_code} {opnids} {activity}")
+        
+        if long_format:
+            df = df.reset_index().melt(id_vars = ['index'],var_name = 'OPNID',value_name = 'value')
+            df.rename(columns = {'index':'datetime'},inplace = True)
+            df['TIMESERIES'] = t_con
+            df['OPERATION'] = t_opn
+        return df
 
     def get_perlnd_constituent(self,constituent,perlnd_ids = None,time_step = 5):
         return get_simulated_perlnd_constituent(self,constituent,time_step)
@@ -217,13 +237,33 @@ class hbnInterface:
         # for dic in dics:
         #     for key, vals in dic.items():
         #         [dd[key].append(val) for val in vals]
-        dd = defaultdict(set)    
+        # dd = defaultdict(set)    
         dics =  [hbn.output_names() for hbn in self.hbns]
+        return merge_dicts(dics)
+        # for dic in dics:
+        #     for operation, vals in dic.items():
+        #         for activity,v in vals.items():
+        #             [dd[operation][activity].add(t) for t in v]
+        # return dd
+
+    def _timeseries(self):
+        mapn = self._mapn()
+        timeseries = []
+        for key, vals in mapn.items():
+            _key = list(key)
+            for val in vals:
+                timeseries.append(_key + [val])
+        return timeseries      
+            
+
+    def _mapn(self):
+        dd = defaultdict(set)    
+        dics =  [hbn.mapn for hbn in self.hbns]
         for dic in dics:
             for key, vals in dic.items():
                 [dd[key].add(val) for val in vals]
-        return dd
-
+        return dd 
+    
     def get_perlnd_data(self,constituent,t_code = 'yearly'):
         t_cons = helpers.get_tcons(constituent,'PERLND')
         
@@ -236,14 +276,13 @@ class hbnInterface:
         return df
          
           
-    def get_rchres_data(self,constituent,reach_ids,units = 'mg/l',t_code = 'daily'):
+    def get_rchres_output(self,constituent,units = 'mg/l',t_code = 5):
         '''
         Convience function for accessing the hbn time series associated with our current
         calibration method. Assumes you are summing across all dataframes.
        '''
-        
-        df = pd.concat([self.get_reach_constituent(constituent,[reach_id],t_code,units) for reach_id in reach_ids], axis = 1)
-        df.columns = reach_ids
+        t_cons = helpers.get_tcons(constituent,'RCHRES',units)
+        df = sum([self.get_multiple_timeseries('RCHRES',t_code,t_con) for t_con in t_cons])
         df.attrs['unit'] = units
         df.attrs['constituent'] = constituent
         return df
@@ -399,19 +438,27 @@ class hbnClass:
     def infer_opnids(self,t_opn, t_cons,activity):
         result = [k[-2] for k,v in self.mapn.items() if (t_cons in v) & (k[0] == t_opn) & (k[-1] == activity)]
         if len(result) == 0:
-            return print('No Constituent-OPNID relationship found')
+            result = [-1]
+        #     return print('No Constituent-OPNID relationship found')
         return result
     
     
     def infer_activity(self,t_opn, t_cons):  
         result = [k[-1] for k,v in self.mapn.items() if (t_cons in v) & (k[0] == t_opn)]
         if len(result) == 0:
-            return print('No Constituent-Activity relationship found')
-        assert(len(set(result)) == 1)
-        return result[0]
-    
+            result = ''
+        else:#     return print('No Constituent-Activity relationship found')
+            assert(len(set(result)) == 1)
+            result = result[0]
+        return result
     
     def get_time_series(self, t_opn, t_cons, t_code, opnid, activity = None):
+        df = self._get_time_series(t_opn, t_cons, t_code, opnid, activity)
+        if df.empty:
+            raise ValueError(f"No data found for {t_opn} {t_cons} {t_code} {opnid} {activity}")
+        return df
+
+    def _get_time_series(self, t_opn, t_cons, t_code, opnid, activity = None):
         """
         get a single time series based on:
         1.      t_opn: RCHRES, IMPLND, PERLND
@@ -420,13 +467,15 @@ class hbnClass:
         4. t_activity: HYDR, IQUAL, etc
         5.  time_unit: yearly, monthly, full (default is 'full' simulation duration)
         """
+
+
         if isinstance(t_code,str):
             t_code = self.tcodes[t_code]
         
         if activity is None:
             activity = self.infer_activity(t_opn,t_cons)        
-            if activity is None:
-                return None
+
+            
         summaryindx = f'{t_opn}_{activity}_{opnid:03d}_{t_code}'
         if summaryindx in self.summaryindx:
             df = self.data_frames[summaryindx][t_cons].copy()
@@ -438,25 +487,31 @@ class hbnClass:
             #df.index = df.index.shift(-1,TCODES2FREQ[t_code])
             df = df[df.index >= '1996-01-01']
         else:
-            df = None
+            df = pd.DataFrame()
             
         return df
+    
     def get_multiple_timeseries(self,t_opn,t_code,t_con,opnids = None,activity = None):
+        df = self._get_multiple_timeseries(t_opn,t_code,t_con,opnids,activity)
+        if df.empty:
+            raise ValueError(f"No data found for {t_opn} {t_con} {t_code} {opnids} {activity}")
+        return df
+    
+    def _get_multiple_timeseries(self,t_opn,t_code,t_con,opnids = None,activity = None):
         # a single constituent but multiple opnids
+
+        
         if isinstance(t_code,str):
             t_code = self.tcodes[t_code]
             
         if activity is None:
-            activity = self.infer_activity(t_opn,t_con)
-            if activity is None:
-                return None
-           
+            activity = self.infer_activity(t_opn,t_con)   
+
         if opnids is None:
             opnids = self.infer_opnids(t_opn,t_con,activity)
-            if opnids is None:
-                return None 
+
            
-        df = None
+        df = pd.DataFrame()
         frames = []
         mapd_list = list(self.mapd.keys())
         for opnid in opnids:
@@ -475,9 +530,76 @@ class hbnClass:
             dic[activity] = set([item for sublist in t_cons for item in sublist])
         return dic
     
+
+    def output_names(self):
+
+        activities = []
+        operations = []
+        for k, v in self.mapn.items():
+            operations.append(k[0])
+            activities.append(k[-1])
+
+        operations = set(operations)
+        activities = set(activities)
+        #activities = set([k[-1] for k,v in self.mapn.items()])
+
+        dic = {}
+        for operation in operations:
+            acitivities = set([k[-1] for k,v in self.mapn.items() if k[0] == operation])
+            dic[operation] = {}
+            for activity in acitivities:
+                t_cons = [v for k,v in self.mapn.items() if (k[0] == operation) & (k[-1] == activity)]   
+                dic[operation][activity] = set([item for sublist in t_cons for item in sublist])
+        # for activity in activities:
+        #     t_cons = [v for k,v in self.mapn.items() if k[-1] == activity]   
+        #     dic[activity] = set([item for sublist in t_cons for item in sublist])
+        return dic
+    
+    def get_timeseries(self):
+        mapn = self.mapn
+        timeseries = []
+        for key, vals in mapn.items():
+            _key = list(key)
+            for val in vals:
+                timeseries.append(_key + [val])
+        return timeseries      
+
     @staticmethod          
     def get_perlands(summary_indxs):
          perlands =  [int(summary_indx.split('_')[-2]) for summary_indx in summary_indxs]
          return perlands
      
- 
+
+def merge_dicts(dicts):
+    """
+    Merge a list of dictionaries into a single dictionary, combining sets
+    at the leaf level and properly merging nested dictionaries.
+    
+    Args:
+        dicts (list): A list of dictionaries to merge.
+    
+    Returns:
+        dict: The merged dictionary.
+    """
+    def recursive_merge(d1, d2):
+        for key, value in d2.items():
+            if key in d1:
+                # If the value is a dictionary, recurse
+                if isinstance(d1[key], MutableMapping) and isinstance(value, MutableMapping):
+                    recursive_merge(d1[key], value)
+                # If the value is a set, merge the sets
+                elif isinstance(d1[key], set) and isinstance(value, set):
+                    d1[key].update(value)
+                else:
+                    raise ValueError(f"Incompatible types for key '{key}': {type(d1[key])} vs {type(value)}")
+            else:
+                # If the key does not exist in d1, copy it
+                d1[key] = value
+    
+    # Start with an empty dictionary
+    merged_dict = {}
+    
+    for d in dicts:
+        recursive_merge(merged_dict, d)
+    
+    return merged_dict

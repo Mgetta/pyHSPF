@@ -635,7 +635,8 @@ class reachNetwork():
         areas = areas.groupby(['source_type','source_type_id','source_name'])['area'].sum()[['PERLND','IMPLND']]
 
         if group:  
-            areas = pd.concat([areas[operation].groupby('source_name').sum()  for operation in ['PERLND','IMPLND']])
+            areas = areas.groupby(['source_type','source_name']).sum()
+            #areas = pd.concat([areas[operation].groupby('source_name').sum()  for operation in ['PERLND','IMPLND']])
             #areas = pd.concat([areas[operation].groupby(self.uci.opnid_dict[operation].loc[areas[operation].index,'LSID'].values).sum() for operation in ['PERLND','IMPLND']])
         return areas
 

@@ -7,17 +7,19 @@ Created on Thu Oct 13 09:26:05 2022
 from pathlib import Path
 import os.path
 import subprocess
+import concurrent.futures
 
-from .uci import UCI
-from . import hbn
-from .reports import Reports
-from .wdm import wdmInterface
-from . import wdmReader
-
-
-
+from hspf.uci import UCI
+from hspf import hbn
+from hspf.reports import Reports
+from hspf.wdm import wdmInterface
+from hspf import wdmReader
 
 
+
+
+
+winHSPF = str(Path(__file__).resolve().parent) + '\\bin\\WinHSPFLt\\WinHspfLt.exe'
 
 
 # Only for accessing information regarding a specific uci_file
@@ -51,6 +53,15 @@ class hspfModel():
         # Compositions
         self.reports = Reports(self.uci,self.hbns,self.wdms)
         
+    def _reinitialize(self,uci_file:str,run_model:bool = False):
+        self.uci = UCI(uci_file)
+        self.validate_uci(run_model = run_model)
+        self.hbns = hbn.hbnInterface(self.hbn_paths)
+        try:
+            self.wdms = wdmInterface(self.wdm_paths)
+        except:
+            self.wdms = None
+        self.reports = Reports(self.uci,self.hbns,self.wdms)
 
     def validate_wdms(self):
         # Ensure wdm files exist and the folders for the other file types exist relative
@@ -92,15 +103,16 @@ class hspfModel():
         else:
             self.run_model()
 
-    def run_model(self,new_uci_file = None):
+    def run_model(self,new_uci_file = None,):
         
         if new_uci_file is None:
             new_uci_file = self.uci_file
         
         # new_uci_file = self.model_path.joinpath(uci_name)
         # self.uci.write(new_uci_file)
-        subprocess.run([self.winHSPF,self.uci_file.as_posix()]) #, stdout=subprocess.PIPE, creationflags=0x08000000)
-        self.load_uci(new_uci_file,run_model = False)
+
+        subprocess.run([winHSPF,self.uci_file.as_posix()]) #, stdout=subprocess.PIPE, creationflags=0x08000000)
+        self._reinitialize(new_uci_file,run_model = False)
 
     def load_hbn(self,hbn_name):
         self.hbns[hbn_name] = hbn.hbnClass(self.uci_file.parent.joinpath(hbn_name).as_posix())
@@ -177,8 +189,35 @@ class hspfModel():
 
 
 
+def run_uci(uci_file:str, ):
+    """
+    convenience function to run a single model uci file.
+    """
+    print(f"Starting model: {uci_file}")
+    subprocess.run([winHSPF, uci_file]) 
+    print(f"Completed model: {uci_file}")
 
 
+def run_batch_files(file_list, max_concurrent=4):
+    """
+    Takes a list of .uci file paths and runs them N at a time.
+    """
+    # Create a pool of workers (threads)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+        # Submit all jobs to the pool
+        future_to_file = {
+            executor.submit(run_uci, uci_file): uci_file 
+            for uci_file in file_list
+        }
+        
+        # Monitor completion (optional, but good for error catching)
+        for future in concurrent.futures.as_completed(future_to_file):
+            uci_file = future_to_file[future]
+            try:
+                future.result() # This will raise exceptions if run_uci failed
+            except Exception as exc:
+                print(f"File {uci_file} generated an exception: {exc}")
+                
 
 # class runManager():
 #     def __init__()

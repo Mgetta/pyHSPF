@@ -43,12 +43,12 @@ class Reports():
     def simulated_et(self):
         return simulated_et(self.uci,self.hbns)
     
-    def annual_runoff(self,reach_ids = None,upstream_reach_ids = None,start_year = 1996,end_year = 2100):
+    def annual_perlnd_runoff(self,reach_ids = None,upstream_reach_ids = None,start_year = 1996,end_year = 2100):
         if (reach_ids is None) and (upstream_reach_ids is None):
-            onpids = None
+            opnids = None
         else:
             opnids = self.uci.network.get_opnids('PERLND',reach_ids,upstream_reach_ids)
-        return annual_runoff(self.uci,self.hbns,reach_ids,upstream_reach_ids,start_year,end_year)
+        return annual_perlnd_runoff(self.uci,self.hbns,opnids,start_year,end_year)
     
     #% Catchment and Watershed Loading (Edge of Field Load) Reports 
     # 
@@ -461,7 +461,7 @@ def average_annual_watershed_loading(uci,hbn,constituent,reach_ids, upstream_rea
     return df
 
 def average_monthly_watershed_loading(uci,hbn,constituent,reach_ids, upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
-    df = average_monthly_catchment_loading(uci,hbn,constituent,by_landcover = False,start_year = start_year,end_year = end_year)
+    df = average_monthly_catchment_loading(uci,hbn,constituent,by_landcover = by_landcover,start_year = start_year,end_year = end_year)
     reach_ids = uci.network.get_opnids('RCHRES',reach_ids,upstream_reach_ids)
     df = df.loc[df['TVOLNO'].isin(reach_ids)]
     if drainage_area is None:

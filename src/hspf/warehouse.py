@@ -46,41 +46,48 @@ def create_hspf_model_hierarchy_tables(con: duckdb.DuckDBPyConnection):
     -- Level 1: The overall Model (e.g., for a specific basin)
     CREATE TABLE IF NOT EXISTS hspf.models (
         model_pk        BIGINT PRIMARY KEY DEFAULT nextval('hspf.model_seq'),
-        model_name      VARCHAR NOT NULL UNIQUE, -- e.g., 'Nemadji River Basin Model'
-        description     VARCHAR
-    );
-
-    -- Level 2: A specific Version of a Model
-    CREATE TABLE IF NOT EXISTS hspf.model_versions (
-        model_version_pk BIGINT PRIMARY KEY DEFAULT nextval('hspf.model_version_seq'),
-        model_pk         BIGINT NOT NULL REFERENCES hspf.models(model_pk),
+        model_name      VARCHAR NOT NULL, -- e.g., 'Nemadji River Basin Model'
         version_name     VARCHAR NOT NULL, -- e.g., 'v2.1', '2025_Update'
-        release_date     DATE,
-        description      VARCHAR,
-        UNIQUE (model_pk, version_name)
-    );
+        --last_extension   DATE,
+        --last_update      DATE,
+        --last_calibration DATE,
+        description      VARCHAR
+        -- release_date     DATE,
+        UNIQUE (model_name, version_name)
+                );
+                ''')
 
-    -- Level 3: A Scenario within a Model Version
-    CREATE TABLE IF NOT EXISTS hspf.scenarios (
-        scenario_pk      BIGINT PRIMARY KEY DEFAULT nextval('hspf.scenario_seq'),
-        model_version_pk BIGINT NOT NULL REFERENCES hspf.model_versions(model_version_pk),
-        scenario_name    VARCHAR NOT NULL, -- e.g., 'Baseline_2020', 'Future_Climate_BMPs'
-        description      VARCHAR,
-        UNIQUE (model_version_pk, scenario_name)
-    );
+    # -- Level 2: A specific Version of a Model
+    # CREATE TABLE IF NOT EXISTS hspf.model_versions (
+    #     model_version_pk BIGINT PRIMARY KEY DEFAULT nextval('hspf.model_version_seq'),
+    #     model_pk         BIGINT NOT NULL REFERENCES hspf.models(model_pk),
+    #     version_name     VARCHAR NOT NULL, -- e.g., 'v2.1', '2025_Update'
+    #     release_date     DATE,
+    #     description      VARCHAR,
+    #     UNIQUE (model_pk, version_name)
+    # );
 
-    -- Level 4: A single execution (Run) of a Scenario
-    CREATE TABLE IF NOT EXISTS hspf.model_runs (
-        model_run_pk   BIGINT PRIMARY KEY DEFAULT nextval('hspf.model_run_seq'),
-        scenario_pk    BIGINT NOT NULL REFERENCES hspf.scenarios(scenario_pk),
-        run_id         BIGINT,
-        run_name       VARCHAR,          -- e.g., 'Run_1995-2015', 'Calibration_Run_A'
-        start_year     INTEGER,
-        end_year       INTEGER,
-        run_timestamp  TIMESTAMP DEFAULT current_timestamp,
-        notes          VARCHAR
-    );
-    ''')
+    # -- Level 3: A Scenario within a Model Version
+    # CREATE TABLE IF NOT EXISTS hspf.scenarios (
+    #     scenario_pk      BIGINT PRIMARY KEY DEFAULT nextval('hspf.scenario_seq'),
+    #     model_version_pk BIGINT NOT NULL REFERENCES hspf.model_versions(model_version_pk),
+    #     scenario_name    VARCHAR NOT NULL, -- e.g., 'Baseline_2020', 'Future_Climate_BMPs'
+    #     description      VARCHAR,
+    #     UNIQUE (model_version_pk, scenario_name)
+    # );
+
+    # -- Level 4: A single execution (Run) of a Scenario
+    # CREATE TABLE IF NOT EXISTS hspf.model_runs (
+    #     model_run_pk   BIGINT PRIMARY KEY DEFAULT nextval('hspf.model_run_seq'),
+    #     scenario_pk    BIGINT NOT NULL REFERENCES hspf.scenarios(scenario_pk),
+    #     run_id         BIGINT,
+    #     run_name       VARCHAR,          -- e.g., 'Run_1995-2015', 'Calibration_Run_A'
+    #     start_year     INTEGER,
+    #     end_year       INTEGER,
+    #     run_timestamp  TIMESTAMP DEFAULT current_timestamp,
+    #     notes          VARCHAR
+    # );
+    # ''')
 
 def create_model_run_table(con: duckdb.DuckDBPyConnection):
     """

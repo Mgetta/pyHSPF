@@ -552,3 +552,484 @@ class OutputWriter:
             Dictionary mapping activity names to available constituent names.
         """
         return self.hbns.output_names()
+
+
+class ReportWriter:
+    """
+    Provides organized report generation from HSPF model results.
+    
+    Separates getting reports (returns data) from writing reports (writes to disk)
+    so report data can be passed directly to pyhcal or other analysis tools
+    without writing to disk.
+    
+    This class wraps the existing Reports class functionality with a consistent
+    get_*/write_* API pattern.
+    
+    Parameters
+    ----------
+    reports : Reports
+        The Reports object from an hspfModel instance.
+    
+    Notes
+    -----
+    ReportWriter delegates to the existing Reports class for all calculations.
+    It provides a consistent API with:
+    - get_* methods: Return DataFrame for analysis/passing to pyhcal
+    - write_* methods: Write report to disk in various formats
+    
+    Examples
+    --------
+    >>> from hspf import hspfModel
+    >>> model = hspfModel('path/to/model.uci')
+    >>> rw = ReportWriter(model.reports)
+    >>> 
+    >>> # Get scour report for analysis
+    >>> scour_data = rw.get_scour_report()
+    >>> 
+    >>> # Write water budget to CSV
+    >>> rw.write_water_budget('water_budget.csv', operation='PERLND')
+    """
+    
+    def __init__(self, reports):
+        """
+        Initialize the ReportWriter.
+        
+        Parameters
+        ----------
+        reports : Reports
+            The Reports object from an hspfModel instance.
+        """
+        self.reports = reports
+    
+    # =========================================================================
+    # GET methods - return report data for analysis
+    # =========================================================================
+    
+    def get_scour_report(
+        self,
+        start_year: str = '1996',
+        end_year: str = '2030'
+    ) -> 'pd.DataFrame':
+        """
+        Get channel scour report.
+        
+        Calculates the ratio of nonpoint source loading to total loading
+        including channel scour/deposition for each reach.
+        
+        Parameters
+        ----------
+        start_year : str, default '1996'
+            Start year for averaging.
+        end_year : str, default '2030'
+            End year for averaging.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Scour report with columns: RCHID, LKFG, nonpoint, depscour, ratio
+        """
+        return self.reports.scour(start_year=start_year, end_year=end_year)
+    
+    def get_landcover_area(self) -> 'pd.DataFrame':
+        """
+        Get landcover area summary.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Area and percent by landcover type.
+        """
+        return self.reports.landcover_area()
+    
+    def get_water_budget(self, operation: str = 'PERLND') -> 'pd.DataFrame':
+        """
+        Get annual water budget report.
+        
+        Parameters
+        ----------
+        operation : str, default 'PERLND'
+            Operation type. Options: 'PERLND', 'IMPLND', 'RCHRES'
+        
+        Returns
+        -------
+        pd.DataFrame
+            Annual water budget components.
+        """
+        return self.reports.annual_water_budget(operation)
+    
+    def get_sediment_budget(self) -> 'pd.DataFrame':
+        """
+        Get annual sediment budget report.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Annual sediment budget.
+        """
+        return self.reports.annual_sediment_budget()
+    
+    def get_subwatershed_loading(self, constituent: str) -> 'pd.DataFrame':
+        """
+        Get annual average subwatershed loading.
+        
+        Parameters
+        ----------
+        constituent : str
+            Constituent of interest. Options: 'Q', 'TSS', 'TP', 'TKN', 'N', 'OP'
+        
+        Returns
+        -------
+        pd.DataFrame
+            Loading by subwatershed with weighted mean and area.
+        """
+        return self.reports.ann_avg_subwatershed_loading(constituent)
+    
+    def get_watershed_loading(
+        self,
+        constituent: str,
+        reach_ids: Union[int, List[int]]
+    ) -> 'pd.DataFrame':
+        """
+        Get annual average watershed loading by landcover.
+        
+        Parameters
+        ----------
+        constituent : str
+            Constituent of interest. Options: 'Q', 'TSS', 'TP', 'TKN', 'N', 'OP'
+        reach_ids : int or list of int
+            Outlet reach IDs for the watershed.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Loading by landcover with volume, area, and share metrics.
+        """
+        if isinstance(reach_ids, int):
+            reach_ids = [reach_ids]
+        return self.reports.ann_avg_watershed_loading(constituent, reach_ids)
+    
+    def get_yield(
+        self,
+        constituent: str,
+        reach_ids: Union[int, List[int]]
+    ) -> 'pd.DataFrame':
+        """
+        Get annual average yield.
+        
+        Parameters
+        ----------
+        constituent : str
+            Constituent of interest. Options: 'Q', 'TSS', 'TP', 'TKN', 'N', 'OP'
+        reach_ids : int or list of int
+            Outlet reach IDs for yield calculation.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Average annual yield.
+        """
+        if isinstance(reach_ids, int):
+            reach_ids = [reach_ids]
+        return self.reports.ann_avg_yield(constituent, reach_ids)
+    
+    def get_annual_precip(self) -> 'pd.DataFrame':
+        """
+        Get average annual precipitation report.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Average annual precipitation by operation and DSN.
+        """
+        return self.reports.annual_precip()
+    
+    def get_simulated_et(self) -> 'pd.DataFrame':
+        """
+        Get simulated evapotranspiration report.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Simulated ET data.
+        """
+        return self.reports.simulated_et()
+    
+    # =========================================================================
+    # WRITE methods - write reports to disk
+    # =========================================================================
+    
+    def write_scour_report(
+        self,
+        filepath: Union[str, Path],
+        start_year: str = '1996',
+        end_year: str = '2030',
+        format: str = 'csv'
+    ) -> Path:
+        """
+        Write channel scour report to file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        start_year : str, default '1996'
+            Start year for averaging.
+        end_year : str, default '2030'
+            End year for averaging.
+        format : str, default 'csv'
+            Output format. Options: 'csv', 'excel', 'hdf5'
+        
+        Returns
+        -------
+        Path
+            Path to the written file.
+        """
+        df = self.get_scour_report(start_year=start_year, end_year=end_year)
+        return self._write_dataframe(df, filepath, format)
+    
+    def write_landcover_area(
+        self,
+        filepath: Union[str, Path],
+        format: str = 'csv'
+    ) -> Path:
+        """
+        Write landcover area report to file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        format : str, default 'csv'
+            Output format. Options: 'csv', 'excel', 'hdf5'
+        
+        Returns
+        -------
+        Path
+            Path to the written file.
+        """
+        df = self.get_landcover_area()
+        return self._write_dataframe(df, filepath, format)
+    
+    def write_water_budget(
+        self,
+        filepath: Union[str, Path],
+        operation: str = 'PERLND',
+        format: str = 'csv'
+    ) -> Path:
+        """
+        Write annual water budget report to file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        operation : str, default 'PERLND'
+            Operation type. Options: 'PERLND', 'IMPLND', 'RCHRES'
+        format : str, default 'csv'
+            Output format. Options: 'csv', 'excel', 'hdf5'
+        
+        Returns
+        -------
+        Path
+            Path to the written file.
+        """
+        df = self.get_water_budget(operation=operation)
+        return self._write_dataframe(df, filepath, format)
+    
+    def write_sediment_budget(
+        self,
+        filepath: Union[str, Path],
+        format: str = 'csv'
+    ) -> Path:
+        """
+        Write annual sediment budget report to file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        format : str, default 'csv'
+            Output format. Options: 'csv', 'excel', 'hdf5'
+        
+        Returns
+        -------
+        Path
+            Path to the written file.
+        """
+        df = self.get_sediment_budget()
+        return self._write_dataframe(df, filepath, format)
+    
+    def write_subwatershed_loading(
+        self,
+        filepath: Union[str, Path],
+        constituent: str,
+        format: str = 'csv'
+    ) -> Path:
+        """
+        Write subwatershed loading report to file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        constituent : str
+            Constituent of interest.
+        format : str, default 'csv'
+            Output format. Options: 'csv', 'excel', 'hdf5'
+        
+        Returns
+        -------
+        Path
+            Path to the written file.
+        """
+        df = self.get_subwatershed_loading(constituent=constituent)
+        return self._write_dataframe(df, filepath, format)
+    
+    def write_watershed_loading(
+        self,
+        filepath: Union[str, Path],
+        constituent: str,
+        reach_ids: Union[int, List[int]],
+        format: str = 'csv'
+    ) -> Path:
+        """
+        Write watershed loading report to file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        constituent : str
+            Constituent of interest.
+        reach_ids : int or list of int
+            Outlet reach IDs for the watershed.
+        format : str, default 'csv'
+            Output format. Options: 'csv', 'excel', 'hdf5'
+        
+        Returns
+        -------
+        Path
+            Path to the written file.
+        """
+        df = self.get_watershed_loading(constituent=constituent, reach_ids=reach_ids)
+        return self._write_dataframe(df, filepath, format)
+    
+    def write_yield(
+        self,
+        filepath: Union[str, Path],
+        constituent: str,
+        reach_ids: Union[int, List[int]],
+        format: str = 'csv'
+    ) -> Path:
+        """
+        Write yield report to file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        constituent : str
+            Constituent of interest.
+        reach_ids : int or list of int
+            Outlet reach IDs.
+        format : str, default 'csv'
+            Output format. Options: 'csv', 'excel', 'hdf5'
+        
+        Returns
+        -------
+        Path
+            Path to the written file.
+        """
+        df = self.get_yield(constituent=constituent, reach_ids=reach_ids)
+        return self._write_dataframe(df, filepath, format)
+    
+    def write_annual_precip(
+        self,
+        filepath: Union[str, Path],
+        format: str = 'csv'
+    ) -> Path:
+        """
+        Write annual precipitation report to file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        format : str, default 'csv'
+            Output format. Options: 'csv', 'excel', 'hdf5'
+        
+        Returns
+        -------
+        Path
+            Path to the written file.
+        """
+        df = self.get_annual_precip()
+        return self._write_dataframe(df, filepath, format)
+    
+    def write_simulated_et(
+        self,
+        filepath: Union[str, Path],
+        format: str = 'csv'
+    ) -> Path:
+        """
+        Write simulated ET report to file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Output file path.
+        format : str, default 'csv'
+            Output format. Options: 'csv', 'excel', 'hdf5'
+        
+        Returns
+        -------
+        Path
+            Path to the written file.
+        """
+        df = self.get_simulated_et()
+        return self._write_dataframe(df, filepath, format)
+    
+    # =========================================================================
+    # Helper methods
+    # =========================================================================
+    
+    def _write_dataframe(
+        self,
+        df: 'pd.DataFrame',
+        filepath: Union[str, Path],
+        format: str = 'csv'
+    ) -> Path:
+        """Write a DataFrame to a file in the specified format."""
+        filepath = Path(filepath)
+        
+        if format == 'csv':
+            df.to_csv(filepath)
+        elif format == 'excel':
+            df.to_excel(filepath)
+        elif format == 'hdf5':
+            df.to_hdf(filepath, key='data', mode='w')
+        else:
+            raise ValueError(f"Unsupported format: {format}. Use 'csv', 'excel', or 'hdf5'")
+        
+        return filepath
+    
+    def available_reports(self) -> List[str]:
+        """
+        Get list of available report types.
+        
+        Returns
+        -------
+        list of str
+            Names of available reports.
+        """
+        return [
+            'scour_report',
+            'landcover_area',
+            'water_budget',
+            'sediment_budget',
+            'subwatershed_loading',
+            'watershed_loading',
+            'yield',
+            'annual_precip',
+            'simulated_et'
+        ]

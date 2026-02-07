@@ -11,6 +11,7 @@ import subprocess
 from .uci import UCI
 from . import hbn
 from .reports import Reports
+from .output import OutputWriter
 from .wdm import wdmInterface
 from . import wdmReader
 
@@ -50,6 +51,7 @@ class hspfModel():
         
         # Compositions
         self.reports = Reports(self.uci,self.hbns,self.wdms)
+        self.output = OutputWriter(self.hbns, self.uci, self.wdms)
         
 
     def validate_wdms(self):

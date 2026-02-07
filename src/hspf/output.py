@@ -12,9 +12,12 @@ directly to pyhcal without having to write to disk first.
 
 @author: pyHSPF contributors
 """
+import logging
 import pandas as pd
 from pathlib import Path
 from typing import List, Optional, Union
+
+logger = logging.getLogger(__name__)
 
 
 class OutputWriter:
@@ -27,11 +30,18 @@ class OutputWriter:
     Parameters
     ----------
     hbns : hbnInterface
-        Interface to HBN binary output files
+        Interface to HBN binary output files. Required for all output methods.
     uci : UCI, optional
-        UCI model configuration object, required for some reports
+        UCI model configuration object. Currently not used directly by OutputWriter,
+        but may be needed for future report extensions. Pass when available.
     wdms : wdmInterface, optional
-        Interface to WDM input/output files
+        Interface to WDM input/output files. Currently not used directly by OutputWriter,
+        but may be needed for future report extensions. Pass when available.
+    
+    Notes
+    -----
+    All get_* and write_* methods require only `hbns` to be provided.
+    The `uci` and `wdms` parameters are reserved for future report extensions.
     
     Examples
     --------
@@ -373,6 +383,7 @@ class OutputWriter:
             constituents = ['Q', 'TSS', 'TP', 'TKN', 'N', 'OP']
         
         summaries = []
+        skipped_constituents = []
         for constituent in constituents:
             try:
                 df = self.get_reach_output(
@@ -384,9 +395,19 @@ class OutputWriter:
                 summary = df.describe()
                 summary['constituent'] = constituent
                 summaries.append(summary)
-            except (KeyError, TypeError, AttributeError):
-                # Skip constituents that aren't available
+            except (KeyError, TypeError, AttributeError) as e:
+                # Log warning for unavailable constituents
+                logger.warning(
+                    f"Constituent '{constituent}' not available for reach_ids={reach_ids}: {e}"
+                )
+                skipped_constituents.append(constituent)
                 continue
+        
+        if skipped_constituents:
+            logger.info(
+                f"Skipped {len(skipped_constituents)} unavailable constituent(s): "
+                f"{skipped_constituents}"
+            )
         
         if summaries:
             result = pd.concat(summaries)

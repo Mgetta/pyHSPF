@@ -244,10 +244,17 @@ class TestOutputWriterFromHspfModel:
     """Test OutputWriter integration with hspfModel."""
     
     def test_output_attribute_exists(self):
-        """Test that hspfModel has output attribute."""
-        from hspf.hspfModel import hspfModel
-        from hspf.output import OutputWriter
+        """Test that hspfModel creates output attribute with OutputWriter."""
+        from pathlib import Path
         
-        # The hspfModel now includes an output attribute
-        # This verifies the import and class structure is correct
-        assert hasattr(hspfModel, '__init__')
+        # Read the hspfModel.py source file directly
+        hspf_model_path = Path(__file__).parent.parent / 'src' / 'hspf' / 'hspfModel.py'
+        source = hspf_model_path.read_text()
+        
+        # Check that OutputWriter is imported in the module
+        assert 'from .output import OutputWriter' in source, \
+            "OutputWriter should be imported in hspfModel module"
+        
+        # Check that output attribute is created in __init__
+        assert 'self.output = OutputWriter' in source, \
+            "hspfModel.__init__ should create self.output = OutputWriter(...)"

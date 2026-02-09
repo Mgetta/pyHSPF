@@ -221,18 +221,23 @@ class UCI():
             for line in self.lines:    
                 the_file.write(line+'\n')
 
-    def add_parameter_template(self,block,table_name,table_id,parameter,tpl_char = '~',opnids = None,single_template = True, group_id = ''):
+    def add_parameter_template(self,block,table_name,table_id,column,parname = None,tpl_char = '~',opnids = None,single_template = True, group_id = ''):
         
         table = self.table(block,table_name,0,False).reset_index()
         column_names,dtypes,starts,stops = self.uci[(block,table_name,table_id)]._delimiters()
         
-        width = stops[column_names.index(parameter)] - starts[column_names.index(parameter)]
+        width = stops[column_names.index(column)] - starts[column_names.index(column)]
 
-        ids = ~table[parameter].isna() # Handle comment lines in uci
-        parameter = parameter.lower()
+        ids = ~table[column].isna() # Handle comment lines in uci
+        if parname is None:
+            parameter = column.lower()
+        else:
+            parameter = parname.lower()
+
         if opnids is not None:
             ids = ids & (table['OPNID'].isin(opnids))
 
+        
         # Replace paramter name with PEST/PEST++ specification. Note this does not use the HSPF supplemental file so parameters are limited to width of uci file column
         if single_template:
             pest_param = group_id + parameter 
@@ -244,7 +249,7 @@ class UCI():
             template = [tpl_char + pest_param + ' '*(width-len(pest_param)-2)+ tpl_char for pest_param in pest_param]
             #template = pest_param.apply(lambda name: tpl_char + name + ' '*(width-len(name)-1)+ tpl_char)
 
-        table.loc[ids,parameter.upper()] = template
+        table.loc[ids,column] = template
         table = table.set_index('OPNID')
         self.replace_table(table,block,table_name,table_id)
         return list(set(pest_param))

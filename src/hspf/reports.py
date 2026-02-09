@@ -114,9 +114,22 @@ class Reports():
         df= average_monthly_yield(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids,start_year,end_year)
         return df
     
-
+'''
+An outlet defined by a list of reach ids
+Hourly constituent concentration output
+Q,TSS,TP,OP,TKN,N,DO,BOD,CHLA
+Monthly watershed loading rates
+Monthly reach constituent output
+Q,TSS,TP,OP,TKN,N,DO,BOD,CHLA
+Monthly weighted catchment constituent loading rate
+Monthly weighted catchment surface runoff
+Monthly PERLND/IMPLND constituent loading rate
+Monthly PRELND/IMPLNDsurface runoff
+'''
 
 #%% Channel Reports    
+
+
 def scour(hbn,uci,start_year = 1996,end_year = 2030):
     # Should eventually create an entire reports module or class indorder to calculate all of the different model checks
     # TODO: Incorporate IMPLNDS
@@ -297,6 +310,7 @@ def get_constituent_loading(uci,hbn,constituent,time_step = 5):
     implnds['OPERATION'] = 'IMPLND'
 
     df = pd.concat([perlnds,implnds],axis=0)
+    df.rename(columns = {'index': 'datetime'}, inplace = True)
 
     #df = df.groupby(['OPNID','OPERATION'])['value'].mean().reset_index()
 
@@ -360,7 +374,7 @@ def get_catchment_loading(uci,hbn,constituent,time_step=5,by_landcover = False):
     df['load'] = df['value']*df['AFACTR']
     df = df.rename(columns = {'value':'loading_rate', 'AFACTR':'landcover_area','LSID':'landcover'})
     df['constituent'] = constituent
-    df = df[['index','constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']]
+    df = df[['datetime','constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']]
     return df
 
 
@@ -380,15 +394,15 @@ def get_watershed_loading(uci,hbn,reach_ids,constituent,upstream_reach_ids = Non
 
 def average_annual_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100):
     df = get_constituent_loading(uci,hbn,constituent,time_step=5)
-    df = df.loc[(df['index'].dt.year >= start_year) & (df['index'].dt.year <= end_year)]
-    df['year'] = df['index'].dt.year
+    df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
+    df['year'] = df['datetime'].dt.year
     df = df.groupby(['OPERATION','OPNID'])['value'].mean().reset_index()
     return df
 
 def average_monthly_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100):
     df = get_constituent_loading(uci,hbn,constituent,time_step=4)
-    df = df.loc[(df['index'].dt.year >= start_year) & (df['index'].dt.year <= end_year)]
-    df['month'] = df['index'].dt.month
+    df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
+    df['month'] = df['datetime'].dt.month
     df = df.groupby(['month','OPERATION','OPNID'])['value'].mean().reset_index()
     return df
 

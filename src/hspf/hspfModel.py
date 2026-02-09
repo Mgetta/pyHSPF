@@ -8,15 +8,13 @@ from pathlib import Path
 import os.path
 import subprocess
 import concurrent.futures
-
 from hspf.uci import UCI
 from hspf import hbn
 from hspf.reports import Reports
 from hspf.wdm import wdmInterface
 from hspf import wdmReader
-
-
-
+from hspf.outputs import outputWriter
+ 
 
 
 winHSPF = str(Path(__file__).resolve().parent) + '\\bin\\WinHSPFLt\\WinHspfLt.exe'
@@ -52,6 +50,8 @@ class hspfModel():
         
         # Compositions
         self.reports = Reports(self.uci,self.hbns,self.wdms)
+        self.outputs = outputWriter(self.uci,self.hbns)
+
         
     def _reinitialize(self,uci_file:str,run_model:bool = False):
         self.uci = UCI(uci_file)
@@ -133,7 +133,7 @@ class hspfModel():
     def _load_wdms(self):
         self.wdms = wdmInterface(self.wdm_paths)
            
-    
+
     # Model checks         
     def check_filename_exist(self,file_extension: str):
         table = self.uci.table('FILES',drop_comments = False)

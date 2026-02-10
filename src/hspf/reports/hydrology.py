@@ -73,7 +73,7 @@ def monthly_weighted_output(uci, hbn, ts_name, operation='PERLND', opnids=None, 
         DataFrame with monthly weighted output
     """
     if months is None:
-        months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        months = list(range(1, 13))
         
     df = hbn.get_multiple_timeseries(operation, 4, ts_name, opnids=opnids)
     df = df.loc[df.index.month.isin(months)]
@@ -274,7 +274,7 @@ def subwatershed_weighted_output(uci, hbn, reach_ids, ts_name, time_step, by_lan
     return df
 
 
-def meteorlogical(uci, wdm, operation, ts_name, time_step='Y', opnids=None):
+def meteorological(uci, wdm, operation, ts_name, time_step='Y', opnids=None):
     """Get meteorological data.
     
     Args:

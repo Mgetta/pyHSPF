@@ -42,7 +42,7 @@ def avg_subwatershed_loading(constituent, t_code, uci, hbn):
                                               t_con=t_con,
                                               t_code=t_code) for t_con in t_cons])
         if constituent == 'TSS':
-            df * 2000
+            df = df * 2000
 
         df = df.T.reset_index()
         df.loc[:, 'SVOL'] = t_opn
@@ -79,7 +79,7 @@ def monthly_avg_constituent_loading(constituent, uci, hbn):
                                               t_code='monthly') for t_con in t_cons])
         df = df.groupby(df.index.month).mean().T.reset_index()
         if constituent == 'TSS':
-            df * 2000
+            df = df * 2000
 
         df.loc[:, 'SVOL'] = t_opn
         df = df.rename(columns={'index': 'OPNID'})

@@ -1,104 +1,97 @@
 # -*- coding: utf-8 -*-
-"""
-Landcover utilities module for working with model landcover data.
-
-This module provides functions to query and retrieve landcover information
-from the model_landcovers.csv file.
-"""
+"""Landcover utilities module for working with model landcover data."""
 import pandas as pd
-from functools import lru_cache
 from pathlib import Path
 
-
-@lru_cache(maxsize=1)
-def _load_landcover_data():
-    """Load the model_landcovers.csv file and return a DataFrame.
-    
-    The DataFrame is cached to avoid repeated file I/O operations.
-    """
-    data_path = Path(__file__).parent / "data" / "model_landcovers.csv"
-    return pd.read_csv(data_path)
+# Load landcover data as a global DataFrame on module import
+_DATA_PATH = Path(__file__).parent / "data" / "model_landcovers.csv"
+try:
+    LANDCOVER_DF = pd.read_csv(_DATA_PATH)
+except FileNotFoundError:
+    raise FileNotFoundError(f"Landcover data file not found: {_DATA_PATH}")
+except Exception as e:
+    raise RuntimeError(f"Error loading landcover data from {_DATA_PATH}: {e}")
 
 
 def get_landcover(model_name, perlnd_id):
-    """
-    Get landcover information for a specific perlnd in a model.
-
-    Parameters
-    ----------
-    model_name : str
-        The name of the model (e.g., 'BigFork', 'BigSioux').
-    perlnd_id : int
-        The OPNID of the perlnd.
-
-    Returns
-    -------
-    dict or None
-        A dictionary containing all landcover information for the perlnd,
-        or None if the perlnd is not found.
-    """
-    df = _load_landcover_data()
-    result = df[(df['model'] == model_name) & (df['OPNID'] == perlnd_id)]
+    """Get landcover information for a specific perlnd in a model."""
+    result = LANDCOVER_DF[(LANDCOVER_DF['model'] == model_name) & (LANDCOVER_DF['OPNID'] == perlnd_id)]
     if result.empty:
         return None
     return result.iloc[0].to_dict()
 
 
 def get_agricultural_perlnds(model_name):
-    """
-    Get all agricultural perlnds for a model.
-
-    Parameters
-    ----------
-    model_name : str
-        The name of the model (e.g., 'BigFork', 'BigSioux').
-
-    Returns
-    -------
-    list of int
-        A list of OPNID values for all agricultural perlnds in the model.
-    """
-    df = _load_landcover_data()
-    result = df[(df['model'] == model_name) & (df['Landcover'] == 'Agricultural')]
+    """Get all agricultural perlnds for a model."""
+    result = LANDCOVER_DF[(LANDCOVER_DF['model'] == model_name) & (LANDCOVER_DF['Landcover'] == 'Agricultural')]
     return result['OPNID'].dropna().astype(int).tolist()
 
 
 def get_forested_perlnds(model_name):
-    """
-    Get all forested perlnds for a model.
-
-    Parameters
-    ----------
-    model_name : str
-        The name of the model (e.g., 'BigFork', 'BigSioux').
-
-    Returns
-    -------
-    list of int
-        A list of OPNID values for all forested perlnds in the model.
-    """
-    df = _load_landcover_data()
-    result = df[(df['model'] == model_name) & (df['Landcover'] == 'Forest')]
+    """Get all forested perlnds for a model."""
+    result = LANDCOVER_DF[(LANDCOVER_DF['model'] == model_name) & (LANDCOVER_DF['Landcover'] == 'Forest')]
     return result['OPNID'].dropna().astype(int).tolist()
 
 
 def get_cropland_perlnds(model_name):
-    """
-    Get all cropland perlnds for a model.
-
-    Cropland perlnds are a subset of agricultural perlnds where
-    the 'Agricultural Use' column is 'Cropland'.
-
-    Parameters
-    ----------
-    model_name : str
-        The name of the model (e.g., 'BigFork', 'BigSioux').
-
-    Returns
-    -------
-    list of int
-        A list of OPNID values for all cropland perlnds in the model.
-    """
-    df = _load_landcover_data()
-    result = df[(df['model'] == model_name) & (df['Agricultural Use'] == 'Cropland')]
+    """Get cropland perlnds (Agricultural Use == 'Cropland') for a model."""
+    result = LANDCOVER_DF[(LANDCOVER_DF['model'] == model_name) & (LANDCOVER_DF['Agricultural Use'] == 'Cropland')]
     return result['OPNID'].dropna().astype(int).tolist()
+
+
+def get_perlnds_by_landcover(model_name, landcover):
+    """Get all perlnds with a specific landcover type for a model."""
+    result = LANDCOVER_DF[(LANDCOVER_DF['model'] == model_name) & (LANDCOVER_DF['Landcover'] == landcover)]
+    return result['OPNID'].dropna().astype(int).tolist()
+
+
+def filter_perlnds_by_landcover(model_name, perlnd_ids, landcover):
+    """Filter a list of perlnd IDs to only those matching a specific landcover type."""
+    mask = (
+        (LANDCOVER_DF['model'] == model_name) &
+        (LANDCOVER_DF['OPNID'].isin(perlnd_ids)) &
+        (LANDCOVER_DF['Landcover'] == landcover)
+    )
+    return LANDCOVER_DF[mask]['OPNID'].dropna().astype(int).tolist()
+
+
+def get_all_models():
+    """Get a list of all unique model names in the dataset."""
+    return LANDCOVER_DF['model'].unique().tolist()
+
+
+def get_model_perlnds(model_name):
+    """Get all perlnd IDs for a model."""
+    result = LANDCOVER_DF[LANDCOVER_DF['model'] == model_name]
+    return result['OPNID'].dropna().astype(int).tolist()
+
+
+def get_landcover_summary(model_name):
+    """Get a count of perlnds by landcover type for a model."""
+    result = LANDCOVER_DF[LANDCOVER_DF['model'] == model_name]
+    return result['Landcover'].value_counts().to_dict()
+
+
+def get_landcovers_for_perlnds(model_name, perlnd_ids):
+    """Get landcover info for a list of perlnd IDs in a model."""
+    mask = (LANDCOVER_DF['model'] == model_name) & (LANDCOVER_DF['OPNID'].isin(perlnd_ids))
+    return LANDCOVER_DF[mask].to_dict('records')
+
+
+def get_cross_model_summary(landcover):
+    """Get count of perlnds with a specific landcover type across all models."""
+    result = LANDCOVER_DF[LANDCOVER_DF['Landcover'] == landcover]
+    return result.groupby('model')['OPNID'].count().to_dict()
+
+
+def get_all_landcover_types():
+    """Get a list of all unique landcover types in the dataset."""
+    return LANDCOVER_DF['Landcover'].dropna().unique().tolist()
+
+
+def get_perlnds_by_column_value(model_name, column, value):
+    """Get perlnds where column matches value; returns empty list if column not found."""
+    if column not in LANDCOVER_DF.columns:
+        return []
+    mask = (LANDCOVER_DF['model'] == model_name) & (LANDCOVER_DF[column] == value)
+    return LANDCOVER_DF[mask]['OPNID'].dropna().astype(int).tolist()

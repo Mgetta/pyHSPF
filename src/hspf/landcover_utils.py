@@ -6,11 +6,16 @@ This module provides functions to query and retrieve landcover information
 from the model_landcovers.csv file.
 """
 import pandas as pd
+from functools import lru_cache
 from pathlib import Path
 
 
+@lru_cache(maxsize=1)
 def _load_landcover_data():
-    """Load the model_landcovers.csv file and return a DataFrame."""
+    """Load the model_landcovers.csv file and return a DataFrame.
+    
+    The DataFrame is cached to avoid repeated file I/O operations.
+    """
     data_path = Path(__file__).parent / "data" / "model_landcovers.csv"
     return pd.read_csv(data_path)
 

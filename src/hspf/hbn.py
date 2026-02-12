@@ -488,7 +488,8 @@ class hbnClass:
             df = df[df.index >= '1996-01-01']
         else:
             df = pd.DataFrame()
-            
+        
+        df.index.name = 'datetime'
         return df
     
     def get_multiple_timeseries(self,t_opn,t_code,t_con,opnids = None,activity = None):

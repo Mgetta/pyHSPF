@@ -203,10 +203,9 @@ def catchment_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2
     df = constituent_loading_summary(uci,hbn,constituent,start_year,end_year,time_step=time_step,temporal_grouping=temporal_grouping,agg_func=agg_func)
     df = _join_catchments(df,uci,constituent)
 
-    group_prefix = []
+    group_prefix = [temporal_grouping] if temporal_grouping is not None else []
     base_cols = ['constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']
     if temporal_grouping is not None:
-        group_prefix = [temporal_grouping]
         base_cols = [temporal_grouping] + base_cols
     df = df[df.columns.intersection(base_cols)]
     return _aggregate_catchment_loading(df,by_landcover,group_prefix=group_prefix)

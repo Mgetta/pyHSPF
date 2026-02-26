@@ -343,15 +343,17 @@ class UCI():
     def initialize(self,name = None, default_output = 4,n=5,reach_ids = None):
         if name is None:
             name = self.name
-            
+        
+        # Note that the order of these function calls matters
         setup_files(self,name,n)
-        setup_geninfo(self)
         setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids)
+        setup_geninfo(self)
         setup_qualid(self)
 
     def initialize_binary_info(self,default_output = 4,reach_ids = None):
         setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids)
-        
+        setup_geninfo(self)
+
     
     def build_targets(self):
         geninfo = self.table('PERLND','GEN-INFO')  
@@ -449,16 +451,23 @@ def setup_geninfo(uci):
     bino_nums = uci.table('FILES').set_index('FTYPE').loc['BINO','UNIT'].tolist()
     if isinstance(bino_nums,int): #Pands is poorly designed. Why would tolist not return a goddamn list...?
         bino_nums = [bino_nums]
-  
+
+
     #opnids = uci.table(operation,'GEN-INFO').index
+    # Split model output from all operations evenly across binary files
     for operation in ['RCHRES','PERLND','IMPLND']:
-        opnids = np.array_split(uci.table(operation,'GEN-INFO').index.to_list(),len(bino_nums))
-        
-        for opnid,bino_num in zip(opnids,bino_nums):
-            if operation == 'RCHRES': #TODO convert BUNITE to BUNIT1 to get rid of this if statement
-                uci.update_table(bino_num,'RCHRES','GEN-INFO',0,opnids = opnid,columns = 'BUNITE',operator = 'set')
-            else:
-                uci.update_table(bino_num,operation,'GEN-INFO',0,opnids = opnid,columns = 'BUNIT1',operator = 'set')
+        binary_info = uci.table(operation, 'BINARY-INFO')
+        for t_code in [2,3,4,5]:
+            opnids = binary_info.index[(binary_info.iloc[:, :-2] == t_code).any(axis=1)].to_list()
+            if len(opnids) > 0:
+                opnids = np.array_split(opnids,len(bino_nums))
+                for opnid,bino_num in zip(opnids,bino_nums):
+                    if len(opnid) > 0:
+                        if operation == 'RCHRES': #TODO convert BUNITE to BUNIT1 to get rid of this if statement
+                            uci.update_table(bino_num,'RCHRES','GEN-INFO',0,opnids = opnid,columns = 'BUNITE',operator = 'set')
+                        else:
+                            uci.update_table(bino_num,operation,'GEN-INFO',0,opnids = opnid,columns = 'BUNIT1',operator = 'set')
+
 
 def setup_binaryinfo(uci,default_output = 4,reach_ids = None):
     # Initialize Binary-Info

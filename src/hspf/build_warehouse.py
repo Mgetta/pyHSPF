@@ -1,5 +1,7 @@
 
 #%%
+from dataclasses import dataclass
+
 from hspf.parser.parsers import parseTable
 from hspf import warehouse
 import duckdb
@@ -27,25 +29,21 @@ run_name: Initial Run
 run_id: 0
 '''
 
-ucis = {model_name: UCI(Repository(model_name).uci_file,False) for model_name in Repository.valid_models()}
-
 
 #%% Table Builders
 
-def build_model_table(model_name,uci,version_name=None, scenario_name=None):
+def build_model_table(model_name,uci,version_id=None, scenario_name = 'base',run_id = 0):
     scenario_name = pd.NA
     start_year = int(uci.table('GLOBAL')['start_date'].str[0:4].values[0])
     end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
 
-    if version_name is None:
-        version_name = f"{model_name}_{start_year}_{end_year}"
-
-    if scenario_name is None:
-        scenario_name = 'Basecase'
+    if version_id is None:
+        version_id = f"{model_name}_{start_year}_{end_year}"
 
     df_model = pd.DataFrame({
         'model_name': [model_name],
-        'version_name': [version_name],
+        'version_id': [version_id],
+        'run_id': [run_id],
         'start_year': [start_year],
         'end_year': [end_year],
         'scenario_name': [scenario_name]
@@ -131,125 +129,196 @@ def build_parmeter_table(model_name, uci):
     return df
 
 #%% Build Tables
-models_df = pd.concat([build_model_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
-operations_df = pd.concat([build_operations_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
-masslinks_df = pd.concat([build_masslink_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
-schematics_df = pd.concat([build_schematic_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True) 
-extsources_df = pd.concat([build_extsources_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
-exttargets_df = pd.concat([build_exttargets_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
-networks_df = pd.concat([build_network_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
-ftables_df = pd.concat([build_ftables_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
-df = pd.concat([build_parmeter_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
-df = pd.merge(df,parseTable,left_on = ['operation_type','table_name','variable'],
-         right_on = ['block','table2','column'],how='left')[['model_name','operation_type','table_name','table_id','operation_id','variable','value','dtype']]
-props = df.query('dtype == "C"')
-flags = df.query('dtype == "I"')
-params = df.query('dtype == "R"')
 
 #%% Optionally Add PKs
-models_df['model_pk'] = models_df.index + 1
-operations_df['operation_pk'] = operations_df.index + 1
-mlno_pks = {mlno: idx+1 for idx, mlno in enumerate(masslinks_df[['MLNO','model_name']].drop_duplicates().itertuples(index=False, name=None))}
-masslinks_df['mlno_pk'] = masslinks_df[['MLNO','model_name']].apply(tuple, axis=1).map(mlno_pks)
-# Schematics
-schematics_df = schematics_df.merge(
-    operations_df[['model_name','operation_id','operation_type','operation_pk']],
-    left_on=['model_name','SVOLNO','SVOL'],
-    right_on=['model_name','operation_id','operation_type'],
-    how='left'
-).rename(columns={'operation_pk': 'source_operation_pk'})
 
-schematics_df = schematics_df.merge(
-    operations_df[['model_name','operation_id','operation_type','operation_pk']],
-    left_on=['model_name','TVOL','TVOLNO'],
-    right_on=['model_name','operation_type','operation_id'],
-    how='left'
-).rename(columns={'operation_pk': 'target_operation_pk'})
-#Join masslink pks
-schematics_df = schematics_df.merge(
-    masslinks_df[['model_name','MLNO','mlno_pk']],
-    on=['model_name','MLNO'],
-    how='left'
-)
-#set operatin_pk dtyes to int
-schematics_df['source_operation_pk'] = schematics_df['source_operation_pk'].astype('Int64')
-schematics_df['target_operation_pk'] = schematics_df['target_operation_pk'].astype('Int64')
-schematics_df[['source_operation_pk','target_operation_pk','AFACTR','MLNO','TMEMSB1','TMEMSB2']]
-schematics_df['mlno_pk'] = schematics_df['mlno_pk'].astype('Int64')
+def add_model_pks(models_df):
+    models_df['model_pk'] = models_df.index + 1
+    return models_df
+
+def add_operation_pks(operations_df, models_df):
+    operations_df['operation_pk'] = operations_df.index + 1
+    operations_df = operations_df.merge(
+        models_df[['model_name', 'model_pk']],
+        on='model_name',
+        how='left'
+    )
+    return operations_df
+
+def add_masslink_pks(masslinks_df, models_df):
+    mlno_pks = {mlno: idx+1 for idx, mlno in enumerate(masslinks_df[['MLNO','model_name']].drop_duplicates().itertuples(index=False, name=None))}
+    masslinks_df['mlno_pk'] = masslinks_df[['MLNO','model_name']].apply(tuple, axis=1).map(mlno_pks)
+    return masslinks_df
+
+# Schematics
+
+def add_schematic_pks(schematics_df, operations_df, masslinks_df):
+    schematics_df = schematics_df.merge(
+        operations_df[['model_name','operation_id','operation_type','operation_pk']],
+        left_on=['model_name','SVOLNO','SVOL'],
+        right_on=['model_name','operation_id','operation_type'],
+        how='left'
+    ).rename(columns={'operation_pk': 'source_operation_pk'})
+
+    schematics_df = schematics_df.merge(
+        operations_df[['model_name','operation_id','operation_type','operation_pk']],
+        left_on=['model_name','TVOL','TVOLNO'],
+        right_on=['model_name','operation_type','operation_id'],
+        how='left'
+    ).rename(columns={'operation_pk': 'target_operation_pk'})
+    #Join masslink pks
+    schematics_df = schematics_df.merge(
+        masslinks_df[['model_name','MLNO','mlno_pk']],
+        on=['model_name','MLNO'],
+        how='left'
+    )
+    #set operatin_pk dtyes to int
+    schematics_df['source_operation_pk'] = schematics_df['source_operation_pk'].astype('Int64')
+    schematics_df['target_operation_pk'] = schematics_df['target_operation_pk'].astype('Int64')
+    schematics_df[['source_operation_pk','target_operation_pk','AFACTR','MLNO','TMEMSB1','TMEMSB2']]
+    schematics_df['mlno_pk'] = schematics_df['mlno_pk'].astype('Int64')
+    return schematics_df
+
 #% Ext Sources
-extsources_df = extsources_df.merge(
-    operations_df[['model_name','operation_id','operation_type','operation_pk']],
-    left_on=['model_name','TVOL','TOPFST'],
-    right_on=['model_name','operation_type','operation_id'],
-    how='left'
-).rename(columns={'operation_pk': 'target_operation_pk'})
+def add_extsource_pks(extsources_df, operations_df):
+    extsources_df = extsources_df.merge(
+        operations_df[['model_name','operation_id','operation_type','operation_pk']],
+        left_on=['model_name','TVOL','TOPFST'],
+        right_on=['model_name','operation_type','operation_id'],
+        how='left'
+    ).rename(columns={'operation_pk': 'target_operation_pk'})
+    return extsources_df
 #% Ext Targets
-exttargets_df = exttargets_df.merge(
-    operations_df[['model_name','operation_id','operation_type','operation_pk']],
-    left_on=['model_name','SVOL','SVOLNO'],
-    right_on=['model_name','operation_type','operation_id'],
-    how='left'
-).rename(columns={'operation_pk': 'source_operation_pk'})
+def add_exttarget_pks(exttargets_df, operations_df):
+    exttargets_df = exttargets_df.merge(
+        operations_df[['model_name','operation_id','operation_type','operation_pk']],
+        left_on=['model_name','SVOL','SVOLNO'],
+        right_on=['model_name','operation_type','operation_id'],
+        how='left'
+    ).rename(columns={'operation_pk': 'source_operation_pk'})
+    return exttargets_df
 #% Network
-networks_df = networks_df.merge(
-    operations_df[['model_name','operation_id','operation_type','operation_pk']],
-    left_on=['model_name','TOPFST','TVOL'],
-    right_on=['model_name','operation_id','operation_type'],
-    how='left'
-).rename(columns={'operation_pk': 'target_operation_pk'})
-networks_df = networks_df.merge(
-    operations_df[['model_name','operation_id','operation_type','operation_pk']],
-    left_on=['model_name','SVOL','SVOLNO'],
-    right_on=['model_name','operation_type','operation_id'],
-    how='left'
-).rename(columns={'operation_pk': 'source_operation_pk'})
+def add_network_pks(networks_df, operations_df):
+    networks_df = networks_df.merge(
+        operations_df[['model_name','operation_id','operation_type','operation_pk']],
+        left_on=['model_name','TOPFST','TVOL'],
+        right_on=['model_name','operation_id','operation_type'],
+        how='left'
+    ).rename(columns={'operation_pk': 'target_operation_pk'})
+    networks_df = networks_df.merge(
+        operations_df[['model_name','operation_id','operation_type','operation_pk']],
+        left_on=['model_name','SVOL','SVOLNO'],
+        right_on=['model_name','operation_type','operation_id'],
+        how='left'
+    ).rename(columns={'operation_pk': 'source_operation_pk'})
+    return networks_df
 #% FTABLES
-ftables_df = ftables_df.merge(
-    operations_df[['model_name','operation_id','operation_type','operation_pk']].query('operation_type == "RCHRES"'),
-    left_on=['model_name','reach_id'],
-    right_on=['model_name','operation_id'],
-    how='left'
-)
+def add_ftable_pks(ftables_df, operations_df):
+    ftables_df = ftables_df.merge(
+        operations_df[['model_name','operation_id','operation_type','operation_pk']].query('operation_type == "RCHRES"'),
+        left_on=['model_name','reach_id'],
+        right_on=['model_name','operation_id'],
+        how='left'
+    ).rename(columns={'operation_pk': 'ftable_operation_pk'})
+    return ftables_df
 #% Parameters, Flags, Properties
-props = props.merge(models_df[['model_name','model_pk']], on='model_name', how='left')
-props = props.merge(operations_df[['model_name','operation_id','operation_type','operation_pk']],
-                    left_on=['model_name','operation_id','operation_type'],
-                    right_on=['model_name','operation_id','operation_type'],
-                    how='left')
-flags = flags.merge(models_df[['model_name','model_pk']], on='model_name', how='left')
-flags = flags.merge(operations_df[['model_name','operation_id','operation_type','operation_pk']],
-                    left_on=['model_name','operation_id','operation_type'],
-                    right_on=['model_name','operation_id','operation_type'],
-                    how='left')
-params = params.merge(models_df[['model_name','model_pk']], on='model_name', how='left')
-params = params.merge(operations_df[['model_name','operation_id','operation_type','operation_pk']],
-                    left_on=['model_name','operation_id','operation_type'],
-                    right_on=['model_name','operation_id','operation_type'],
-                    how='left')
+def add_param_pks(params, operations_df, models_df):
+    params = params.merge(models_df[['model_name','model_pk']], on='model_name', how='left')
+    params = params.merge(operations_df[['model_name','operation_id','operation_type','operation_pk']],
+                        left_on=['model_name','operation_id','operation_type'],
+                        right_on=['model_name','operation_id','operation_type'],
+                        how='left')
+    return params
+
+def add_flag_pks(flags, operations_df, models_df):
+    flags = flags.merge(models_df[['model_name','model_pk']], on='model_name', how='left')
+    flags = flags.merge(operations_df[['model_name','operation_id','operation_type','operation_pk']],
+                        left_on=['model_name','operation_id','operation_type'],
+                        right_on=['model_name','operation_id','operation_type'],
+                        how='left')
+    return flags
+
+def add_prop_pks(props, operations_df, models_df):
+    props = props.merge(models_df[['model_name','model_pk']], on='model_name', how='left')
+    props = props.merge(operations_df[['model_name','operation_id','operation_type','operation_pk']],
+                        left_on=['model_name','operation_id','operation_type'],
+                        right_on=['model_name','operation_id','operation_type'],
+                        how='left')
+    return props
 
 
 
 
 #Dump all dataframes to warehouse
 #%% Dump to Warehouse
+def load_to_warehouse(db_path,model_names = None,replace=True):
+    if model_names is None:
+        model_names = Repository.valid_models()
+    ucis = {model_name: UCI(Repository(model_name).uci_file,True) for model_name in model_names}
+    models_df = pd.concat([build_model_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
+    operations_df = pd.concat([build_operations_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
+    masslinks_df = pd.concat([build_masslink_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
+    schematics_df = pd.concat([build_schematic_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True) 
+    extsources_df = pd.concat([build_extsources_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
+    exttargets_df = pd.concat([build_exttargets_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
+    networks_df = pd.concat([build_network_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
+    ftables_df = pd.concat([build_ftables_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
+    df = pd.concat([build_parmeter_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
+    df = pd.merge(df,parseTable,left_on = ['operation_type','table_name','variable'],
+            right_on = ['block','table2','column'],how='left')[['model_name','operation_type','table_name','table_id','operation_id','variable','value','dtype']]
+    props = df.query('dtype == "C"')
+    flags = df.query('dtype == "I"')
+    params = df.query('dtype == "R"')
 
-db_path = 'c:/Users/mfratki/Documents/ucis.duckdb'
-with duckdb.connect(db_path) as con:
-    warehouse.load_df_to_table(con, models_df, 'models')
-    warehouse.load_df_to_table(con, operations_df, 'operations')
-    warehouse.load_df_to_table(con, schematics_df, 'schematics')
-    warehouse.load_df_to_table(con, masslinks_df, 'masslinks')
-    warehouse.load_df_to_table(con, extsources_df, 'extsources')
-    warehouse.load_df_to_table(con, exttargets_df, 'exttargets')
-    warehouse.load_df_to_table(con, networks_df, 'networks')
-    warehouse.load_df_to_table(con, ftables_df, 'ftables')
-    warehouse.load_df_to_table(con, props, 'properties')
-    warehouse.load_df_to_table(con, flags, 'flags')
-    warehouse.load_df_to_table(con, params, 'parameters')
+    with duckdb.connect(db_path) as con:
+        con.execute("CREATE SCHEMA IF NOT EXISTS hspf")
+
+        warehouse.load_df_to_table(con, models_df, 'models',replace)
+        warehouse.load_df_to_table(con, operations_df, 'operations',replace)
+        warehouse.load_df_to_table(con, schematics_df, 'schematics',replace)
+        warehouse.load_df_to_table(con, masslinks_df, 'masslinks',replace)
+        warehouse.load_df_to_table(con, extsources_df, 'extsources',replace)
+        warehouse.load_df_to_table(con, exttargets_df, 'exttargets',replace)
+        warehouse.load_df_to_table(con, networks_df, 'networks',replace)
+        warehouse.load_df_to_table(con, ftables_df, 'ftables',replace)
+        warehouse.load_df_to_table(con, props, 'properties',replace)
+        warehouse.load_df_to_table(con, flags, 'flags',replace)
+        warehouse.load_df_to_table(con, params, 'parameters',replace)
+
+#%% Catchment Constituent Loadings
+
+def catchment_loadings(model_name, mod):
+        dfs = []
+        for constituent in ['Q','TSS','N','TKN','TP','OP']:
+            df_constituent = mod.reports.catchment_loading(constituent,True)
+            dfs.append(df_constituent)
+        df = pd.concat(dfs)
+        df['model_name'] = model_name
+        df['month'] = df['datetime'].dt.month
+        df['year'] = df['datetime'].dt.year
+        return df
+
+
+
+
+
+
+#%% Model Scour Reports
+
+
+
+#%% Outlet Contributions
+
 
 
 
 #%%
+
+db_path = 'c:/Users/mfratki/Documents/hspf.duckdb'
+
+
+
+#%% HBN Output Exploration
 
 with duckdb.connect(db_path) as con:
     warehouse.create_model_run_table(con)
@@ -281,11 +350,48 @@ for key,ts_names in outputs.items():
     dfs.append(df)
 output_df = pd.concat(dfs).reset_index(drop=True)
 
+dfs = []
+for key,data in hbn.hbns[0].data_frames.items():
+    keys = key.split('_')
+    operation = keys[0]
+    activity = keys[1]
+    opnid = int(keys[2])
+    t_code = keys[3]
+    data.reset_index(inplace=True)
+    data.rename(columns={'index': 'datetime'}, inplace=True)
+    data = data.melt(id_vars = ['datetime'],var_name = 'ts_name', value_name = 'value')
+    data['operation'] = operation
+    data['activity'] = activity
+    data['opnid'] = opnid
+    data['t_code'] = t_code
+    data['model_name'] = model_name
+    dfs.append(data)
+output_df = pd.concat(dfs).reset_index(drop=True)
 
-ts_name = 'PERO'
-op_type = 'PERLND'
-t_code = 4
 
+
+# Write to Parquet with DuckDB, including "t_code" as a partition
+output_path = "model_outputs"
+
+con = duckdb.connect(database=':memory:')  # Temporary in-memory database
+con.execute(f"""
+    COPY output_df
+    TO '{output_path}'
+    (FORMAT 'parquet', PARTITION_BY ('model_name','operation', 'opnid'))
+""")
+
+print(f"Data written to {output_path}")
+
+
+
+['PERO',
+'SURO',
+'IFWO',
+'AGWO']
+
+for constituent in ['Q','TSS','TP','N','OP','BOD','TKN']:
+    t_cons = helpers.get_tcons(constituent,'RCHRES','lb')
+    df = hbn.get_rechres_data(constituent, units='lb', freq='daily').reset_index()
 
 
 pero = hbn.get_multiple_timeseries(op_type,t_code,ts_name).reset_index().rename(columns={'index': 'datetime'})
@@ -295,15 +401,58 @@ pero['t_code'] = t_code
 pero['model_name'] = model_name
 
 
+db_path = 'c:/Users/mfratki/Documents/ucis.duckdb'
 with duckdb.connect(db_path) as con:
     warehouse.insert_model_run(con, model_name, run_id)
 
+db_path = 'c:/Users/mfratki/Documents/ucis.duckdb'
+with duckdb.connect(db_path) as conn:
+    conn.execute("CREATE SCHEMA if not exists reports")
+    conn.execute("CREATE TABLE if not exists reports.catchment_loading AS SELECT * FROM df")
+    conn.close()
+
+
+# Average annual loading by catchment 
+db_path = 'c:/Users/mfratki/Documents/ucis.duckdb'
+with duckdb.connect(db_path) as conn:
+    query = f"""
+    SELECT 
+        model_name,
+        operation AS operation_type,
+        opnid AS operation_id,
+        t_code,
+        ts_name AS constituent,
+        AVG(value) * 365.25 AS annual_loading
+    FROM reports.catchment_loading
+    WHERE t_code = 'PERLND' AND constituent IN ('Q','TP','TSS','N','OP','BOD','TKN')
+    GROUP BY model_name, TVOLNO, constituent
+    """
+    annual_loadings = conn.execute(query).fetchdf()
+    conn.close()
+
+hbn.hbns[0].data_frames.keys()
 
 
 
+import duckdb
+import pandas as pd
 
 
+# Convert to DataFrame
+df = pd.DataFrame(data)
+df['datetime'] = pd.to_datetime(df['datetime'])  # Ensure datetime column is formatted properly
 
+# Write to Parquet with DuckDB, including "t_code" as a partition
+output_path = "model_outputs"
+
+con = duckdb.connect(database=':memory:')  # Temporary in-memory database
+con.execute(f"""
+    COPY df
+    TO '{output_path}'
+    (FORMAT 'parquet', PARTITION_BY ('operation_type', 'operation_id', 't_code'))
+""")
+
+print(f"Data written to {output_path}")
 
 
 
@@ -418,14 +567,6 @@ for row in props.iterrows():
         df['model_name'] = model_name
         properties.append(df)
 
-
-
-
-#%% Parameters
-
-
-
-#%% Flags
 
 
 

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock
-from hspf.reports import (
+from hspf.reports.loading import (
     _join_catchments,
     _average_constituent_loading,
     _aggregate_catchment_loading,
@@ -202,7 +202,7 @@ def test_average_constituent_loading_annual_shape():
 
     # Mock get_constituent_loading via direct function replacement
     # since _average_constituent_loading calls it internally
-    import hspf.reports as reports_mod
+    import hspf.reports.loading as reports_mod
 
     melted = ts_data.melt(id_vars=['datetime'], var_name='OPNID')
     melted['OPERATION'] = 'PERLND'
@@ -223,7 +223,7 @@ def test_average_constituent_loading_monthly_has_month():
     """Verify _average_constituent_loading with group_by_month adds month column."""
     uci = MagicMock()
     hbn = MagicMock()
-    import hspf.reports as reports_mod
+    import hspf.reports.loading as reports_mod
 
     ts_data = pd.DataFrame({
         'datetime': pd.to_datetime(['2000-01-01', '2000-02-01', '2001-01-01', '2001-02-01']),

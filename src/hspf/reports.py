@@ -6,7 +6,7 @@ Created on Mon Apr 11 08:26:04 2022
 """
 import numpy as np
 import pandas as pd
-from hspf import helpers
+from hspf import helpers, uci
 from pathlib import Path
 
 #timeseries_catalog = pd.read_csv(Path(__file__).parent/'TIMESERIES_CATALOG.csv')
@@ -19,6 +19,7 @@ class Reports():
         self.hbns = hbns
         self.uci = uci
         self.wdms = wdms
+
 
 #Sediment Reports        
     def scour(self,start_year = '1996',end_year = '2030'):
@@ -126,6 +127,27 @@ Monthly weighted catchment surface runoff
 Monthly PERLND/IMPLND constituent loading rate
 Monthly PRELND/IMPLNDsurface runoff
 '''
+
+def _operation_metadata():
+        # Add metadata
+    dfs = []
+    for operation in ['PERLND','IMPLND','RCHRES']:
+        df = uci.opnid_dict[operation].reset_index()
+        df['OPERATION'] = operation
+        dfs.append(df)
+    df = pd.concat(dfs)
+
+    # Merge with network data
+    df = pd.merge(
+        uci.network.subwatersheds().reset_index(),
+        df[['TOPFST','OPERATION','metzone']],
+        left_on=['SVOLNO', 'SVOL'],
+        right_on=['TOPFST', 'OPERATION'],
+        how='inner'
+    )
+    
+    return df[['TVOLNO','SVOLNO','SVOL','AFACR','MLNO','LSID','metzone']]
+    
 
 #%% Channel Reports    
 
@@ -300,11 +322,11 @@ def get_constituent_loading(uci,hbn,constituent,time_step = 5):
 
     
     if constituent == 'TP':
-        perlnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'PERLND').reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
-        implnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'IMPLND').reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
+        perlnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'PERLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
+        implnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'IMPLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
     else:
-        perlnds = hbn.get_perlnd_constituent(constituent,time_step = time_step).reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
-        implnds = hbn.get_implnd_constituent(constituent,time_step = time_step).reset_index().melt(id_vars = ['index'],var_name = 'OPNID')
+        perlnds = hbn.get_perlnd_constituent(constituent,time_step = time_step).reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
+        implnds = hbn.get_implnd_constituent(constituent,time_step = time_step).reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
     
     perlnds['OPERATION'] = 'PERLND'
     implnds['OPERATION'] = 'IMPLND'
@@ -956,18 +978,232 @@ def avg_annual_precip(uci,wdm):
 
 # grouping_columns = ['TVOLNO','LSID','TIMESERIES']
 # df.groupby[grouping_columns]
+'''
+Weighting groups in any combination:
+   metzone,
+   landcover,
+   watershed,
 
-def weighted_output(uci,hbn,ts_name,operation = 'PERLND',t_code = 5,opnids = None):
-    df = hbn.get_multiple_timeseries(operation,t_code,ts_name,opnids = opnids)
+weighted_output(uci,hbn,ts_name,operation,t_code,opnids,
+                reach_ids = None, upstream_reach_ids = None, 
+                by_landcover = False, 
+                by_metzone = False)
+    '''
+#TODO: Super slow implementation
 
-    subwatersheds = uci.network.subwatersheds().reset_index()
-    subwatersheds = subwatersheds.loc[subwatersheds['SVOL'] == operation]
-            
-          
-    df = pd.merge(subwatersheds,df,left_on = 'SVOLNO', right_on='SVOLNO',how='left')
-    df = weighted_mean(df,ts_name,'AFACTR')
-    df = df.set_index([df.index,'AFACTR'])
+def weighted_describe(df, value_col, weight_col):
+    """
+    Calculate weighted statistics for a DataFrame.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe
+    value_col : str
+        Column name for values to analyze
+    weight_col : str
+        Column name for weights
+        
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with weighted statistics
+    """
+    total_weight = df[weight_col].sum()
+    weighted_mean = (df[value_col] * df[weight_col]).sum() / total_weight
+    weighted_var = ((df[value_col] - weighted_mean) ** 2 * df[weight_col]).sum() / total_weight
+    weighted_std = np.sqrt(weighted_var)
+    
+    return pd.DataFrame({
+        'area': [total_weight],
+        f'weighted_mean_{value_col}': [weighted_mean],
+        f'weighted_std_{value_col}': [weighted_std]
+    })
+
+
+
+def weighted_parameter(uci,operation, table_name, table_id, parameter, opnids = None):
+    
+    
+
+    values = uci.table(operation,table_name,table_id)[['parameter']]
+    if opnids is not None:
+        values = values.loc[opnids].reset_index()
+
+    values['OPERATION'] = operation
+
+        # Merge with network data
+    df = pd.merge(
+        uci.network.subwatersheds().reset_index(),
+        df,
+        left_on=['SVOLNO', 'SVOL'],
+        right_on=['OPNID', 'OPERATION'],
+        how='inner'
+    )
+
+    df = (
+    df.groupby(['TVOLNO'])[[parameter, "AFACTR"]]
+    .apply(lambda x: weighted_describe(x, parameter, "AFACTR"))
+    .droplevel(2)
+    .reset_index()
+    )
+    
     return df
+
+def weighted_output(
+    uci, 
+    hbn, 
+    ts_name, 
+    operation='PERLND', 
+    t_code=5, 
+    opnids=None, 
+    weight_by='catchment',
+    time_agg=None,
+    time_agg_funcs=None
+):
+    """
+    Calculate weighted outputs from timeseries data.
+    
+    Parameters
+    ----------
+    uci : object
+        UCI object containing network and operation data
+    hbn : object
+        HBN object with timeseries data
+    ts_name : str
+        Timeseries name to analyze
+    operation : str, default 'PERLND'
+        Operation type
+    t_code : int, default 5
+        Time code
+    opnids : list, optional
+        Operation IDs to filter
+    weight_by : str, default 'catchment'
+        Grouping method: 'catchment', 'lsid', 'metzone', or 'landcover'
+    time_agg : str, optional
+        Time aggregation frequency (e.g., 'D', 'M', 'Y')
+    time_agg_funcs : dict, optional
+        Custom aggregation functions for columns after time grouping
+        Example: {'weighted_mean_value': 'mean', 'area': 'sum'}
+        
+    Returns
+    -------
+    pd.DataFrame
+        Weighted statistics grouped by specified dimension
+    """
+    # Define grouping column mapping
+    WEIGHT_BY_MAPPING = {
+        'catchment': 'TVOLNO',
+        'lsid': 'LSID',
+        'metzone': 'metzone'
+    }
+    
+    if weight_by not in WEIGHT_BY_MAPPING:
+        raise ValueError(
+            f"weight_by must be one of {list(WEIGHT_BY_MAPPING.keys())}, got '{weight_by}'"
+        )
+    
+    # Get and prepare timeseries data
+    df = (
+        hbn.get_multiple_timeseries(operation, t_code, ts_name, opnids=opnids)
+        .reset_index()
+        .melt(var_name='OPNID', value_name='value', id_vars=['datetime'])
+    )
+    
+    # Add metadata
+    df['OPERATION'] = operation
+    df['ts_name'] = ts_name
+    
+    # Merge with network data
+    df = pd.merge(
+        uci.network.subwatersheds().reset_index(),
+        df,
+        left_on=['SVOLNO', 'SVOL'],
+        right_on=['OPNID', 'OPERATION'],
+        how='inner'
+    )
+    
+    # Merge with metzone data
+    df = pd.merge(
+        df,
+        uci.opnid_dict[operation]['metzone'],
+        left_on='OPNID',
+        right_on='TOPFST',
+        how='inner'
+    )
+    
+    # Select relevant columns
+    df = df[['TVOLNO', 'OPERATION', 'OPNID', 'AFACTR', 'LSID', 'metzone', 'ts_name', 'datetime', 'value']]
+    
+    # Group by spatial dimension and calculate weighted statistics
+    group_col = WEIGHT_BY_MAPPING[weight_by]
+    df = (
+        df.groupby(['datetime', group_col])[['value', 'AFACTR']]
+        .apply(lambda x: weighted_describe(x, 'value', 'AFACTR'))
+        .droplevel(2)
+        .reset_index()
+    )
+    
+    df['ts_name'] = ts_name
+    
+    # Apply time aggregation if requested
+    if time_agg is not None:
+        df = _apply_time_aggregation(df, time_agg, group_col, time_agg_funcs)
+    
+    return df
+
+
+def _apply_time_aggregation(df, freq, group_col, agg_funcs=None):
+    """
+    Apply time-based aggregation to weighted statistics.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe with datetime index
+    freq : str
+        Pandas frequency string (e.g., 'D', 'M', 'Y')
+    group_col : str
+        Spatial grouping column to preserve
+    agg_funcs : dict, optional
+        Custom aggregation functions per column
+        
+    Returns
+    -------
+    pd.DataFrame
+        Time-aggregated dataframe
+    """
+    # Set default aggregation functions if not provided
+    if agg_funcs is None:
+        # Default: means are averaged, areas are summed
+        agg_funcs = {
+            col: 'mean' if 'mean' in col or 'std' in col else 'sum'
+            for col in df.columns
+            if col not in ['datetime', group_col, 'ts_name']
+        }
+    
+    # Ensure datetime is datetime type
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    
+    # Create time period column
+    df['time_period'] = df['datetime'].dt.to_period(freq)
+    
+    # Group and aggregate
+    result = (
+        df.groupby(['time_period', group_col])
+        .agg(agg_funcs)
+        .reset_index()
+    )
+    
+    # Convert period back to timestamp
+    result['datetime'] = result['time_period'].dt.to_timestamp()
+    result = result.drop(columns=['time_period'])
+    
+    # Restore ts_name
+    result['ts_name'] = df['ts_name'].iloc[0]
+    
+    return result
+
 
 def weighted_mean(df,value_col,weight_col):
    weighted_mean = (df[value_col] * df[weight_col]).sum() / df[weight_col].sum()
@@ -1067,6 +1303,11 @@ def annual_reach_water_budget(uci,hbn):
     df.index.name = 'OPNID'
     return df.reset_index()
 
+def perlnd_water_budget(uci,hbn,time_step = 5,start_year = 1996,end_year = 2100):
+    ts_names = ['PRECIP','SURO','IFWO','AGWO','PERO','TAET']
+    df = pd.concat([hbn.get_multiple_timeseries('PERLND',time_step,ts_name).loc[lambda x: (x.index.year >= start_year) & (x.index.year <= end_year)].mean() for ts_name in ts_names],axis=1)
+    df.columns = ts_names
+    return df
 
 def annual_implnd_water_budget(uci,hbn):
     ts_names = ['SUPY','SURO','IMPEV']
@@ -1080,6 +1321,13 @@ def annual_perlnd_water_budget(uci,hbn):
     df = pd.concat([annual_weighted_output(uci,hbn,ts_name,group_by='landcover') for ts_name in ts_names],axis = 1)
     df.columns = ts_names
     return df
+
+def watershed_water_budget(uci,hbn,reach_ids,upstream_reach_ids = None, time_step = 5, by_landcover = True):
+    
+    raise NotImplementedError("This function is not yet implemented. It will combine the reach, implnd, and perlnd water budgets for a given set of reaches and their upstream reaches.")   
+
+def metzone_watershed_budget(uci,hbn,operation = None):
+    raise NotImplementedError("This function is not yet implemented. It will combine the reach, implnd, and perlnd water budgets for a given metzone or set of metzones.")
 
 def annual_sediment_budget(uci,hbn):
     ts_names = ['SOSED']

@@ -5,7 +5,7 @@ Sediment reports — scour and sediment budget.
 import numpy as np
 import pandas as pd
 
-from hspf.reports.weighted import annual_weighted_output
+from hspf.reports.utils import annual_weighted_output
 
 
 def scour(hbn,uci,start_year = 1996,end_year = 2030):

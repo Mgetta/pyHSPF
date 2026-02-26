@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Weighted output and statistical utilities.
+Utility functions for weighted statistics and time aggregation.
 """
 import numpy as np
 import pandas as pd

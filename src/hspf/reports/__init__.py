@@ -16,8 +16,8 @@ sediment
     Scour and sediment budget reports.
 phosphorus
     TP-specific calculations (masslink scheme, qualprop transforms).
-weighted
-    Weighted output and statistical utilities.
+utils
+    Utility functions for weighted statistics and time aggregation.
 legacy
     Older loading implementations kept for backward compatibility.
 """
@@ -32,12 +32,15 @@ from hspf.reports.loading import (
     get_catchment_loading,
     get_watershed_loading,
     _average_constituent_loading,
+    constituent_loading_summary,
     average_annual_constituent_loading,
     average_monthly_constituent_loading,
     _aggregate_catchment_loading,
+    catchment_loading_summary,
     average_annual_catchment_loading,
     average_monthly_catchment_loading,
     _filter_to_watershed,
+    watershed_loading_summary,
     average_annual_watershed_loading,
     average_monthly_watershed_loading,
 )
@@ -102,8 +105,8 @@ from hspf.reports.hydrology import (
     metzone_watershed_budget,
 )
 
-# --- weighted ---
-from hspf.reports.weighted import (
+# --- utils ---
+from hspf.reports.utils import (
     weighted_describe,
     weighted_parameter,
     weighted_output,

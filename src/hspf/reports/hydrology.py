@@ -4,7 +4,7 @@ Hydrology reports — water balance, precipitation, ET, runoff, and meteorologic
 """
 import pandas as pd
 
-from hspf.reports.weighted import annual_weighted_output
+from hspf.reports.utils import annual_weighted_output
 
 
 def pevt_balance(mod,operation,opnid):

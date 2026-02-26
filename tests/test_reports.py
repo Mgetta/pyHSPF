@@ -7,6 +7,7 @@ from hspf.reports.loading import (
     _aggregate_catchment_loading,
     _filter_to_watershed,
     catchment_areas,
+    constituent_loading_summary,
 )
 
 
@@ -238,5 +239,114 @@ def test_average_constituent_loading_monthly_has_month():
     try:
         result = reports_mod._average_constituent_loading(uci, hbn, 'TP', 2000, 2001, time_step=4, group_by_month=True)
         assert 'month' in result.columns
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+# ---------------------------------------------------------------------------
+# Tests for constituent_loading_summary
+# ---------------------------------------------------------------------------
+
+def _mock_get_constituent_loading():
+    """Helper to create mock data and patch get_constituent_loading."""
+    import hspf.reports.loading as reports_mod
+    ts_data = pd.DataFrame({
+        'datetime': pd.to_datetime([
+            '2000-01-15', '2000-06-15', '2000-12-15',
+            '2001-01-15', '2001-06-15', '2001-12-15',
+        ]),
+        101: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        102: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
+    })
+    melted = ts_data.melt(id_vars=['datetime'], var_name='OPNID')
+    melted['OPERATION'] = 'PERLND'
+    return reports_mod, melted
+
+
+def test_constituent_loading_summary_no_grouping():
+    """Overall summary with no temporal grouping."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        result = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001)
+        assert 'month' not in result.columns
+        assert 'year' not in result.columns
+        assert 'season' not in result.columns
+        assert 'value' in result.columns
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_constituent_loading_summary_by_year():
+    """Group by year."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        result = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001, temporal_grouping='year')
+        assert 'year' in result.columns
+        assert set(result['year'].unique()) == {2000, 2001}
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_constituent_loading_summary_by_season():
+    """Group by season."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        result = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001, temporal_grouping='season')
+        assert 'season' in result.columns
+        assert set(result['season'].unique()).issubset({'DJF', 'MAM', 'JJA', 'SON'})
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_constituent_loading_summary_sum_agg():
+    """Use sum instead of mean."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        result_mean = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001, agg_func='mean')
+        result_sum = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001, agg_func='sum')
+        # Sum should be >= mean for positive data
+        assert result_sum['value'].iloc[0] >= result_mean['value'].iloc[0]
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_constituent_loading_summary_max_agg():
+    """Use max aggregation."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        result = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001, agg_func='max')
+        # For OPNID 101: max of [1, 2, 3, 4, 5, 6] = 6
+        row_101 = result.loc[result['OPNID'] == 101]
+        assert np.isclose(row_101['value'].iloc[0], 6.0)
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_constituent_loading_summary_invalid_grouping():
+    """Invalid temporal_grouping raises ValueError."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        import pytest
+        with pytest.raises(ValueError):
+            reports_mod.constituent_loading_summary(
+                MagicMock(), MagicMock(), 'TP', 2000, 2001, temporal_grouping='invalid')
     finally:
         reports_mod.get_constituent_loading = original_fn

@@ -7,7 +7,7 @@ import pandas as pd
 from hspf import helpers
 
 from hspf.reports.phosphorus import total_phosphorous
-from hspf.reports.weighted import weighted_describe
+from hspf.reports.utils import weighted_describe
 
 
 def avg_subwatershed_loading(constituent,t_code,uci,hbn):

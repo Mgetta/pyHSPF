@@ -37,7 +37,7 @@ def _make_constituent_loading_df(include_datetime=False, include_month=False):
         'value': [0.5, 0.3, 0.8, 0.4],
     }
     if include_datetime:
-        data['datetime'] = pd.to_datetime(['2000-01-01', '2000-01-01', '2000-01-01', '2000-01-01'])
+        data['datetime'] = pd.to_datetime(['2000-01-15', '2000-02-15', '2000-03-15', '2000-04-15'])
     if include_month:
         data['month'] = [1, 1, 1, 1]
     return pd.DataFrame(data)
@@ -200,9 +200,8 @@ def test_average_constituent_loading_annual_shape():
         102: [0.5, 1.0, 1.5, 2.0],
     })
 
-    # Mock get_constituent_loading via the function's internal call
-    # Since _average_constituent_loading calls get_constituent_loading which calls hbn methods,
-    # we'll test via direct invocation with a monkeypatch approach
+    # Mock get_constituent_loading via direct function replacement
+    # since _average_constituent_loading calls it internally
     import hspf.reports as reports_mod
 
     melted = ts_data.melt(id_vars=['datetime'], var_name='OPNID')

@@ -385,17 +385,7 @@ def _join_catchments(df,uci,constituent):
 
 def get_catchment_loading(uci,hbn,constituent,time_step=5,by_landcover = False):
     df = get_constituent_loading(uci,hbn,constituent,time_step)
-    
-    subwatersheds = uci.network.subwatersheds().reset_index()
-    subwatersheds = subwatersheds.loc[subwatersheds['SVOL'].isin(['PERLND','IMPLND'])]
-    areas = catchment_areas(uci)
-
-
-    df = pd.merge(subwatersheds,df,left_on = ['SVOL','SVOLNO'], right_on=['OPERATION','OPNID'],how='inner')
-    df = pd.merge(df,areas,left_on = ['TVOLNO'], right_on='TVOLNO',how='left')
-    df['load'] = df['value']*df['AFACTR']
-    df = df.rename(columns = {'value':'loading_rate', 'AFACTR':'landcover_area','LSID':'landcover'})
-    df['constituent'] = constituent
+    df = _join_catchments(df,uci,constituent)
     df = df[['datetime','constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']]
     return df
 
@@ -414,78 +404,59 @@ def get_watershed_loading(uci,hbn,reach_ids,constituent,upstream_reach_ids = Non
     return df
 
 
-def average_annual_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100):
-    df = get_constituent_loading(uci,hbn,constituent,time_step=5)
+def _average_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100,time_step = 5,group_by_month = False):
+    df = get_constituent_loading(uci,hbn,constituent,time_step=time_step)
     df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
-    df['year'] = df['datetime'].dt.year
-    df = df.groupby(['OPERATION','OPNID'])['value'].mean().reset_index()
+    group_cols = ['OPERATION','OPNID']
+    if group_by_month:
+        df['month'] = df['datetime'].dt.month
+        group_cols = ['month'] + group_cols
+    df = df.groupby(group_cols)['value'].mean().reset_index()
     return df
 
+def average_annual_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100):
+    return _average_constituent_loading(uci,hbn,constituent,start_year,end_year,time_step=5)
+
 def average_monthly_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100):
-    df = get_constituent_loading(uci,hbn,constituent,time_step=4)
-    df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
-    df['month'] = df['datetime'].dt.month
-    df = df.groupby(['month','OPERATION','OPNID'])['value'].mean().reset_index()
+    return _average_constituent_loading(uci,hbn,constituent,start_year,end_year,time_step=4,group_by_month=True)
+
+def _aggregate_catchment_loading(df,by_landcover = False,group_prefix = None):
+    if group_prefix is None:
+        group_prefix = []
+    if by_landcover:
+        df = df.groupby(group_prefix + ['TVOLNO','landcover','constituent'])[['landcover_area','load']].sum().reset_index()
+        df['loading_rate'] = df['load']/df['landcover_area']
+    else:
+        df = df.groupby(group_prefix + ['TVOLNO','constituent','catchment_area'])[['load']].sum().reset_index()
+        df['loading_rate'] = df['load']/df['catchment_area']
     return df
 
 def average_annual_catchment_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100,by_landcover = False):
     df = average_annual_constituent_loading(uci,hbn,constituent,start_year,end_year)    
-
-    subwatersheds = uci.network.subwatersheds().reset_index()
-    subwatersheds = subwatersheds.loc[subwatersheds['SVOL'].isin(['PERLND','IMPLND'])]
-    areas = catchment_areas(uci)
-
-
-    df = pd.merge(subwatersheds,df,left_on = ['SVOL','SVOLNO'], right_on=['OPERATION','OPNID'],how='inner')
-    df = pd.merge(df,areas,left_on = ['TVOLNO'], right_on='TVOLNO',how='left')
-    df['load'] = df['value']*df['AFACTR']
-    df = df.rename(columns = {'value':'loading_rate', 'AFACTR':'landcover_area','LSID':'landcover'})
-    df['constituent'] = constituent
+    df = _join_catchments(df,uci,constituent)
     df = df[['constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']]
-
-
-    if by_landcover:
-        df = df.groupby(['TVOLNO','landcover','constituent'])[['landcover_area','load']].sum().reset_index()
-        df['loading_rate'] = df['load']/df['landcover_area']
-    else:
-        df = df.groupby(['TVOLNO','constituent','catchment_area'])[['load']].sum().reset_index()
-        df['loading_rate'] = df['load']/df['catchment_area']
-    return df
+    return _aggregate_catchment_loading(df,by_landcover)
 
 def average_monthly_catchment_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100,by_landcover = False):  
     df = average_monthly_constituent_loading(uci,hbn,constituent,start_year,end_year)    
-
-    subwatersheds = uci.network.subwatersheds().reset_index()
-    subwatersheds = subwatersheds.loc[subwatersheds['SVOL'].isin(['PERLND','IMPLND'])]
-    areas = catchment_areas(uci)
-
-
-    df = pd.merge(subwatersheds,df,left_on = ['SVOL','SVOLNO'], right_on=['OPERATION','OPNID'],how='inner')
-    df = pd.merge(df,areas,left_on = ['TVOLNO'], right_on='TVOLNO',how='left')
-    df['load'] = df['value']*df['AFACTR']
-    df = df.rename(columns = {'value':'loading_rate', 'AFACTR':'landcover_area','LSID':'landcover'})
-    df['constituent'] = constituent
+    df = _join_catchments(df,uci,constituent)
     df = df[['month','constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']]
-
-
-    if by_landcover:
-        df = df.groupby(['month','TVOLNO','landcover','constituent'])[['landcover_area','load']].sum().reset_index()
-        df['loading_rate'] = df['load']/df['landcover_area']
-    else:
-        df = df.groupby(['month','TVOLNO','constituent','catchment_area'])[['load']].sum().reset_index()
-        df['loading_rate'] = df['load']/df['catchment_area']
-    return df
+    return _aggregate_catchment_loading(df,by_landcover,group_prefix=['month'])
 
 
 
-def average_annual_watershed_loading(uci,hbn,constituent,reach_ids, upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
-    df = average_annual_catchment_loading(uci,hbn,constituent,by_landcover = by_landcover,start_year = start_year,end_year = end_year)
+def _filter_to_watershed(df,uci,reach_ids,upstream_reach_ids = None,drainage_area = None):
     reach_ids = uci.network.get_opnids('RCHRES',reach_ids,upstream_reach_ids)
     df = df.loc[df['TVOLNO'].isin(reach_ids)]
     if drainage_area is None:
-        df['watershed_area'] = uci.network.drainage_area(reach_ids,upstream_reach_ids) #df.drop_duplicates(subset=['TVOLNO'])['catchment_area'].sum()
+        df['watershed_area'] = uci.network.drainage_area(reach_ids,upstream_reach_ids)
     else:
         df['watershed_area'] = drainage_area
+    return df
+
+def average_annual_watershed_loading(uci,hbn,constituent,reach_ids, upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
+    df = average_annual_catchment_loading(uci,hbn,constituent,by_landcover = by_landcover,start_year = start_year,end_year = end_year)
+    df = _filter_to_watershed(df,uci,reach_ids,upstream_reach_ids,drainage_area)
 
     if by_landcover:
         df = df.groupby(['landcover','constituent'])[['landcover_area','load']].sum().reset_index()
@@ -498,12 +469,7 @@ def average_annual_watershed_loading(uci,hbn,constituent,reach_ids, upstream_rea
 
 def average_monthly_watershed_loading(uci,hbn,constituent,reach_ids, upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
     df = average_monthly_catchment_loading(uci,hbn,constituent,by_landcover = by_landcover,start_year = start_year,end_year = end_year)
-    reach_ids = uci.network.get_opnids('RCHRES',reach_ids,upstream_reach_ids)
-    df = df.loc[df['TVOLNO'].isin(reach_ids)]
-    if drainage_area is None:
-        df['watershed_area'] = uci.network.drainage_area(reach_ids,upstream_reach_ids) #df.drop_duplicates(subset=['TVOLNO'])['catchment_area'].sum()
-    else:
-        df['watershed_area'] = drainage_area
+    df = _filter_to_watershed(df,uci,reach_ids,upstream_reach_ids,drainage_area)
 
     if by_landcover:
         df = df.groupby(['month','TVOLNO','landcover','constituent'])[['landcover_area','load']].sum().reset_index()

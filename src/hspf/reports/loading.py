@@ -199,7 +199,7 @@ def catchment_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2
     -------
     pd.DataFrame
     """
-    time_step = 4 if temporal_grouping == 'month' else 5
+    time_step = 4 if temporal_grouping in ['month', 'season'] else 5
     df = constituent_loading_summary(uci,hbn,constituent,start_year,end_year,time_step=time_step,temporal_grouping=temporal_grouping,agg_func=agg_func)
     df = _join_catchments(df,uci,constituent)
 

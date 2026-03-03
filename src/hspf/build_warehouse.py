@@ -2,6 +2,7 @@
 #%%
 from dataclasses import dataclass
 
+from hspf import uci
 from hspf.parser.parsers import parseTable
 from hspf import warehouse
 import duckdb
@@ -53,10 +54,14 @@ def build_model_table(model_name,uci,version_id=None, scenario_name = 'base',run
 
 
 
-def build_operations_table(model_name, uci):
+def build_operations_table(model_name, uci):   
     df = uci.table('OPN SEQUENCE')[['OPERATION','SEGMENT']]
     df = df.rename(columns={'SEGMENT': 'operation_id', 'OPERATION': 'operation_type'})
     df['model_name'] = model_name
+
+    df_metzones = pd.concat(uci.get_metzones()).reset_index()           
+    df = pd.merge(df,df_metzones,right_on = ['level_0','TOPFST'],left_on = ['operation_type','operation_id'],how='left')
+    df = df[['operation_id','operation_type','metzone','model_name']]
     return df
 
 
@@ -126,6 +131,9 @@ def build_parmeter_table(model_name, uci):
             table.rename(columns = {'OPNID': 'operation_id'}, inplace=True)
             dfs.append(table.melt(id_vars = ['model_name','table_name','table_id','operation_type','operation_id']))
     df = pd.concat(dfs).reset_index(drop=True)
+    df = pd.merge(df,parseTable,left_on = ['operation_type','table_name','variable'],
+            right_on = ['block','table2','column'],how='left')[['model_name','operation_type','table_name','table_id','operation_id','variable','value','dtype']]
+
     return df
 
 #%% Build Tables
@@ -251,6 +259,61 @@ def add_prop_pks(props, operations_df, models_df):
 
 #Dump all dataframes to warehouse
 #%% Dump to Warehouse
+def load_model(con,model_name,uci):
+    df_model = build_model_table(model_name,uci)
+    df_operations = build_operations_table(model_name, uci)
+    df_masslinks = build_masslink_table(model_name, uci)
+    df_schematics = build_schematic_table(model_name, uci)
+    df_extsources = build_extsources_table(model_name, uci)
+    df_exttargets = build_exttargets_table(model_name, uci)
+    df_networks = build_network_table(model_name, uci)
+    df_ftables = build_ftables_table(model_name, uci)
+
+    df_parameters = build_parmeter_table(model_name, uci)
+    props = df_parameters.query('dtype == "C"')
+    flags = df_parameters.query('dtype == "I"')
+    params = df_parameters.query('dtype == "R"')
+
+    warehouse.load_df_to_table(con, df_model, 'uci.models',replace=True)
+    warehouse.load_df_to_table(con, df_operations, 'uci.operations',replace=True)
+    warehouse.load_df_to_table(con, df_schematics, 'uci.schematics',replace=True)
+    warehouse.load_df_to_table(con, df_masslinks, 'uci.masslinks',replace=True)
+    warehouse.load_df_to_table(con, df_extsources, 'uci.extsources',replace=True)
+    warehouse.load_df_to_table(con, df_exttargets, 'uci.exttargets',replace=True)
+    warehouse.load_df_to_table(con, df_networks, 'uci.networks',replace=True)
+    warehouse.load_df_to_table(con, df_ftables, 'uci.ftables',replace=True)
+    warehouse.load_df_to_table(con, props, 'uci.properties',replace=True)
+    warehouse.load_df_to_table(con, flags, 'uci.flags',replace=True)
+    warehouse.load_df_to_table(con, params, 'uci.parameters',replace=True)
+
+def add_model(con,model_name,uci):
+    df_model = build_model_table(model_name,uci)
+    df_operations = build_operations_table(model_name, uci)
+    df_masslinks = build_masslink_table(model_name, uci)
+    df_schematics = build_schematic_table(model_name, uci)
+    df_extsources = build_extsources_table(model_name, uci)
+    df_exttargets = build_exttargets_table(model_name, uci)
+    df_networks = build_network_table(model_name, uci)
+    df_ftables = build_ftables_table(model_name, uci)
+
+    df_parameters = build_parmeter_table(model_name, uci)
+    props = df_parameters.query('dtype == "C"')
+    flags = df_parameters.query('dtype == "I"')
+    params = df_parameters.query('dtype == "R"')
+
+    warehouse.add_df_to_table(con, df_model, 'uci.models',replace=True)
+    warehouse.add_df_to_table(con, df_operations, 'uci.operations',replace=True)
+    warehouse.add_df_to_table(con, df_schematics, 'uci.schematics',replace=True)
+    warehouse.add_df_to_table(con, df_masslinks, 'uci.masslinks',replace=True)
+    warehouse.add_df_to_table(con, df_extsources, 'uci.extsources',replace=True)
+    warehouse.add_df_to_table(con, df_exttargets, 'uci.exttargets',replace=True)
+    warehouse.add_df_to_table(con, df_networks, 'uci.networks',replace=True)
+    warehouse.add_df_to_table(con, df_ftables, 'uci.ftables',replace=True)
+    warehouse.add_df_to_table(con, props, 'uci.properties',replace=True)
+    warehouse.add_df_to_table(con, flags, 'uci.flags',replace=True)
+    warehouse.add_df_to_table(con, params, 'uci.parameters',replace=True)
+
+
 def load_to_warehouse(db_path,model_names = None,replace=True):
     if model_names is None:
         model_names = Repository.valid_models()
@@ -264,26 +327,24 @@ def load_to_warehouse(db_path,model_names = None,replace=True):
     networks_df = pd.concat([build_network_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
     ftables_df = pd.concat([build_ftables_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
     df = pd.concat([build_parmeter_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
-    df = pd.merge(df,parseTable,left_on = ['operation_type','table_name','variable'],
-            right_on = ['block','table2','column'],how='left')[['model_name','operation_type','table_name','table_id','operation_id','variable','value','dtype']]
     props = df.query('dtype == "C"')
     flags = df.query('dtype == "I"')
     params = df.query('dtype == "R"')
 
     with duckdb.connect(db_path) as con:
-        con.execute("CREATE SCHEMA IF NOT EXISTS hspf")
+        con.execute("CREATE SCHEMA IF NOT EXISTS uci")
 
-        warehouse.load_df_to_table(con, models_df, 'models',replace)
-        warehouse.load_df_to_table(con, operations_df, 'operations',replace)
-        warehouse.load_df_to_table(con, schematics_df, 'schematics',replace)
-        warehouse.load_df_to_table(con, masslinks_df, 'masslinks',replace)
-        warehouse.load_df_to_table(con, extsources_df, 'extsources',replace)
-        warehouse.load_df_to_table(con, exttargets_df, 'exttargets',replace)
-        warehouse.load_df_to_table(con, networks_df, 'networks',replace)
-        warehouse.load_df_to_table(con, ftables_df, 'ftables',replace)
-        warehouse.load_df_to_table(con, props, 'properties',replace)
-        warehouse.load_df_to_table(con, flags, 'flags',replace)
-        warehouse.load_df_to_table(con, params, 'parameters',replace)
+        warehouse.load_df_to_table(con, models_df, 'uci.models',replace)
+        warehouse.load_df_to_table(con, operations_df, 'uci.operations',replace)
+        warehouse.load_df_to_table(con, schematics_df, 'uci.schematics',replace)
+        warehouse.load_df_to_table(con, masslinks_df, 'uci.masslinks',replace)
+        warehouse.load_df_to_table(con, extsources_df, 'uci.extsources',replace)
+        warehouse.load_df_to_table(con, exttargets_df, 'uci.exttargets',replace)
+        warehouse.load_df_to_table(con, networks_df, 'uci.networks',replace)
+        warehouse.load_df_to_table(con, ftables_df, 'uci.ftables',replace)
+        warehouse.load_df_to_table(con, props, 'uci.properties',replace)
+        warehouse.load_df_to_table(con, flags, 'uci.flags',replace)
+        warehouse.load_df_to_table(con, params, 'uci.parameters',replace)
 
 #%% Catchment Constituent Loadings
 

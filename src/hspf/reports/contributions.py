@@ -63,16 +63,16 @@ def catchment_contributions(uci,hbn,constituent,target_reach_id, landcover = Non
     fate_factors = pd.concat([fate[v].prod(axis=1) for k,v in p.items()],axis=1)
     fate_factors.columns = list(p.keys())
 
-    fate_factors = fate_factors.reset_index().melt(id_vars = 'index')
+    fate_factors = fate_factors.reset_index().melt(id_vars = 'datetime')
 
     df = get_catchment_loading(uci,hbn,constituent,by_landcover = True)
-    df = pd.merge(df,fate_factors,left_on = ['TVOLNO','index'],right_on = ['variable','index'])
+    df = pd.merge(df,fate_factors,left_on = ['TVOLNO','datetime'],right_on = ['variable','datetime'])
     
     df['contribution'] = df['value']*df['load']
 
     target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
     
-    df = pd.merge(df,target_load.reset_index().melt(id_vars='index',var_name = 'target_reach',value_name = 'target_load'),left_on='index',right_on='index')
+    df = pd.merge(df,target_load.reset_index().melt(id_vars='datetime',var_name = 'target_reach',value_name = 'target_load'),left_on='datetime',right_on='datetime')
     df['contribution_perc'] = df['contribution']/(df['target_load'])*100
     
     df = df.groupby(['TVOLNO','landcover','landcover_area'])[['load','contribution','contribution_perc','target_load']].mean().reset_index()

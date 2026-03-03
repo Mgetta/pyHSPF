@@ -128,7 +128,7 @@ def ann_avg_constituent_loading(constituent,uci,hbn):
             df[constituent] = df[constituent]*2000
     
     subwatersheds = uci.network.subwatersheds().reset_index()
-       
+    
     df = pd.merge(subwatersheds,df,left_on = ['SVOL','SVOLNO'], right_on=['SVOL','OPNID'],how='left')
     return df  
 
@@ -137,7 +137,9 @@ def ann_avg_subwatershed_loading(constituent,uci,hbn):
     df = df.groupby(df['TVOLNO'])[[constituent,'AFACTR']].apply(lambda x: weighted_describe(x,constituent,'AFACTR')).droplevel(1)
     return df
 
-def ann_avg_watershed_loading(constituent,reach_ids,uci,hbn, by_landcover = False):
+def ann_avg_watershed_loading(constituent,uci,hbn,reach_ids=None, by_landcover = False):
+    if reach_ids is None:
+        reach_ids = uci.network.outlets()
     reach_ids = [item for sublist in [uci.network._upstream(reach_id) for reach_id in reach_ids] for item in sublist]
     df = ann_avg_constituent_loading(constituent,uci,hbn)
     df = df.loc[df['TVOLNO'].isin(reach_ids)]
@@ -168,8 +170,10 @@ class Reports():
         return scour(self.hbns,self.uci,start_year = start_year,end_year=end_year)
 
 # Hydrology Reports
-    def landcover_area(self,reach_ids,upstream_reach_ids = None):
-        return watershed_landcover_areas(self.uci,reach_ids,upstream_reach_ids)
+    def landcover_area(self,reach_ids=None,upstream_reach_ids = None):
+        df = self.uci.network.drainage_area_landcover(reach_ids,upstream_reach_ids,group=True).reset_index()
+        df['percent'] = 100*(df['area']/df['area'].sum())
+        return df
     
     def annual_water_budget(self,operation):
         assert operation in ['PERLND','RCHRES','IMPLND']
@@ -201,10 +205,10 @@ class Reports():
     def average_monthly_catchment_loading(self,constituent,by_landcover = False,start_year = 1996,end_year = 2100):
         return average_monthly_catchment_loading(self.uci,self.hbns,constituent,by_landcover = by_landcover,start_year = start_year,end_year = end_year)
     
-    def average_annual_watershed_loading(self,constituent,reach_ids,upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
+    def average_annual_watershed_loading(self,constituent,reach_ids=None,upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
         return average_annual_watershed_loading(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids, start_year, end_year, by_landcover,drainage_area)
     
-    def average_monthly_watershed_loading(self,constituent,reach_ids,upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
+    def average_monthly_watershed_loading(self,constituent,reach_ids=None,upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
         return average_monthly_watershed_loading(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids, start_year, end_year, by_landcover,drainage_area)
         
     def watershed_loading(self,constituent,reach_ids,upstream_reach_ids = None,by_landcover = False):
@@ -236,10 +240,10 @@ class Reports():
     
     # Landscape Yield Reports
   
-    def average_annual_yield(self,constituent,reach_ids,upstream_reach_ids = None,start_year = 1996,end_year = 2100):
+    def average_annual_yield(self,constituent,reach_ids=None,upstream_reach_ids = None,start_year = 1996,end_year = 2100):
         df= average_annual_yield(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids,start_year,end_year)
         return df
 
-    def average_monthly_yield(self,constituent,reach_ids,upstream_reach_ids = None,start_year = 1996,end_year = 2100):
+    def average_monthly_yield(self,constituent,reach_ids=None,upstream_reach_ids = None,start_year = 1996,end_year = 2100):
         df= average_monthly_yield(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids,start_year,end_year)
         return df

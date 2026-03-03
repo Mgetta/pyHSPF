@@ -10,8 +10,10 @@ def init_hspf_db(db_path: str, reset: bool = False):
 
     with duckdb.connect(db_path.as_posix()) as con:
         # Create schema
-        con.execute("CREATE SCHEMA IF NOT EXISTS hspf")
-        
+        con.execute("CREATE SCHEMA IF NOT EXISTS uci")
+        con.execute("CREATE SCHEMA IF NOT EXISTS output")
+        con.execute("CREATE SCHEMA IF NOT EXISTS reports")
+
         # Create tables for HSPF model data
         create_model_tables(con)
         create_model_run_table(con)
@@ -32,6 +34,53 @@ def load_df_to_table(con: duckdb.DuckDBPyConnection, df: pd.DataFrame, table_nam
     con.execute(f"CREATE TABLE {table_name} AS SELECT * FROM tmp_df")
     con.unregister("tmp_df")
 
+
+def get_column_names(con: duckdb.DuckDBPyConnection, table_schema: str, table_name: str) -> list:
+    """
+    Get the column names of a DuckDB table.
+    """
+    #table_schema, table_name = table_name.split('.')
+    query = """
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_name = ? AND table_schema = ?
+    """
+    result = con.execute(query,[table_name,table_schema]).fetchall()
+    column_names = [row[0] for row in result]
+    return column_names
+
+def drop_model_tables(con: duckdb.DuckDBPyConnection,model_name: str):
+    """
+    Drops all tables related to a specific model, identified by model_name.
+    This is useful for resetting the database state for a particular model.
+    """
+    # Get all tables in the 'hspf' schema
+    tables = con.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'hspf'").fetchall()
+    table_names = [row[0] for row in tables]
+
+    # Loop through each table and drop rows related to the specified model
+    for table in table_names:
+        print(f"Dropping data from hspf.{table} for model '{model_name}'...")
+        con.execute(f"DELETE FROM hspf.{table} WHERE model_name = ?", [model_name])
+
+def add_df_to_table(con: duckdb.DuckDBPyConnection, df: pd.DataFrame, table_schema: str, table_name: str):
+    """
+    Append a pandas DataFrame into a DuckDB table. This will create the table
+    if it does not exist.
+    """
+    # get existing columns
+    existing_columns = get_column_names(con, table_schema, table_name)
+    df = df[existing_columns]
+
+
+    # register pandas DF and create table if not exists
+    con.register("tmp_df", df)
+
+    con.execute(f"""
+        INSERT INTO {table_schema}.{table_name} 
+        SELECT * FROM tmp_df
+    """)
+    con.unregister("tmp_df")
 
 def create_model_table(con: duckdb.DuckDBPyConnection):
     '''

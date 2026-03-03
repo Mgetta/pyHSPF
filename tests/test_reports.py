@@ -350,3 +350,168 @@ def test_constituent_loading_summary_invalid_grouping():
                 MagicMock(), MagicMock(), 'TP', 2000, 2001, temporal_grouping='invalid')
     finally:
         reports_mod.get_constituent_loading = original_fn
+
+
+# ---------------------------------------------------------------------------
+# Tests for simulation_period / aggregation_period (utils)
+# ---------------------------------------------------------------------------
+
+def test_validate_periods_equal_no_error():
+    """Same simulation and aggregation period is valid (no aggregation)."""
+    from hspf.reports.utils import validate_periods
+    validate_periods('monthly', 'monthly')  # should not raise
+
+
+def test_validate_periods_agg_coarser_ok():
+    """aggregation_period coarser than simulation_period is valid."""
+    from hspf.reports.utils import validate_periods
+    validate_periods('monthly', 'yearly')
+    validate_periods('daily', 'simulation')
+
+
+def test_validate_periods_agg_finer_raises():
+    """aggregation_period finer than simulation_period must raise."""
+    import pytest
+    from hspf.reports.utils import validate_periods
+    with pytest.raises(ValueError):
+        validate_periods('yearly', 'monthly')
+
+
+def test_validate_periods_invalid_sim_raises():
+    """Unknown simulation_period must raise."""
+    import pytest
+    from hspf.reports.utils import validate_periods
+    with pytest.raises(ValueError):
+        validate_periods('biweekly', None)
+
+
+def test_validate_periods_invalid_agg_raises():
+    """Unknown aggregation_period must raise."""
+    import pytest
+    from hspf.reports.utils import validate_periods
+    with pytest.raises(ValueError):
+        validate_periods('monthly', 'biweekly')
+
+
+def test_simulation_period_to_time_step():
+    """Mapping from human-readable period to HBN code."""
+    from hspf.reports.utils import simulation_period_to_time_step
+    assert simulation_period_to_time_step('hourly') == 2
+    assert simulation_period_to_time_step('daily') == 3
+    assert simulation_period_to_time_step('monthly') == 4
+    assert simulation_period_to_time_step('yearly') == 5
+
+
+def test_simulation_period_to_time_step_invalid():
+    """Invalid period must raise."""
+    import pytest
+    from hspf.reports.utils import simulation_period_to_time_step
+    with pytest.raises(ValueError):
+        simulation_period_to_time_step('biweekly')
+
+
+def test_aggregation_period_to_temporal_grouping_same():
+    """Equal periods -> None (no grouping)."""
+    from hspf.reports.utils import aggregation_period_to_temporal_grouping
+    assert aggregation_period_to_temporal_grouping('monthly', 'monthly') is None
+    assert aggregation_period_to_temporal_grouping('yearly', 'yearly') is None
+
+
+def test_aggregation_period_to_temporal_grouping_simulation():
+    """'simulation' -> None (overall)."""
+    from hspf.reports.utils import aggregation_period_to_temporal_grouping
+    assert aggregation_period_to_temporal_grouping('monthly', 'simulation') is None
+
+
+def test_aggregation_period_to_temporal_grouping_yearly():
+    """monthly -> yearly maps to 'year'."""
+    from hspf.reports.utils import aggregation_period_to_temporal_grouping
+    assert aggregation_period_to_temporal_grouping('monthly', 'yearly') == 'year'
+
+
+# ---------------------------------------------------------------------------
+# Tests for constituent_loading_summary with simulation_period
+# ---------------------------------------------------------------------------
+
+def test_constituent_loading_summary_with_simulation_period():
+    """simulation_period='yearly' produces same result as time_step=5."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        result = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001,
+            simulation_period='yearly')
+        assert 'value' in result.columns
+        assert 'month' not in result.columns
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_constituent_loading_summary_monthly_with_yearly_agg():
+    """simulation_period='monthly', aggregation_period='yearly' groups by year."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        result = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001,
+            simulation_period='monthly', aggregation_period='yearly')
+        assert 'year' in result.columns
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_constituent_loading_summary_simulation_agg():
+    """aggregation_period='simulation' gives overall (no grouping col)."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        result = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001,
+            simulation_period='monthly', aggregation_period='simulation')
+        assert 'month' not in result.columns
+        assert 'year' not in result.columns
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+# ---------------------------------------------------------------------------
+# Tests for spatial_grouping in _aggregate helpers
+# ---------------------------------------------------------------------------
+
+def test_aggregate_catchment_by_landcover_group():
+    """Landcover-group filter keeps only named landcovers."""
+    from hspf.reports.loading import _aggregate_catchment_by_landcover_group
+    df = _make_catchment_joined_df()
+    result = _aggregate_catchment_by_landcover_group(df, ['Forest'])
+
+    assert len(result) > 0
+    # Only Forest data should be aggregated; Urban is excluded
+    assert 'loading_rate' in result.columns
+    assert 'load' in result.columns
+
+
+def test_aggregate_catchment_by_landcover_group_empty():
+    """Landcover-group with no matches returns empty DataFrame."""
+    from hspf.reports.loading import _aggregate_catchment_by_landcover_group
+    df = _make_catchment_joined_df()
+    result = _aggregate_catchment_by_landcover_group(df, ['Wetland'])
+    assert len(result) == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests for Reports class living in legacy module
+# ---------------------------------------------------------------------------
+
+def test_reports_class_importable_from_package():
+    """Reports should be importable from hspf.reports (backward compat)."""
+    from hspf.reports import Reports
+    assert Reports is not None
+
+
+def test_reports_class_lives_in_legacy():
+    """Reports class module should be hspf.reports.legacy."""
+    from hspf.reports import Reports
+    assert Reports.__module__ == 'hspf.reports.legacy'

@@ -373,28 +373,29 @@ def watershed_loading_summary(uci,hbn,constituent,reach_ids,upstream_reach_ids =
             simulation_period, aggregation_period
         )
 
-    # ---- resolve spatial_grouping vs by_landcover ---------------------------
-    if spatial_grouping is not None:
-        by_landcover = (spatial_grouping == 'landcover')
-
     df = catchment_loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover,temporal_grouping=temporal_grouping,agg_func=agg_func,simulation_period=simulation_period,aggregation_period=aggregation_period,spatial_grouping=spatial_grouping)
     df = _filter_to_watershed(df,uci,reach_ids,upstream_reach_ids,drainage_area)
 
     group_prefix = [temporal_grouping] if temporal_grouping is not None else []
+    ws_area = df['watershed_area'].iloc[0] if len(df) > 0 else None
 
-    if by_landcover or spatial_grouping == 'landcover':
+    if spatial_grouping == 'landcover' or (spatial_grouping is None and by_landcover):
         df = df.groupby(group_prefix + ['TVOLNO','landcover','constituent'])[['landcover_area','load']].sum().reset_index()
         df['loading_rate'] = df['load']/df['landcover_area']
     elif spatial_grouping == 'metzone':
-        grp = group_prefix + ['metzone', 'constituent', 'watershed_area']
+        grp = group_prefix + ['metzone', 'constituent']
         df = df.groupby(grp)[['load']].sum().reset_index()
+        df['watershed_area'] = ws_area
         df['loading_rate'] = df['load'] / df['watershed_area']
     elif isinstance(spatial_grouping, list):
-        grp = group_prefix + ['constituent', 'watershed_area']
+        grp = group_prefix + ['constituent']
         df = df.groupby(grp)[['load']].sum().reset_index()
+        df['watershed_area'] = ws_area
         df['loading_rate'] = df['load'] / df['watershed_area']
     else:
-        df = df.groupby(group_prefix + ['constituent','watershed_area'])[['load']].sum().reset_index()
+        grp = group_prefix + ['constituent']
+        df = df.groupby(grp)[['load']].sum().reset_index()
+        df['watershed_area'] = ws_area
         df['loading_rate'] = df['load']/df['watershed_area']
 
     return df

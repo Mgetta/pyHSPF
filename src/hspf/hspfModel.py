@@ -10,7 +10,7 @@ import subprocess
 import concurrent.futures
 from hspf.uci import UCI
 from hspf import hbn
-from hspf.reports import Reports
+from hspf.reports import ReportsAccessor
 from hspf.wdm import wdmInterface
 from hspf import wdmReader
 from hspf.outputs import outputWriter
@@ -49,7 +49,7 @@ class hspfModel():
             self.wdms = None
         
         # Compositions
-        self.reports = Reports(self.uci,self.hbns,self.wdms)
+        self.reports = ReportsAccessor(self.uci,self.hbns,self.wdms)
         self.outputs = outputWriter(self.uci,self.hbns)
 
         
@@ -61,7 +61,7 @@ class hspfModel():
             self.wdms = wdmInterface(self.wdm_paths)
         except:
             self.wdms = None
-        self.reports = Reports(self.uci,self.hbns,self.wdms)
+        self.reports = ReportsAccessor(self.uci,self.hbns,self.wdms)
 
     def validate_wdms(self):
         # Ensure wdm files exist and the folders for the other file types exist relative

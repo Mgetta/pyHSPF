@@ -7,6 +7,7 @@ import pandas as pd
 from hspf.reports.phosphorus import total_phosphorous
 from hspf.reports.utils import (
     validate_periods,
+    aggregation_period_to_temporal_grouping,
 )
 
 
@@ -125,17 +126,19 @@ def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year =
     group_cols = ['OPERATION','OPNID']
     if aggregation_period is None:
         group_cols = ['datetime'] + group_cols
-    elif aggregation_period == 'month':
+    elif aggregation_period == 'monthly':
         df['month'] = df['datetime'].dt.month
         group_cols = ['month'] + group_cols
-    elif aggregation_period == 'year':
+    elif aggregation_period == 'yearly':
         df['year'] = df['datetime'].dt.year
         group_cols = ['year'] + group_cols
-    elif aggregation_period == 'season':
+    elif aggregation_period == 'seasonal':
         df['season'] = df['datetime'].dt.month.map(
             {12:'DJF',1:'DJF',2:'DJF',3:'MAM',4:'MAM',5:'MAM',
              6:'JJA',7:'JJA',8:'JJA',9:'SON',10:'SON',11:'SON'})
         group_cols = ['season'] + group_cols
+    elif aggregation_period == 'simulation':
+        pass  # no temporal grouping column — aggregate across all time
     else:
         raise ValueError(f"Unsupported aggregation_period '{aggregation_period}'")
     df = df.groupby(group_cols)['value'].agg(agg_func).reset_index()
@@ -220,7 +223,14 @@ def loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,
     df = _join_catchments(df,uci,constituent)
 
     # Add relevant temporal grouping columns for spatial aggregation
-    group_prefix = [aggregation_period] if aggregation_period is not None else ['datetime']
+    temporal_col = aggregation_period_to_temporal_grouping(simulation_period, aggregation_period)
+    if temporal_col is not None:
+        group_prefix = [temporal_col]
+    elif aggregation_period is None:
+        group_prefix = ['datetime']
+    else:
+        # aggregation_period='simulation' → aggregate across all time
+        group_prefix = []
 
     # Filter to selected landcovers
     if landcovers is not None:

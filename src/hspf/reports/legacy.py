@@ -10,13 +10,10 @@ from hspf.reports.phosphorus import total_phosphorous
 from hspf.reports.utils import weighted_describe
 
 from hspf.reports.loading import (
-    average_annual_catchment_loading,
-    average_monthly_catchment_loading,
-    average_annual_watershed_loading,
-    average_monthly_watershed_loading,
+    catchment_loading_summary,
+    watershed_loading_summary,
     get_watershed_loading,
     get_catchment_loading,
-    watershed_landcover_areas,
 )
 from hspf.reports.hydrology import (
     annual_perlnd_water_budget,
@@ -200,16 +197,16 @@ class Reports():
     #% Catchment and Watershed Loading (Edge of Field Load) Reports 
     # 
     def average_annual_catchment_loading(self,constituent,by_landcover = False,start_year = 1996,end_year = 2100):
-        return average_annual_catchment_loading(self.uci,self.hbns,constituent,by_landcover = by_landcover,start_year = start_year,end_year = end_year)
+        return catchment_loading_summary(self.uci,self.hbns,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover,simulation_period='yearly',aggregation_period='yearly',agg_func='mean')
     
     def average_monthly_catchment_loading(self,constituent,by_landcover = False,start_year = 1996,end_year = 2100):
-        return average_monthly_catchment_loading(self.uci,self.hbns,constituent,by_landcover = by_landcover,start_year = start_year,end_year = end_year)
+        return catchment_loading_summary(self.uci,self.hbns,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover,simulation_period='monthly',aggregation_period='monthly',agg_func='mean')
     
     def average_annual_watershed_loading(self,constituent,reach_ids=None,upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
-        return average_annual_watershed_loading(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids, start_year, end_year, by_landcover,drainage_area)
+        return watershed_loading_summary(self.uci,self.hbns,constituent,reach_ids=reach_ids,upstream_reach_ids=upstream_reach_ids,start_year=start_year,end_year=end_year,by_landcover=by_landcover,drainage_area=drainage_area,simulation_period='yearly',aggregation_period='yearly',agg_func='mean')
     
     def average_monthly_watershed_loading(self,constituent,reach_ids=None,upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
-        return average_monthly_watershed_loading(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids, start_year, end_year, by_landcover,drainage_area)
+        return watershed_loading_summary(self.uci,self.hbns,constituent,reach_ids=reach_ids,upstream_reach_ids=upstream_reach_ids,start_year=start_year,end_year=end_year,by_landcover=by_landcover,drainage_area=drainage_area,simulation_period='monthly',aggregation_period='monthly',agg_func='mean')
         
     def watershed_loading(self,constituent,reach_ids,upstream_reach_ids = None,by_landcover = False):
         '''

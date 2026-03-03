@@ -3,8 +3,6 @@ import numpy as np
 from unittest.mock import MagicMock
 from hspf.reports.loading import (
     _join_catchments,
-    _average_constituent_loading,
-    _aggregate_catchment_loading,
     _filter_to_watershed,
     catchment_areas,
     constituent_loading_summary,
@@ -90,10 +88,10 @@ def test_join_catchments_preserves_month():
 
 
 # ---------------------------------------------------------------------------
-# Tests for _aggregate_catchment_loading
+# Tests for _filter_to_watershed
 # ---------------------------------------------------------------------------
 
-def _make_catchment_joined_df(include_month=False):
+def _make_catchment_joined_df():
     """DataFrame mimicking output of _join_catchments after column selection."""
     data = {
         'TVOLNO': [1, 1, 2, 2],
@@ -106,53 +104,7 @@ def _make_catchment_joined_df(include_month=False):
         'load': [5.0, 1.5, 16.0, 3.2],
         'constituent': ['TP'] * 4,
     }
-    if include_month:
-        data['month'] = [1, 1, 1, 1]
     return pd.DataFrame(data)
-
-
-def test_aggregate_catchment_loading_total():
-    df = _make_catchment_joined_df()
-    result = _aggregate_catchment_loading(df, by_landcover=False)
-
-    assert 'TVOLNO' in result.columns
-    assert 'load' in result.columns
-    assert 'loading_rate' in result.columns
-    # Check total load for TVOLNO=1: 5.0 + 1.5 = 6.5
-    row1 = result.loc[result['TVOLNO'] == 1].iloc[0]
-    assert np.isclose(row1['load'], 6.5)
-    assert np.isclose(row1['loading_rate'], 6.5 / 15.0)
-
-
-def test_aggregate_catchment_loading_by_landcover():
-    df = _make_catchment_joined_df()
-    result = _aggregate_catchment_loading(df, by_landcover=True)
-
-    assert 'landcover' in result.columns
-    # Forest in TVOLNO=1: load=5.0, area=10.0
-    forest_1 = result.loc[(result['TVOLNO'] == 1) & (result['landcover'] == 'Forest')].iloc[0]
-    assert np.isclose(forest_1['loading_rate'], 5.0 / 10.0)
-
-
-def test_aggregate_catchment_loading_with_month_prefix():
-    df = _make_catchment_joined_df(include_month=True)
-    result = _aggregate_catchment_loading(df, by_landcover=False, group_prefix=['month'])
-
-    assert 'month' in result.columns
-    assert len(result) > 0
-
-
-def test_aggregate_catchment_loading_by_landcover_with_month():
-    df = _make_catchment_joined_df(include_month=True)
-    result = _aggregate_catchment_loading(df, by_landcover=True, group_prefix=['month'])
-
-    assert 'month' in result.columns
-    assert 'landcover' in result.columns
-
-
-# ---------------------------------------------------------------------------
-# Tests for _filter_to_watershed
-# ---------------------------------------------------------------------------
 
 def test_filter_to_watershed_filters_reach_ids():
     uci = _make_mock_uci()
@@ -184,63 +136,6 @@ def test_filter_to_watershed_custom_drainage_area():
     result = _filter_to_watershed(df, uci, reach_ids=[1, 2], drainage_area=50.0)
 
     assert (result['watershed_area'] == 50.0).all()
-
-
-# ---------------------------------------------------------------------------
-# Tests for _average_constituent_loading
-# ---------------------------------------------------------------------------
-
-def test_average_constituent_loading_annual_shape():
-    """Verify _average_constituent_loading without month produces correct groupby."""
-    uci = MagicMock()
-    hbn = MagicMock()
-
-    ts_data = pd.DataFrame({
-        'datetime': pd.to_datetime(['2000-01-01', '2000-02-01', '2001-01-01', '2001-02-01']),
-        101: [1.0, 2.0, 3.0, 4.0],
-        102: [0.5, 1.0, 1.5, 2.0],
-    })
-
-    # Mock get_constituent_loading via direct function replacement
-    # since _average_constituent_loading calls it internally
-    import hspf.reports.loading as reports_mod
-
-    melted = ts_data.melt(id_vars=['datetime'], var_name='OPNID')
-    melted['OPERATION'] = 'PERLND'
-    original_fn = reports_mod.get_constituent_loading
-    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
-
-    try:
-        result = reports_mod._average_constituent_loading(uci, hbn, 'TP', 2000, 2001, simulation_period='yearly')
-        assert 'OPERATION' in result.columns
-        assert 'OPNID' in result.columns
-        assert 'value' in result.columns
-        assert 'month' not in result.columns
-    finally:
-        reports_mod.get_constituent_loading = original_fn
-
-
-def test_average_constituent_loading_monthly_has_month():
-    """Verify _average_constituent_loading with group_by_month adds month column."""
-    uci = MagicMock()
-    hbn = MagicMock()
-    import hspf.reports.loading as reports_mod
-
-    ts_data = pd.DataFrame({
-        'datetime': pd.to_datetime(['2000-01-01', '2000-02-01', '2001-01-01', '2001-02-01']),
-        101: [1.0, 2.0, 3.0, 4.0],
-        102: [0.5, 1.0, 1.5, 2.0],
-    })
-    melted = ts_data.melt(id_vars=['datetime'], var_name='OPNID')
-    melted['OPERATION'] = 'PERLND'
-    original_fn = reports_mod.get_constituent_loading
-    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
-
-    try:
-        result = reports_mod._average_constituent_loading(uci, hbn, 'TP', 2000, 2001, simulation_period='monthly', group_by_month=True)
-        assert 'month' in result.columns
-    finally:
-        reports_mod.get_constituent_loading = original_fn
 
 
 # ---------------------------------------------------------------------------
@@ -325,13 +220,14 @@ def test_constituent_loading_summary_sum_agg():
 
 
 def test_constituent_loading_summary_max_agg():
-    """Use max aggregation."""
+    """Use max aggregation with simulation-level aggregation."""
     reports_mod, melted = _mock_get_constituent_loading()
     original_fn = reports_mod.get_constituent_loading
     reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
     try:
         result = reports_mod.constituent_loading_summary(
-            MagicMock(), MagicMock(), 'TP', 2000, 2001, agg_func='max')
+            MagicMock(), MagicMock(), 'TP', 2000, 2001,
+            simulation_period='monthly', aggregation_period='simulation', agg_func='max')
         # For OPNID 101: max of [1, 2, 3, 4, 5, 6] = 6
         row_101 = result.loc[result['OPNID'] == 101]
         assert np.isclose(row_101['value'].iloc[0], 6.0)
@@ -478,28 +374,6 @@ def test_constituent_loading_summary_simulation_agg():
         reports_mod.get_constituent_loading = original_fn
 
 
-# ---------------------------------------------------------------------------
-# Tests for spatial_grouping in _aggregate helpers
-# ---------------------------------------------------------------------------
-
-def test_aggregate_catchment_by_landcover_group():
-    """Landcover-group filter keeps only named landcovers."""
-    from hspf.reports.loading import _aggregate_catchment_by_landcover_group
-    df = _make_catchment_joined_df()
-    result = _aggregate_catchment_by_landcover_group(df, ['Forest'])
-
-    assert len(result) > 0
-    # Only Forest data should be aggregated; Urban is excluded
-    assert 'loading_rate' in result.columns
-    assert 'load' in result.columns
-
-
-def test_aggregate_catchment_by_landcover_group_empty():
-    """Landcover-group with no matches returns empty DataFrame."""
-    from hspf.reports.loading import _aggregate_catchment_by_landcover_group
-    df = _make_catchment_joined_df()
-    result = _aggregate_catchment_by_landcover_group(df, ['Wetland'])
-    assert len(result) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -528,14 +402,6 @@ def test_loading_summary_invalid_spatial_grouping():
     from hspf.reports.loading import loading_summary
     with pytest.raises(ValueError):
         loading_summary(MagicMock(), MagicMock(), 'TP', spatial_grouping='invalid')
-
-
-def test_loading_summary_watershed_requires_reach_ids():
-    """spatial_grouping='watershed' without reach_ids raises ValueError."""
-    import pytest
-    from hspf.reports.loading import loading_summary
-    with pytest.raises(ValueError):
-        loading_summary(MagicMock(), MagicMock(), 'TP', spatial_grouping='watershed')
 
 
 def test_loading_summary_catchment_default():

@@ -221,28 +221,44 @@ class UCI():
             for line in self.lines:    
                 the_file.write(line+'\n')
 
-    def add_parameter_template(self,block,table_name,table_id,parameter,tpl_char = '~'):
+    def add_parameter_template(self,block,table_name,table_id,column,parname = None,tpl_char = '~',opnids = None,single_template = True, group_id = ''):
         
         table = self.table(block,table_name,0,False).reset_index()
         column_names,dtypes,starts,stops = self.uci[(block,table_name,table_id)]._delimiters()
         
-        width = stops[column_names.index(parameter)] - starts[column_names.index(parameter)]
+        width = stops[column_names.index(column)] - starts[column_names.index(column)]
 
-        ids = ~table[parameter].isna() # Handle comment lines in uci
+        ids = ~table[column].isna() # Handle comment lines in uci
+        if parname is None:
+            parameter = column.lower()
+        else:
+            parameter = parname.lower()
 
+        if opnids is not None:
+            ids = ids & (table['OPNID'].isin(opnids))
+
+        
         # Replace paramter name with PEST/PEST++ specification. Note this does not use the HSPF supplemental file so parameters are limited to width of uci file column
-        pest_param = tpl_char + parameter.lower() +  table.loc[ids,'OPNID'].astype(str)
-        pest_param = pest_param.apply(lambda name: name + ' '*(width-len(name)-1)+ tpl_char)
+        if single_template:
+            pest_param = group_id + parameter 
+            template = tpl_char + pest_param + ' '*(width-len(pest_param)-2)+ tpl_char
+            pest_param = [pest_param]
+        else:
+            pest_param = group_id + parameter +  table.loc[ids,'OPNID'].astype(str)
+            pest_param = pest_param.tolist()
+            template = [tpl_char + pest_param + ' '*(width-len(pest_param)-2)+ tpl_char for pest_param in pest_param]
+            #template = pest_param.apply(lambda name: tpl_char + name + ' '*(width-len(name)-1)+ tpl_char)
 
-        table.loc[ids,parameter] = pest_param
+        table.loc[ids,column] = template
         table = table.set_index('OPNID')
         self.replace_table(table,block,table_name,table_id)
+        return list(set(pest_param))
 
     def write_tpl(self,tpl_char = '~',new_tpl_path = None):    
         if new_tpl_path is None:
             new_tpl_path = self.filepath.parent.joinpath(self.filepath.stem + '.tpl')
         self.merge_lines()
-        self.lines.insert(0,tpl_char)
+        self.lines.insert(0,'ptf ' + tpl_char)
         self._write(new_tpl_path)
 
     def write(self,new_uci_path):
@@ -327,15 +343,17 @@ class UCI():
     def initialize(self,name = None, default_output = 4,n=5,reach_ids = None):
         if name is None:
             name = self.name
-            
+        
+        # Note that the order of these function calls matters
         setup_files(self,name,n)
-        setup_geninfo(self)
         setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids)
+        setup_geninfo(self)
         setup_qualid(self)
 
     def initialize_binary_info(self,default_output = 4,reach_ids = None):
         setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids)
-        
+        setup_geninfo(self)
+
     
     def build_targets(self):
         geninfo = self.table('PERLND','GEN-INFO')  
@@ -433,16 +451,23 @@ def setup_geninfo(uci):
     bino_nums = uci.table('FILES').set_index('FTYPE').loc['BINO','UNIT'].tolist()
     if isinstance(bino_nums,int): #Pands is poorly designed. Why would tolist not return a goddamn list...?
         bino_nums = [bino_nums]
-  
+
+
     #opnids = uci.table(operation,'GEN-INFO').index
+    # Split model output from all operations evenly across binary files
     for operation in ['RCHRES','PERLND','IMPLND']:
-        opnids = np.array_split(uci.table(operation,'GEN-INFO').index.to_list(),len(bino_nums))
-        
-        for opnid,bino_num in zip(opnids,bino_nums):
-            if operation == 'RCHRES': #TODO convert BUNITE to BUNIT1 to get rid of this if statement
-                uci.update_table(bino_num,'RCHRES','GEN-INFO',0,opnids = opnid,columns = 'BUNITE',operator = 'set')
-            else:
-                uci.update_table(bino_num,operation,'GEN-INFO',0,opnids = opnid,columns = 'BUNIT1',operator = 'set')
+        binary_info = uci.table(operation, 'BINARY-INFO')
+        for t_code in [2,3,4,5]:
+            opnids = binary_info.index[(binary_info.iloc[:, :-2] == t_code).any(axis=1)].to_list()
+            if len(opnids) > 0:
+                opnids = np.array_split(opnids,len(bino_nums))
+                for opnid,bino_num in zip(opnids,bino_nums):
+                    if len(opnid) > 0:
+                        if operation == 'RCHRES': #TODO convert BUNITE to BUNIT1 to get rid of this if statement
+                            uci.update_table(bino_num,'RCHRES','GEN-INFO',0,opnids = opnid,columns = 'BUNITE',operator = 'set')
+                        else:
+                            uci.update_table(bino_num,operation,'GEN-INFO',0,opnids = opnid,columns = 'BUNIT1',operator = 'set')
+
 
 def setup_binaryinfo(uci,default_output = 4,reach_ids = None):
     # Initialize Binary-Info

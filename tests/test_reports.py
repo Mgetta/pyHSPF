@@ -613,7 +613,7 @@ def test_validate_periods_seasonal_ordering():
 
 
 def test_validate_periods_seasonal_finer_raises():
-    """'seasonal' aggregation is finer than 'yearly' simulation — should raise."""
+    """'seasonal' aggregation is finer than 'yearly' simulation - should raise."""
     import pytest
     from hspf.reports.utils import validate_periods
     with pytest.raises(ValueError):
@@ -630,3 +630,17 @@ def test_aggregation_period_to_temporal_grouping_none():
     """aggregation_period=None returns None (no grouping)."""
     from hspf.reports.utils import aggregation_period_to_temporal_grouping
     assert aggregation_period_to_temporal_grouping('monthly', None) is None
+
+
+def test_constituent_loading_summary_equal_periods_groups():
+    """simulation_period='monthly', aggregation_period='monthly' groups by month."""
+    reports_mod, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    try:
+        result = reports_mod.constituent_loading_summary(
+            MagicMock(), MagicMock(), 'TP', 2000, 2001,
+            simulation_period='monthly', aggregation_period='monthly')
+        assert 'month' in result.columns
+    finally:
+        reports_mod.get_constituent_loading = original_fn

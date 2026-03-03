@@ -5,6 +5,12 @@ Constituent loading reports — catchment and watershed edge-of-field loading.
 import pandas as pd
 
 from hspf.reports.phosphorus import total_phosphorous
+from hspf.reports.utils import (
+    PERIOD_ORDER,
+    simulation_period_to_time_step,
+    validate_periods,
+    aggregation_period_to_temporal_grouping,
+)
 
 
 def catchment_areas(uci):
@@ -97,14 +103,14 @@ def get_watershed_loading(uci,hbn,reach_ids,constituent,upstream_reach_ids = Non
     return df
 
 
-def _average_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100,time_step = 5,group_by_month = False):
+def _average_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100,simulation_period = 'yearly',group_by_month = False):
     """Backward-compatible wrapper. Prefer constituent_loading_summary() for new code."""
     if group_by_month:
-        return constituent_loading_summary(uci,hbn,constituent,start_year,end_year,time_step=time_step,temporal_grouping='month')
+        return constituent_loading_summary(uci,hbn,constituent,start_year,end_year,simulation_period=simulation_period,aggregation_period='monthly')
     else:
-        return constituent_loading_summary(uci,hbn,constituent,start_year,end_year,time_step=time_step)
+        return constituent_loading_summary(uci,hbn,constituent,start_year,end_year,simulation_period=simulation_period)
 
-def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,time_step = 5,temporal_grouping = None,agg_func = 'mean'):
+def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean'):
     """
     Aggregate constituent loading rates with flexible temporal grouping and aggregation.
 
@@ -116,14 +122,12 @@ def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year =
         Constituent name (e.g. 'TP', 'TSS', 'Q')
     start_year, end_year : int
         Year range to filter
-    time_step : int
-        HBN time code (4=monthly, 5=yearly)
-    temporal_grouping : str or None
-        Temporal grouping for output. One of:
-        - None: aggregate over all time (overall summary)
-        - 'month': group by calendar month
-        - 'year': group by year
-        - 'season': group by meteorological season (DJF, MAM, JJA, SON)
+    simulation_period : str
+        Resolution of model output: 'hourly', 'daily', 'monthly', 'yearly'.
+    aggregation_period : str or None
+        Period over which to aggregate: 'monthly', 'seasonal', 'yearly',
+        'simulation', or ``None`` (no temporal aggregation).
+        Must be ≥ *simulation_period*.
     agg_func : str or callable
         Aggregation function applied to 'value' column. Default 'mean'.
         Examples: 'mean', 'sum', 'max', 'min', 'median', 'std'
@@ -133,6 +137,12 @@ def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year =
     pd.DataFrame
         Columns: [OPERATION, OPNID, value] plus temporal grouping column if specified.
     """
+    validate_periods(simulation_period, aggregation_period)
+    time_step = simulation_period_to_time_step(simulation_period)
+    temporal_grouping = aggregation_period_to_temporal_grouping(
+        simulation_period, aggregation_period
+    )
+
     df = get_constituent_loading(uci,hbn,constituent,time_step=time_step)
     df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
     group_cols = ['OPERATION','OPNID']
@@ -148,15 +158,15 @@ def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year =
              6:'JJA',7:'JJA',8:'JJA',9:'SON',10:'SON',11:'SON'})
         group_cols = ['season'] + group_cols
     elif temporal_grouping is not None:
-        raise ValueError(f"temporal_grouping must be None, 'month', 'year', or 'season', got '{temporal_grouping}'")
+        raise ValueError(f"Unsupported temporal_grouping '{temporal_grouping}'")
     df = df.groupby(group_cols)['value'].agg(agg_func).reset_index()
     return df
 
 def average_annual_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100):
-    return constituent_loading_summary(uci,hbn,constituent,start_year,end_year,time_step=5)
+    return constituent_loading_summary(uci,hbn,constituent,start_year,end_year,simulation_period='yearly')
 
 def average_monthly_constituent_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100):
-    return constituent_loading_summary(uci,hbn,constituent,start_year,end_year,time_step=4,temporal_grouping='month')
+    return constituent_loading_summary(uci,hbn,constituent,start_year,end_year,simulation_period='monthly',aggregation_period='monthly')
 
 def _aggregate_catchment_loading(df,by_landcover = False,group_prefix = None):
     if group_prefix is None:
@@ -169,46 +179,54 @@ def _aggregate_catchment_loading(df,by_landcover = False,group_prefix = None):
         df['loading_rate'] = df['load']/df['catchment_area']
     return df
 
+
+def _aggregate_catchment_by_metzone(df, uci, group_prefix=None):
+    """Aggregate catchment loading grouped by meteorological zone."""
+    if group_prefix is None:
+        group_prefix = []
+    # Attach metzone from opnid_dict
+    meta_frames = []
+    for operation in ['PERLND', 'IMPLND']:
+        if operation in uci.opnid_dict:
+            meta = uci.opnid_dict[operation][['metzone']].copy()
+            meta['SVOL'] = operation
+            meta_frames.append(meta)
+    if meta_frames:
+        meta = pd.concat(meta_frames)
+        df = pd.merge(df, meta, left_on=['SVOL', 'SVOLNO'], right_index=True, how='left')
+    else:
+        df['metzone'] = 'unknown'
+
+    grp = group_prefix + ['TVOLNO', 'metzone', 'constituent']
+    df = df.groupby(grp)[['landcover_area', 'load']].sum().reset_index()
+    df['loading_rate'] = df['load'] / df['landcover_area']
+    return df
+
+
+def _aggregate_catchment_by_landcover_group(df, landcover_names, group_prefix=None):
+    """Aggregate catchment loading for a user-defined subset of landcovers.
+
+    Only rows whose *landcover* value appears in *landcover_names* are kept.
+    Those rows are then summed per catchment (like ``by_landcover=False`` but
+    restricted to the given subset).
+    """
+    if group_prefix is None:
+        group_prefix = []
+    df = df.loc[df['landcover'].isin(landcover_names)].copy()
+    grp = group_prefix + ['TVOLNO', 'constituent']
+    df = df.groupby(grp)[['landcover_area', 'load']].sum().reset_index()
+    df['loading_rate'] = df['load'] / df['landcover_area']
+    return df
+
 def average_annual_catchment_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100,by_landcover = False):
-    return catchment_loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover)
+    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover,spatial_grouping='catchment')
 
-def average_monthly_catchment_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100,by_landcover = False):  
-    return catchment_loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover,temporal_grouping='month')
+def average_monthly_catchment_loading(uci,hbn,constituent,start_year = 1996,end_year = 2100,by_landcover = False):
+    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover,simulation_period='monthly',aggregation_period='monthly',spatial_grouping='catchment')
 
-def catchment_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,by_landcover = False,temporal_grouping = None,agg_func = 'mean'):
-    """
-    Aggregate catchment loading with flexible temporal grouping and aggregation.
-
-    Parameters
-    ----------
-    uci : UCI object
-    hbn : HBN object
-    constituent : str
-        Constituent name (e.g. 'TP', 'TSS', 'Q')
-    start_year, end_year : int
-        Year range to filter
-    by_landcover : bool
-        If True, group by landcover type
-    temporal_grouping : str or None
-        Temporal grouping: None (overall), 'month', 'year', 'season'
-    agg_func : str or callable
-        Aggregation function. Default 'mean'.
-        Examples: 'mean', 'sum', 'max', 'min', 'median', 'std'
-
-    Returns
-    -------
-    pd.DataFrame
-    """
-    time_step = 4 if temporal_grouping in ['month', 'season'] else 5
-    df = constituent_loading_summary(uci,hbn,constituent,start_year,end_year,time_step=time_step,temporal_grouping=temporal_grouping,agg_func=agg_func)
-    df = _join_catchments(df,uci,constituent)
-
-    group_prefix = [temporal_grouping] if temporal_grouping is not None else []
-    base_cols = ['constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']
-    if temporal_grouping is not None:
-        base_cols = [temporal_grouping] + base_cols
-    df = df[df.columns.intersection(base_cols)]
-    return _aggregate_catchment_loading(df,by_landcover,group_prefix=group_prefix)
+def catchment_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,by_landcover = False,simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean'):
+    """Thin wrapper around :func:`loading_summary` with ``spatial_grouping='catchment'``."""
+    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,simulation_period=simulation_period,aggregation_period=aggregation_period,agg_func=agg_func,spatial_grouping='catchment',by_landcover=by_landcover)
 
 
 
@@ -222,14 +240,24 @@ def _filter_to_watershed(df,uci,reach_ids,upstream_reach_ids = None,drainage_are
     return df
 
 def average_annual_watershed_loading(uci,hbn,constituent,reach_ids, upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
-    return watershed_loading_summary(uci,hbn,constituent,reach_ids,upstream_reach_ids=upstream_reach_ids,start_year=start_year,end_year=end_year,by_landcover=by_landcover,drainage_area=drainage_area)
+    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,reach_ids=reach_ids,upstream_reach_ids=upstream_reach_ids,by_landcover=by_landcover,drainage_area=drainage_area,spatial_grouping='watershed')
 
 def average_monthly_watershed_loading(uci,hbn,constituent,reach_ids, upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
-    return watershed_loading_summary(uci,hbn,constituent,reach_ids,upstream_reach_ids=upstream_reach_ids,start_year=start_year,end_year=end_year,by_landcover=by_landcover,drainage_area=drainage_area,temporal_grouping='month')
+    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,reach_ids=reach_ids,upstream_reach_ids=upstream_reach_ids,by_landcover=by_landcover,drainage_area=drainage_area,simulation_period='monthly',aggregation_period='monthly',spatial_grouping='watershed')
 
-def watershed_loading_summary(uci,hbn,constituent,reach_ids,upstream_reach_ids = None,start_year = 1996,end_year = 2100,by_landcover = False,drainage_area = None,temporal_grouping = None,agg_func = 'mean'):
+def watershed_loading_summary(uci,hbn,constituent,reach_ids,upstream_reach_ids = None,start_year = 1996,end_year = 2100,by_landcover = False,drainage_area = None,simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean'):
+    """Thin wrapper around :func:`loading_summary` with ``spatial_grouping='watershed'``."""
+    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,simulation_period=simulation_period,aggregation_period=aggregation_period,agg_func=agg_func,reach_ids=reach_ids,upstream_reach_ids=upstream_reach_ids,spatial_grouping='watershed',by_landcover=by_landcover,drainage_area=drainage_area)
+
+
+def loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,
+                    simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean',
+                    reach_ids = None,upstream_reach_ids = None,
+                    spatial_grouping = 'catchment',
+                    by_landcover = False,landcovers = None,
+                    drainage_area = None):
     """
-    Aggregate watershed loading with flexible temporal grouping and aggregation.
+    Unified loading summary with flexible temporal and spatial grouping.
 
     Parameters
     ----------
@@ -237,36 +265,121 @@ def watershed_loading_summary(uci,hbn,constituent,reach_ids,upstream_reach_ids =
     hbn : HBN object
     constituent : str
         Constituent name (e.g. 'TP', 'TSS', 'Q')
-    reach_ids : list
-        Reach IDs defining the watershed outlet
-    upstream_reach_ids : list, optional
-        Upstream boundary reach IDs
     start_year, end_year : int
         Year range to filter
-    by_landcover : bool
-        If True, group by landcover type
-    drainage_area : float, optional
-        Custom drainage area. If None, calculated from network.
-    temporal_grouping : str or None
-        Temporal grouping: None (overall), 'month', 'year', 'season'
+    simulation_period : str
+        Resolution of model output: 'hourly', 'daily', 'monthly', 'yearly'.
+    aggregation_period : str or None
+        Period over which to aggregate: 'monthly', 'seasonal', 'yearly',
+        'simulation', or ``None`` (no temporal aggregation).
+        Must be ≥ *simulation_period*.
     agg_func : str or callable
         Aggregation function. Default 'mean'.
-        Examples: 'mean', 'sum', 'max', 'min', 'median', 'std'
+    reach_ids : list of int, optional
+        Reach IDs defining the watershed of interest.  Required when
+        ``spatial_grouping='watershed'``.
+    upstream_reach_ids : list of int, optional
+        Upstream boundary reach IDs.
+    spatial_grouping : str
+        How to aggregate spatially.  One of:
+
+        * ``'catchment'`` – one row per catchment (TVOLNO).
+        * ``'watershed'`` – aggregate to a single value for the watershed
+          defined by *reach_ids* (requires *reach_ids*).
+        * ``'metzone'`` – one row per meteorological zone.
+    by_landcover : bool
+        If True, break out results by landcover type.
+    landcovers : list of str, optional
+        Filter to only these landcover names before aggregating.
+    drainage_area : float, optional
+        Custom drainage area for watershed-level loading rate.
+        If None, calculated from the network.
 
     Returns
     -------
     pd.DataFrame
     """
-    df = catchment_loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover,temporal_grouping=temporal_grouping,agg_func=agg_func)
-    df = _filter_to_watershed(df,uci,reach_ids,upstream_reach_ids,drainage_area)
+    valid_spatial = ('catchment', 'watershed', 'metzone')
+    if spatial_grouping not in valid_spatial:
+        raise ValueError(
+            f"spatial_grouping must be one of {valid_spatial}, got '{spatial_grouping}'"
+        )
+    if spatial_grouping == 'watershed' and reach_ids is None:
+        raise ValueError("spatial_grouping='watershed' requires reach_ids")
 
+    validate_periods(simulation_period, aggregation_period)
+
+    # Get per-OPNID temporal summary
+    df = constituent_loading_summary(uci,hbn,constituent,start_year,end_year,
+                                     simulation_period=simulation_period,
+                                     aggregation_period=aggregation_period,
+                                     agg_func=agg_func)
+
+    # Join to catchment metadata
+    df = _join_catchments(df,uci,constituent)
+
+    # Derive temporal grouping column for group_prefix
+    temporal_grouping = aggregation_period_to_temporal_grouping(
+        simulation_period, aggregation_period
+    )
     group_prefix = [temporal_grouping] if temporal_grouping is not None else []
 
-    if by_landcover:
-        df = df.groupby(group_prefix + ['TVOLNO','landcover','constituent'])[['landcover_area','load']].sum().reset_index()
-        df['loading_rate'] = df['load']/df['landcover_area']
-    else:
-        df = df.groupby(group_prefix + ['constituent','watershed_area'])[['load']].sum().reset_index()
-        df['loading_rate'] = df['load']/df['watershed_area']
+    # Filter to selected landcovers
+    if landcovers is not None:
+        df = df.loc[df['landcover'].isin(landcovers)].copy()
+
+    # Prepare base columns
+    base_cols = ['constituent','TVOLNO','SVOLNO','SVOL','landcover',
+                 'landcover_area','catchment_area','loading_rate','load']
+    if temporal_grouping is not None:
+        base_cols = [temporal_grouping] + base_cols
+    df = df[df.columns.intersection(base_cols)]
+
+    # Filter to watershed if reach_ids provided
+    if reach_ids is not None:
+        df = _filter_to_watershed(df,uci,reach_ids,upstream_reach_ids,drainage_area)
+
+    # --- spatial aggregation -------------------------------------------------
+    if spatial_grouping == 'catchment':
+        if by_landcover:
+            df = df.groupby(group_prefix + ['TVOLNO','landcover','constituent'])[['landcover_area','load']].sum().reset_index()
+            df['loading_rate'] = df['load'] / df['landcover_area']
+        else:
+            df = df.groupby(group_prefix + ['TVOLNO','constituent','catchment_area'])[['load']].sum().reset_index()
+            df['loading_rate'] = df['load'] / df['catchment_area']
+
+    elif spatial_grouping == 'watershed':
+        ws_area = df['watershed_area'].iloc[0] if len(df) > 0 else None
+        if by_landcover:
+            df = df.groupby(group_prefix + ['landcover','constituent'])[['landcover_area','load']].sum().reset_index()
+            df['loading_rate'] = df['load'] / df['landcover_area']
+        else:
+            grp = group_prefix + ['constituent']
+            df = df.groupby(grp)[['load']].sum().reset_index()
+            df['watershed_area'] = ws_area
+            df['loading_rate'] = df['load'] / df['watershed_area']
+
+    elif spatial_grouping == 'metzone':
+        # Attach metzone metadata
+        meta_frames = []
+        for operation in ['PERLND', 'IMPLND']:
+            if operation in uci.opnid_dict:
+                meta = uci.opnid_dict[operation][['metzone']].copy()
+                meta['SVOL'] = operation
+                meta_frames.append(meta)
+        if meta_frames:
+            meta = pd.concat(meta_frames)
+            df = pd.merge(df, meta, left_on=['SVOL', 'SVOLNO'], right_index=True, how='left')
+        else:
+            df['metzone'] = 'unknown'
+
+        if by_landcover:
+            grp = group_prefix + ['metzone', 'landcover', 'constituent']
+            df = df.groupby(grp)[['landcover_area', 'load']].sum().reset_index()
+            df['loading_rate'] = df['load'] / df['landcover_area']
+        else:
+            grp = group_prefix + ['metzone', 'constituent']
+            df = df.groupby(grp)[['landcover_area', 'load']].sum().reset_index()
+            df['loading_rate'] = df['load'] / df['landcover_area']
 
     return df

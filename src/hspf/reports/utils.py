@@ -20,7 +20,7 @@ SIMULATION_PERIOD_TO_TIME_STEP = {
 
 #: Ordered list of period granularities from finest to coarsest.
 #: 'simulation' is a special sentinel meaning "the entire simulation span".
-PERIOD_ORDER = ['hourly', 'daily', 'monthly', 'yearly', 'simulation']
+PERIOD_ORDER = ['hourly', 'daily', 'monthly', 'seasonal', 'yearly', 'simulation']
 
 
 def simulation_period_to_time_step(simulation_period):
@@ -91,21 +91,21 @@ def validate_periods(simulation_period, aggregation_period):
 
 
 def aggregation_period_to_temporal_grouping(simulation_period, aggregation_period):
-    """Derive the legacy *temporal_grouping* value from the period pair.
+    """Derive the *temporal_grouping* value from the period pair.
 
     Returns
     -------
     str or None
-        The *temporal_grouping* string expected by
-        :func:`constituent_loading_summary` and friends, or ``None`` when no
-        temporal aggregation is needed.
+        The internal temporal-grouping key, or ``None`` when no temporal
+        grouping column is needed (raw output or full-simulation aggregate).
     """
-    if aggregation_period is None or aggregation_period == simulation_period:
+    if aggregation_period is None:
         return None
     mapping = {
         'monthly': 'month',
+        'seasonal': 'season',
         'yearly': 'year',
-        'simulation': None,   # handled as overall mean – no grouping column
+        'simulation': None,   # overall aggregate – no grouping column
     }
     return mapping.get(aggregation_period)
 

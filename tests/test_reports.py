@@ -211,7 +211,7 @@ def test_average_constituent_loading_annual_shape():
     reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
 
     try:
-        result = reports_mod._average_constituent_loading(uci, hbn, 'TP', 2000, 2001, time_step=5)
+        result = reports_mod._average_constituent_loading(uci, hbn, 'TP', 2000, 2001, simulation_period='yearly')
         assert 'OPERATION' in result.columns
         assert 'OPNID' in result.columns
         assert 'value' in result.columns
@@ -237,7 +237,7 @@ def test_average_constituent_loading_monthly_has_month():
     reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
 
     try:
-        result = reports_mod._average_constituent_loading(uci, hbn, 'TP', 2000, 2001, time_step=4, group_by_month=True)
+        result = reports_mod._average_constituent_loading(uci, hbn, 'TP', 2000, 2001, simulation_period='monthly', group_by_month=True)
         assert 'month' in result.columns
     finally:
         reports_mod.get_constituent_loading = original_fn
@@ -280,13 +280,13 @@ def test_constituent_loading_summary_no_grouping():
 
 
 def test_constituent_loading_summary_by_year():
-    """Group by year."""
+    """Group by year via aggregation_period='yearly'."""
     reports_mod, melted = _mock_get_constituent_loading()
     original_fn = reports_mod.get_constituent_loading
     reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
     try:
         result = reports_mod.constituent_loading_summary(
-            MagicMock(), MagicMock(), 'TP', 2000, 2001, temporal_grouping='year')
+            MagicMock(), MagicMock(), 'TP', 2000, 2001, aggregation_period='yearly')
         assert 'year' in result.columns
         assert set(result['year'].unique()) == {2000, 2001}
     finally:
@@ -294,13 +294,14 @@ def test_constituent_loading_summary_by_year():
 
 
 def test_constituent_loading_summary_by_season():
-    """Group by season."""
+    """Group by season via aggregation_period='seasonal'."""
     reports_mod, melted = _mock_get_constituent_loading()
     original_fn = reports_mod.get_constituent_loading
     reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
     try:
         result = reports_mod.constituent_loading_summary(
-            MagicMock(), MagicMock(), 'TP', 2000, 2001, temporal_grouping='season')
+            MagicMock(), MagicMock(), 'TP', 2000, 2001,
+            simulation_period='monthly', aggregation_period='seasonal')
         assert 'season' in result.columns
         assert set(result['season'].unique()).issubset({'DJF', 'MAM', 'JJA', 'SON'})
     finally:
@@ -338,8 +339,8 @@ def test_constituent_loading_summary_max_agg():
         reports_mod.get_constituent_loading = original_fn
 
 
-def test_constituent_loading_summary_invalid_grouping():
-    """Invalid temporal_grouping raises ValueError."""
+def test_constituent_loading_summary_invalid_aggregation_period():
+    """Invalid aggregation_period raises ValueError."""
     reports_mod, melted = _mock_get_constituent_loading()
     original_fn = reports_mod.get_constituent_loading
     reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
@@ -347,7 +348,7 @@ def test_constituent_loading_summary_invalid_grouping():
         import pytest
         with pytest.raises(ValueError):
             reports_mod.constituent_loading_summary(
-                MagicMock(), MagicMock(), 'TP', 2000, 2001, temporal_grouping='invalid')
+                MagicMock(), MagicMock(), 'TP', 2000, 2001, aggregation_period='invalid')
     finally:
         reports_mod.get_constituent_loading = original_fn
 
@@ -411,10 +412,10 @@ def test_simulation_period_to_time_step_invalid():
 
 
 def test_aggregation_period_to_temporal_grouping_same():
-    """Equal periods -> None (no grouping)."""
+    """Equal periods now apply their grouping (no special 'equal means None')."""
     from hspf.reports.utils import aggregation_period_to_temporal_grouping
-    assert aggregation_period_to_temporal_grouping('monthly', 'monthly') is None
-    assert aggregation_period_to_temporal_grouping('yearly', 'yearly') is None
+    assert aggregation_period_to_temporal_grouping('monthly', 'monthly') == 'month'
+    assert aggregation_period_to_temporal_grouping('yearly', 'yearly') == 'year'
 
 
 def test_aggregation_period_to_temporal_grouping_simulation():
@@ -515,3 +516,117 @@ def test_reports_class_lives_in_legacy():
     """Reports class module should be hspf.reports.legacy."""
     from hspf.reports import Reports
     assert Reports.__module__ == 'hspf.reports.legacy'
+
+
+# ---------------------------------------------------------------------------
+# Tests for unified loading_summary
+# ---------------------------------------------------------------------------
+
+def test_loading_summary_invalid_spatial_grouping():
+    """Invalid spatial_grouping raises ValueError."""
+    import pytest
+    from hspf.reports.loading import loading_summary
+    with pytest.raises(ValueError):
+        loading_summary(MagicMock(), MagicMock(), 'TP', spatial_grouping='invalid')
+
+
+def test_loading_summary_watershed_requires_reach_ids():
+    """spatial_grouping='watershed' without reach_ids raises ValueError."""
+    import pytest
+    from hspf.reports.loading import loading_summary
+    with pytest.raises(ValueError):
+        loading_summary(MagicMock(), MagicMock(), 'TP', spatial_grouping='watershed')
+
+
+def test_loading_summary_catchment_default():
+    """loading_summary with spatial_grouping='catchment' returns per-catchment data."""
+    import hspf.reports.loading as reports_mod
+    reports_mod_melted, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    uci = _make_mock_uci()
+    try:
+        result = reports_mod.loading_summary(uci, MagicMock(), 'TP', 2000, 2001,
+                                             spatial_grouping='catchment')
+        assert 'TVOLNO' in result.columns
+        assert 'load' in result.columns
+        assert 'loading_rate' in result.columns
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_loading_summary_catchment_by_landcover():
+    """loading_summary with by_landcover=True breaks out by landcover."""
+    import hspf.reports.loading as reports_mod
+    _, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    uci = _make_mock_uci()
+    try:
+        result = reports_mod.loading_summary(uci, MagicMock(), 'TP', 2000, 2001,
+                                             spatial_grouping='catchment', by_landcover=True)
+        assert 'landcover' in result.columns
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_loading_summary_with_landcovers_filter():
+    """loading_summary with landcovers filters to specified landcovers only."""
+    import hspf.reports.loading as reports_mod
+    _, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    uci = _make_mock_uci()
+    try:
+        result = reports_mod.loading_summary(uci, MagicMock(), 'TP', 2000, 2001,
+                                             spatial_grouping='catchment', landcovers=['Forest'])
+        assert len(result) > 0
+        assert 'load' in result.columns
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_loading_summary_seasonal_aggregation():
+    """loading_summary with aggregation_period='seasonal' groups by season."""
+    import hspf.reports.loading as reports_mod
+    _, melted = _mock_get_constituent_loading()
+    original_fn = reports_mod.get_constituent_loading
+    reports_mod.get_constituent_loading = lambda uci, hbn, constituent, time_step: melted
+    uci = _make_mock_uci()
+    try:
+        result = reports_mod.loading_summary(uci, MagicMock(), 'TP', 2000, 2001,
+                                             simulation_period='monthly',
+                                             aggregation_period='seasonal',
+                                             spatial_grouping='catchment')
+        assert 'season' in result.columns
+        assert set(result['season'].unique()).issubset({'DJF', 'MAM', 'JJA', 'SON'})
+    finally:
+        reports_mod.get_constituent_loading = original_fn
+
+
+def test_validate_periods_seasonal_ordering():
+    """'seasonal' is between 'monthly' and 'yearly' in period ordering."""
+    from hspf.reports.utils import validate_periods
+    validate_periods('monthly', 'seasonal')
+    validate_periods('seasonal', 'yearly')
+    validate_periods('daily', 'seasonal')
+
+
+def test_validate_periods_seasonal_finer_raises():
+    """'seasonal' aggregation is finer than 'yearly' simulation — should raise."""
+    import pytest
+    from hspf.reports.utils import validate_periods
+    with pytest.raises(ValueError):
+        validate_periods('yearly', 'seasonal')
+
+
+def test_aggregation_period_to_temporal_grouping_seasonal():
+    """'seasonal' maps to 'season'."""
+    from hspf.reports.utils import aggregation_period_to_temporal_grouping
+    assert aggregation_period_to_temporal_grouping('monthly', 'seasonal') == 'season'
+
+
+def test_aggregation_period_to_temporal_grouping_none():
+    """aggregation_period=None returns None (no grouping)."""
+    from hspf.reports.utils import aggregation_period_to_temporal_grouping
+    assert aggregation_period_to_temporal_grouping('monthly', None) is None

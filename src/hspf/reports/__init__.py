@@ -36,6 +36,8 @@ from hspf.reports.loading import (
     average_annual_constituent_loading,
     average_monthly_constituent_loading,
     _aggregate_catchment_loading,
+    _aggregate_catchment_by_metzone,
+    _aggregate_catchment_by_landcover_group,
     catchment_loading_summary,
     average_annual_catchment_loading,
     average_monthly_catchment_loading,
@@ -107,6 +109,11 @@ from hspf.reports.hydrology import (
 
 # --- utils ---
 from hspf.reports.utils import (
+    SIMULATION_PERIOD_TO_TIME_STEP,
+    PERIOD_ORDER,
+    simulation_period_to_time_step,
+    validate_periods,
+    aggregation_period_to_temporal_grouping,
     weighted_describe,
     weighted_parameter,
     weighted_output,

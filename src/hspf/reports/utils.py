@@ -6,6 +6,110 @@ import numpy as np
 import pandas as pd
 
 
+# ---------------------------------------------------------------------------
+# Period constants
+# ---------------------------------------------------------------------------
+
+#: Mapping from human-readable simulation period names to HBN time-step codes.
+SIMULATION_PERIOD_TO_TIME_STEP = {
+    'hourly': 2,
+    'daily': 3,
+    'monthly': 4,
+    'yearly': 5,
+}
+
+#: Ordered list of period granularities from finest to coarsest.
+#: 'simulation' is a special sentinel meaning "the entire simulation span".
+PERIOD_ORDER = ['hourly', 'daily', 'monthly', 'yearly', 'simulation']
+
+
+def simulation_period_to_time_step(simulation_period):
+    """Convert a *simulation_period* string to the integer HBN time-step code.
+
+    Parameters
+    ----------
+    simulation_period : str
+        One of 'hourly', 'daily', 'monthly', 'yearly'.
+
+    Returns
+    -------
+    int
+        HBN time-step code (2–5).
+
+    Raises
+    ------
+    ValueError
+        If *simulation_period* is not recognised.
+    """
+    if simulation_period not in SIMULATION_PERIOD_TO_TIME_STEP:
+        raise ValueError(
+            f"simulation_period must be one of "
+            f"{list(SIMULATION_PERIOD_TO_TIME_STEP.keys())}, "
+            f"got '{simulation_period}'"
+        )
+    return SIMULATION_PERIOD_TO_TIME_STEP[simulation_period]
+
+
+def validate_periods(simulation_period, aggregation_period):
+    """Validate that *aggregation_period* ≥ *simulation_period*.
+
+    Both values must come from :data:`PERIOD_ORDER`.  When they are equal no
+    temporal aggregation should be performed.
+
+    Parameters
+    ----------
+    simulation_period : str
+        Resolution of the raw model output.
+    aggregation_period : str or None
+        Period over which to aggregate.  ``None`` means "same as
+        *simulation_period*" (i.e. no aggregation).
+
+    Raises
+    ------
+    ValueError
+        If either period is unrecognised or if *aggregation_period* is finer
+        than *simulation_period*.
+    """
+    if simulation_period not in PERIOD_ORDER:
+        raise ValueError(
+            f"simulation_period must be one of {PERIOD_ORDER}, "
+            f"got '{simulation_period}'"
+        )
+    if aggregation_period is not None and aggregation_period not in PERIOD_ORDER:
+        raise ValueError(
+            f"aggregation_period must be one of {PERIOD_ORDER} or None, "
+            f"got '{aggregation_period}'"
+        )
+    if aggregation_period is not None:
+        sim_idx = PERIOD_ORDER.index(simulation_period)
+        agg_idx = PERIOD_ORDER.index(aggregation_period)
+        if agg_idx < sim_idx:
+            raise ValueError(
+                f"aggregation_period ('{aggregation_period}') cannot be finer "
+                f"than simulation_period ('{simulation_period}')"
+            )
+
+
+def aggregation_period_to_temporal_grouping(simulation_period, aggregation_period):
+    """Derive the legacy *temporal_grouping* value from the period pair.
+
+    Returns
+    -------
+    str or None
+        The *temporal_grouping* string expected by
+        :func:`constituent_loading_summary` and friends, or ``None`` when no
+        temporal aggregation is needed.
+    """
+    if aggregation_period is None or aggregation_period == simulation_period:
+        return None
+    mapping = {
+        'monthly': 'month',
+        'yearly': 'year',
+        'simulation': None,   # handled as overall mean – no grouping column
+    }
+    return mapping.get(aggregation_period)
+
+
 def weighted_describe(df, value_col, weight_col):
     """
     Calculate weighted statistics for a DataFrame.

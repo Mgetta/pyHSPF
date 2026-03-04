@@ -15,6 +15,7 @@ SIMULATION_PERIOD_TO_TIME_STEP = {
     'hourly': 2,
     'daily': 3,
     'monthly': 4,
+    'seasonal': 4,   # same as monthly, but with different grouping
     'yearly': 5,
 }
 
@@ -324,11 +325,18 @@ def _apply_time_aggregation(df, freq, group_col, agg_funcs=None):
 
 
 def weighted_mean(df,value_col,weight_col):
-   weighted_mean = (df[value_col] * df[weight_col]).sum() / df[weight_col].sum()
-   return pd.DataFrame({
-       'AFACTR' : df[weight_col].sum(),
-       value_col: [weighted_mean]})
-                         
+    total = df[weight_col].sum()
+    if total == 0:
+        df = pd.DataFrame({
+            'AFACTR' : 0,
+            value_col: [np.nan]})
+    else:
+        weighted_mean = (df[value_col] * df[weight_col]).sum() / df[weight_col].sum()
+        df = pd.DataFrame({
+            'AFACTR' : df[weight_col].sum(),
+            value_col: [weighted_mean]})
+    return df
+                            
 def annual_weighted_output(uci,hbn,ts_name,operation = 'PERLND',t_code = 5,opnids = None,group_by = None,start_year = 1996,end_year = 2100):
     assert (group_by in [None,'landcover','opnid'])
     df = hbn.get_multiple_timeseries(operation,t_code,ts_name,opnids = opnids)
@@ -350,4 +358,21 @@ def annual_weighted_output(uci,hbn,ts_name,operation = 'PERLND',t_code = 5,opnid
         df = df.groupby(df['SVOLNO'])[[ts_name,'AFACTR']].apply(lambda x: weighted_mean(x,ts_name,'AFACTR')).droplevel(1)
     
     df = df.set_index([df.index,'AFACTR'])
+    return df
+
+
+def add_temporal_groups(df,time_step):
+    assert 'datetime' in df.columns, "DataFrame must have a 'datetime' column"
+    if time_step <= 5:
+        df['year'] = df['datetime'].dt.year
+    if time_step <= 4:
+        df['month'] = df['datetime'].dt.month
+        df['season'] = df['datetime'].dt.month.map(
+    {12:'winter',1:'winter',2:'winter',3:'spring',4:'spring',5:'spring',
+     6:'summer',7:'summer',8:'summer',9:'fall',10:'fall',11:'fall'})
+    if time_step <= 3:
+        df['day'] = df['datetime'].dt.day
+    if time_step <= 2:
+        df['hour'] = df['datetime'].dt.hour
+
     return df

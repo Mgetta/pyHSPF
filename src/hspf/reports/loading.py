@@ -8,6 +8,8 @@ from hspf.reports.phosphorus import total_phosphorous
 from hspf.reports.utils import (
     validate_periods,
     aggregation_period_to_temporal_grouping,
+    add_temporal_groups,
+    SIMULATION_PERIOD_TO_TIME_STEP
 )
 
 
@@ -27,7 +29,7 @@ def catchment_areas(uci):
     return df
 
 
-def get_constituent_loading(uci,hbn,constituent,time_step = 5):
+def get_constituent_loading(uci,hbn,constituent,time_step =5,start_year = 1996,end_year = 2100):
     if constituent == 'TP':
         perlnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'PERLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
         implnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'IMPLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
@@ -45,6 +47,9 @@ def get_constituent_loading(uci,hbn,constituent,time_step = 5):
     # units = 'lb/acre'  
     if constituent == 'Q':
         df.loc[:, 'value'] = df['value']/12  # convert to ft/acre/month
+    
+    df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
+
     
     return df
 
@@ -78,6 +83,58 @@ def get_catchment_loading(uci,hbn,constituent,time_step=5):
     return df
 
 
+def monthly_loading(uci,hbn,constituent,aggregation_period = 'yearly',start_year = 1996,end_year = 2100):
+    df = get_constituent_loading(uci,hbn,constituent,time_step=4,start_year=start_year,end_year=end_year)
+    df = add_temporal_groups(df, 4)
+
+    if aggregation_period == 'monthly':
+        df = df.groupby(['month','OPERATION','OPNID'])['value'].aggregate(func='mean').reset_index()
+    elif aggregation_period == 'simulation':
+    # agg_period = simulation period
+        df = df.groupby(['OPERATION','OPNID'])['value'].aggregate(func='mean').reset_index()
+    elif aggregation_period == 'yearly':
+        # agg_period = monthly
+        df = df.groupby(['year','OPERATION','OPNID'])['value'].aggregate(func='mean').reset_index()
+    elif aggregation_period == 'seasonal':
+        # agg_period = seasonal
+        df = df.groupby(['season','OPERATION','OPNID'])['value'].aggregate(func='mean').reset_index()
+    elif aggregation_period is None:
+        # agg_period = none
+        df = df.groupby(['datetime','OPERATION','OPNID'])['value'].aggregate(func='mean').reset_index()
+    else:
+        raise ValueError(f"Unsupported aggregation_period '{aggregation_period}' for simulation_period 'monthly'")
+
+    return df
+
+def seasonal_loading(uci,hbn,constituent,aggregation_period = 'yearly',start_year = 1996,end_year = 2100):
+    df = get_constituent_loading(uci,hbn,constituent,time_step=4,start_year=start_year,end_year=end_year)
+    df = add_temporal_groups(df, 4)
+    df = df.groupby(['season','year','OPNID','OPERATION'])['value'].aggregate('sum').reset_index()
+
+    if aggregation_period is None:
+        pass
+    elif aggregation_period == 'yearly':
+        df = df.groupby(['season','OPERATION','OPNID'])['value'].aggregate('mean').reset_index()
+    else:
+        raise ValueError(f"Unsupported aggregation_period '{aggregation_period}' for seasonal loading")
+    
+    return df
+
+def annual_loading(uci,hbn,constituent,aggregation_period = None,start_year = 1996,end_year = 2100):
+    df = get_constituent_loading(uci,hbn,constituent,time_step=5,start_year=start_year,end_year=end_year)
+    df = add_temporal_groups(df, 5)
+
+    if aggregation_period == 'yearly':
+            df = df.groupby(['OPERATION','OPNID'])['value'].aggregate(func='mean').reset_index()
+    elif aggregation_period is None:
+        df = df.groupby(['year','OPERATION','OPNID'])['value'].aggregate(func='mean').reset_index()
+    elif aggregation_period == 'simulation':
+        df = df.groupby(['OPERATION','OPNID'])['value'].aggregate(func='mean').reset_index()
+    else:
+        raise ValueError(f"Unsupported aggregation_period '{aggregation_period}' for annual loading")
+    return df
+
+
 def get_watershed_loading(uci,hbn,constituent,reach_ids=None,upstream_reach_ids = None,by_landcover = False,time_step = 5):
     '''
     Edge of field loading for all catchments within a watershed defined by reach_ids and upstream_reach_ids
@@ -92,6 +149,18 @@ def get_watershed_loading(uci,hbn,constituent,reach_ids=None,upstream_reach_ids 
     df = df.loc[df['TVOLNO'].isin(reach_ids)]
     return df
 
+def _temporal_aggregation(df,simulation_period,aggregation_period,agg_func):
+    temporal_col = aggregation_period_to_temporal_grouping(simulation_period, aggregation_period)
+    if temporal_col is not None:
+        group_cols = [temporal_col, 'OPERATION', 'OPNID']
+    elif aggregation_period is None:
+        group_cols = ['datetime', 'OPERATION', 'OPNID']
+    else:
+        # aggregation_period='simulation' → aggregate across all time
+        group_cols = ['OPERATION', 'OPNID']
+    
+    df = df.groupby(group_cols)['value'].agg(agg_func).reset_index()
+    return df
 
 def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean'):
     """
@@ -121,27 +190,12 @@ def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year =
         Columns: [OPERATION, OPNID, value] plus temporal grouping column if specified.
     """
 
-    df = get_constituent_loading(uci,hbn,constituent,time_step=simulation_period)
-    df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
-    group_cols = ['OPERATION','OPNID']
-    if aggregation_period is None:
-        group_cols = ['datetime'] + group_cols
-    elif aggregation_period == 'monthly':
-        df['month'] = df['datetime'].dt.month
-        group_cols = ['month'] + group_cols
-    elif aggregation_period == 'yearly':
-        df['year'] = df['datetime'].dt.year
-        group_cols = ['year'] + group_cols
-    elif aggregation_period == 'seasonal':
-        df['season'] = df['datetime'].dt.month.map(
-            {12:'DJF',1:'DJF',2:'DJF',3:'MAM',4:'MAM',5:'MAM',
-             6:'JJA',7:'JJA',8:'JJA',9:'SON',10:'SON',11:'SON'})
-        group_cols = ['season'] + group_cols
-    elif aggregation_period == 'simulation':
-        pass  # no temporal grouping column — aggregate across all time
-    else:
-        raise ValueError(f"Unsupported aggregation_period '{aggregation_period}'")
-    df = df.groupby(group_cols)['value'].agg(agg_func).reset_index()
+    validate_periods(simulation_period, aggregation_period)
+    
+    # Get per-OPNID values
+    df = get_constituent_loading(uci,hbn,constituent,simulation_period=simulation_period)   
+
+    # Filter to selected years
     return df
 
 
@@ -213,24 +267,23 @@ def loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,
 
     validate_periods(simulation_period, aggregation_period)
 
-    # Get per-OPNID temporal summary
-    df = constituent_loading_summary(uci,hbn,constituent,start_year,end_year,
-                                     simulation_period=simulation_period,
-                                     aggregation_period=aggregation_period,
-                                     agg_func=agg_func)
 
-    # Join to catchment metadata
+
+    # Get per-OPNID values
+    if simulation_period == 'monthly':
+        df = monthly_loading(uci,hbn,constituent,aggregation_period, start_year, end_year)
+    elif simulation_period == 'seasonal':
+        df = seasonal_loading(uci,hbn,constituent,aggregation_period, start_year, end_year)
+    elif simulation_period == 'yearly':
+        df = annual_loading(uci,hbn,constituent,aggregation_period, start_year, end_year)
+    else:
+        raise ValueError(f"Unsupported simulation_period '{simulation_period}'")
+    
+
+    group_prefix = [col for col in df.columns if col not in ['OPERATION', 'OPNID', 'value']]
+    
     df = _join_catchments(df,uci,constituent)
 
-    # Add relevant temporal grouping columns for spatial aggregation
-    temporal_col = aggregation_period_to_temporal_grouping(simulation_period, aggregation_period)
-    if temporal_col is not None:
-        group_prefix = [temporal_col]
-    elif aggregation_period is None:
-        group_prefix = ['datetime']
-    else:
-        # aggregation_period='simulation' → aggregate across all time
-        group_prefix = []
 
     # Filter to selected landcovers
     if landcovers is not None:

@@ -56,7 +56,7 @@ def local_loading(constituent,uci,hbn,t_code,reach_ids = None):
 
 
 
-def catchment_contributions(uci,hbn,constituent,target_reach_id, landcover = None):
+def catchment_contributions(uci,hbn,constituent,target_reach_id, landcovers = None,start_year = 1996, end_year = 2100):
     p = uci.network.paths(target_reach_id)
     p[target_reach_id] = [target_reach_id]
     fate = channel_fate(constituent,uci,hbn,5)
@@ -64,8 +64,9 @@ def catchment_contributions(uci,hbn,constituent,target_reach_id, landcover = Non
     fate_factors.columns = list(p.keys())
 
     fate_factors = fate_factors.reset_index().melt(id_vars = 'datetime')
-
-    df = get_catchment_loading(uci,hbn,constituent,by_landcover = True)
+    
+    df = get_catchment_loading(uci,hbn,constituent)
+    df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
     df = pd.merge(df,fate_factors,left_on = ['TVOLNO','datetime'],right_on = ['variable','datetime'])
     
     df['contribution'] = df['value']*df['load']
@@ -77,8 +78,8 @@ def catchment_contributions(uci,hbn,constituent,target_reach_id, landcover = Non
     
     df = df.groupby(['TVOLNO','landcover','landcover_area'])[['load','contribution','contribution_perc','target_load']].mean().reset_index()
 
-    if landcover is not None:
-        df = df.loc[df['landcover'] == landcover]
+    if landcovers is not None:
+        df = df.loc[df['landcover'].isin(landcovers)]
 
     else:
         df = df.groupby(['TVOLNO',])[['landcover_area','load','contribution','contribution_perc']].sum().reset_index()

@@ -55,13 +55,18 @@ class hspfModel():
         
     def _reinitialize(self,uci_file:str,run_model:bool = False):
         self.uci = UCI(uci_file)
+        self.hbn_paths= []
+        self.wdm_paths = []
+        self.uci_file = Path(uci_file).resolve()
         self.validate_uci(run_model = run_model)
+
         self.hbns = hbn.hbnInterface(self.hbn_paths)
         try:
             self.wdms = wdmInterface(self.wdm_paths)
         except:
             self.wdms = None
         self.reports = ReportsAccessor(self.uci,self.hbns,self.wdms)
+        self.outputs = outputWriter(self.uci,self.hbns)
 
     def validate_wdms(self):
         # Ensure wdm files exist and the folders for the other file types exist relative

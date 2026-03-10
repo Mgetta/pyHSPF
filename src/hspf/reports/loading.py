@@ -76,8 +76,8 @@ def _join_catchments(df,uci,constituent):
     df['constituent'] = constituent
     return df
 
-def get_catchment_loading(uci,hbn,constituent,time_step=5):
-    df = get_constituent_loading(uci,hbn,constituent,time_step)
+def get_catchment_loading(uci,hbn,constituent,time_step=5,start_year=1996,end_year=2100):
+    df = get_constituent_loading(uci,hbn,constituent,time_step,start_year,end_year)
     df = _join_catchments(df,uci,constituent)
     df = df[['datetime','constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']]
     return df

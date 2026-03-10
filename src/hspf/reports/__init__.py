@@ -115,6 +115,18 @@ from hspf.reports.utils import (
     annual_weighted_output,
 )
 
+# --- residence ---
+from hspf.reports.residence import (
+    residence_time,
+    residence_time_stats,
+    turnover_ratio,
+    exceedance_probability,
+    cumulative_exposure,
+    residence_time_distribution,
+    seasonal_residence_time,
+    multi_reach_residence_time,
+)
+
 # --- legacy ---
 from hspf.reports.legacy import (
     avg_subwatershed_loading,

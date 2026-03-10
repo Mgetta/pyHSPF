@@ -113,6 +113,16 @@ from hspf.reports.utils import (
     annual_weighted_output,
 )
 
+# --- residence ---
+from hspf.reports.residence import (
+    get_reach_hydraulics,
+    mannings_velocity,
+    reach_travel_time,
+    path_travel_time,
+    travel_times,
+    travel_time_summary,
+)
+
 # --- legacy ---
 from hspf.reports.legacy import (
     avg_subwatershed_loading,

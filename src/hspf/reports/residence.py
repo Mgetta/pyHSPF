@@ -22,6 +22,12 @@ Key Concepts
 import numpy as np
 import pandas as pd
 
+# Calendar-month to meteorological-season mapping
+_SEASON_MAP = {12: "DJF", 1: "DJF", 2: "DJF",
+               3: "MAM", 4: "MAM", 5: "MAM",
+               6: "JJA", 7: "JJA", 8: "JJA",
+               9: "SON", 10: "SON", 11: "SON"}
+
 
 # ---------------------------------------------------------------------------
 # Core residence-time timeseries
@@ -287,17 +293,12 @@ def seasonal_residence_time(volume, outflow, grouping="month"):
     ValueError
         If *grouping* is not one of the accepted values.
     """
-    SEASON_MAP = {12: "DJF", 1: "DJF", 2: "DJF",
-                  3: "MAM", 4: "MAM", 5: "MAM",
-                  6: "JJA", 7: "JJA", 8: "JJA",
-                  9: "SON", 10: "SON", 11: "SON"}
-
     rt = residence_time(volume, outflow)
 
     if grouping == "month":
         key = rt.index.month
     elif grouping == "season":
-        key = rt.index.month.map(SEASON_MAP)
+        key = rt.index.month.map(_SEASON_MAP)
     elif grouping == "year":
         key = rt.index.year
     else:

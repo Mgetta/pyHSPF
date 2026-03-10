@@ -121,6 +121,14 @@ from hspf.reports.residence import (
     path_travel_time,
     travel_times,
     travel_time_summary,
+    nominal_residence_time,
+    residence_time_stats,
+    turnover_ratio,
+    exceedance_probability,
+    cumulative_exposure,
+    residence_time_distribution,
+    seasonal_residence_time,
+    multi_reach_residence_time,
 )
 
 # --- legacy ---

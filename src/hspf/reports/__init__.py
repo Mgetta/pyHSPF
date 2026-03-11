@@ -59,6 +59,15 @@ from hspf.reports._analytics.yields import (
     yield_summary,
 )
 
+from hspf.reports._analytics.contributions import (
+    compute_fate_factors,
+    compute_path_fate_factors,
+    compute_local_load,
+    compute_contributions,
+    compute_contribution_pct,
+    contribution_summary,
+)
+
 # --- contributions ---
 from hspf.reports.contributions import (
     allocation_selector,

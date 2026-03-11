@@ -11,4 +11,6 @@ Submodules
 ----------
 yields
     Constituent yield and load analytics (compute_yield, average_annual, etc.).
+contributions
+    Channel contribution and fate analytics (compute_fate_factors, compute_contributions, etc.).
 """

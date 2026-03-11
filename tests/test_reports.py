@@ -510,3 +510,128 @@ def test_constituent_loading_summary_equal_periods_groups():
         assert 'month' in result.columns
     finally:
         reports_mod.get_constituent_loading = original_fn
+
+
+# ---------------------------------------------------------------------------
+# Tests for _analytics.yields (model-agnostic layer)
+# ---------------------------------------------------------------------------
+
+def _make_load_series():
+    """Monthly load timeseries spanning 2000-2002 (36 months)."""
+    dates = pd.date_range('2000-01-01', periods=36, freq='MS')
+    return pd.Series(np.arange(1.0, 37.0), index=dates)
+
+
+def _make_load_dataframe():
+    """Monthly load DataFrame with two reaches spanning 2000-2002."""
+    dates = pd.date_range('2000-01-01', periods=36, freq='MS')
+    return pd.DataFrame({'R1': np.arange(1.0, 37.0),
+                         'R2': np.arange(37.0, 73.0)}, index=dates)
+
+
+def test_compute_yield_scalar_area():
+    from hspf.reports._analytics.yields import compute_yield
+    load = _make_load_series()
+    yld = compute_yield(load, 100.0)
+    assert np.allclose(yld, load / 100.0)
+
+
+def test_compute_yield_series_area():
+    from hspf.reports._analytics.yields import compute_yield
+    load = _make_load_dataframe()
+    areas = pd.Series({'R1': 100.0, 'R2': 200.0})
+    yld = compute_yield(load, areas)
+    assert np.allclose(yld['R1'], load['R1'] / 100.0)
+    assert np.allclose(yld['R2'], load['R2'] / 200.0)
+
+
+def test_compute_net_load_no_upstream():
+    from hspf.reports._analytics.yields import compute_net_load
+    load = _make_load_series()
+    net = compute_net_load(load)
+    assert (net == load).all()
+
+
+def test_compute_net_load_with_upstream():
+    from hspf.reports._analytics.yields import compute_net_load
+    load = _make_load_series()
+    upstream = load * 0.4
+    net = compute_net_load(load, upstream)
+    assert np.allclose(net, load - upstream)
+
+
+def test_average_annual_full_range():
+    from hspf.reports._analytics.yields import average_annual
+    load = _make_load_series()
+    result = average_annual(load)
+    assert np.isclose(result, load.mean())
+
+
+def test_average_annual_filtered():
+    from hspf.reports._analytics.yields import average_annual
+    load = _make_load_series()
+    result = average_annual(load, start_year=2000, end_year=2000)
+    assert np.isclose(result, load['2000'].mean())
+
+
+def test_average_monthly_returns_12_months():
+    from hspf.reports._analytics.yields import average_monthly
+    load = _make_load_series()
+    result = average_monthly(load)
+    assert len(result) == 12
+    assert list(result.index) == list(range(1, 13))
+
+
+def test_average_monthly_filtered():
+    from hspf.reports._analytics.yields import average_monthly
+    load = _make_load_series()
+    result = average_monthly(load, start_year=2000, end_year=2000)
+    assert len(result) == 12
+
+
+def test_annual_totals():
+    from hspf.reports._analytics.yields import annual_totals
+    load = _make_load_series()
+    result = annual_totals(load, 2000, 2001)
+    assert len(result) == 2
+    assert set(result.index) == {2000, 2001}
+    assert np.isclose(result[2000], load['2000'].sum())
+
+
+def test_monthly_totals():
+    from hspf.reports._analytics.yields import monthly_totals
+    load = _make_load_series()
+    result = monthly_totals(load, 2000, 2001)
+    assert len(result) == 24  # 12 months × 2 years
+
+
+def test_yield_summary_keys():
+    from hspf.reports._analytics.yields import yield_summary
+    load = _make_load_series()
+    result = yield_summary(load, 500.0, 2000, 2001)
+    assert set(result.keys()) == {'timeseries', 'annual_average', 'monthly_average'}
+
+
+def test_yield_summary_timeseries_shape():
+    from hspf.reports._analytics.yields import yield_summary
+    load = _make_load_series()
+    result = yield_summary(load, 500.0)
+    assert len(result['timeseries']) == len(load)
+    assert np.allclose(result['timeseries'], load / 500.0)
+
+
+def test_yield_summary_monthly_average_length():
+    from hspf.reports._analytics.yields import yield_summary
+    load = _make_load_series()
+    result = yield_summary(load, 500.0)
+    assert len(result['monthly_average']) == 12
+
+
+def test_analytics_exports_from_package():
+    """Analytics functions are accessible from the top-level reports package."""
+    from hspf.reports import (
+        compute_yield, compute_net_load, average_annual,
+        average_monthly, annual_totals, monthly_totals, yield_summary,
+    )
+    assert callable(compute_yield)
+    assert callable(yield_summary)

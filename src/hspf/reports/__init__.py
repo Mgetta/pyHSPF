@@ -48,6 +48,17 @@ from hspf.reports.yields import (
     average_monthly_yield,
 )
 
+# --- analytics (model-agnostic) ---
+from hspf.reports._analytics.yields import (
+    compute_yield,
+    compute_net_load,
+    average_annual,
+    average_monthly,
+    annual_totals,
+    monthly_totals,
+    yield_summary,
+)
+
 # --- contributions ---
 from hspf.reports.contributions import (
     allocation_selector,

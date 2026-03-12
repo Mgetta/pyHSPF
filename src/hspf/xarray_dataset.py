@@ -21,6 +21,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+# Sentinel used when an integer metadata field has no value for a segment
+_MISSING_INT = -1
+
 
 # ---------------------------------------------------------------------------
 # HBN → xarray
@@ -129,7 +132,7 @@ def hbn_to_xarray(hbn):
     )
     ds.coords["opnid"] = (
         "segment",
-        [segment_opnid.get(s, -1) for s in all_segments],
+        [segment_opnid.get(s, _MISSING_INT) for s in all_segments],
     )
     ds.coords["activity"] = (
         "segment",
@@ -207,12 +210,12 @@ def uci_to_xarray(uci):
             data_vars["landcover"] = ("segment", [lsid_map.get(s, "") for s in segments])
             data_vars["downstream_rchres"] = (
                 "segment",
-                [tvolno_map.get(s, -1) for s in segments],
+                [tvolno_map.get(s, _MISSING_INT) for s in segments],
             )
 
             if "MLNO" in sw.columns:
                 mlno_map = dict(zip(sw_seg_filtered, sw_filtered["MLNO"].astype(int).values))
-                data_vars["mass_link"] = ("segment", [mlno_map.get(s, -1) for s in segments])
+                data_vars["mass_link"] = ("segment", [mlno_map.get(s, _MISSING_INT) for s in segments])
     except Exception:
         pass
 
@@ -229,7 +232,7 @@ def uci_to_xarray(uci):
                     }
                     data_vars["metzone"] = (
                         "segment",
-                        [mz_map.get(s, -1) for s in segments],
+                        [mz_map.get(s, _MISSING_INT) for s in segments],
                     )
     except Exception:
         pass
@@ -243,9 +246,9 @@ def uci_to_xarray(uci):
             for rid in reach_ids:
                 try:
                     successors = list(network.graph.successors(rid))
-                    downstream.append(successors[0] if successors else -1)
+                    downstream.append(successors[0] if successors else _MISSING_INT)
                 except Exception:
-                    downstream.append(-1)
+                    downstream.append(_MISSING_INT)
             rch_labels = [f"RCHRES_{rid:03d}" for rid in reach_ids]
             data_vars["downstream_reach"] = (
                 "reach_segment",
@@ -317,7 +320,7 @@ def build_model_dataset(hbn, uci):
                 elif np.issubdtype(dtype, np.floating):
                     fill = np.nan
                 else:
-                    fill = -1
+                    fill = _MISSING_INT
                 aligned = [v if v is not None else fill for v in aligned]
                 ds.coords[var_name] = ("segment", aligned)
 

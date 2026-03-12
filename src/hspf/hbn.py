@@ -198,7 +198,7 @@ class hbnInterface:
             raise ValueError(f"No data found for {t_opn} {t_cons} {t_code} {opnid} {activity}")
         
         if long_format:
-            df = df.reset_index().melt(id_vars = ['index'],var_name = 'OPNID',value_name = t_con)
+            df = df.reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID',value_name = t_con)
             df.rename(columns = {'index':'datetime'},inplace = True)
             df['OPERATION'] = t_opn
         return df
@@ -209,7 +209,7 @@ class hbnInterface:
             raise ValueError(f"No data found for {t_opn} {t_con} {t_code} {opnids} {activity}")
         
         if long_format:
-            df = df.reset_index().melt(id_vars = ['index'],var_name = 'OPNID',value_name = 'value')
+            df = df.reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID',value_name = 'value')
             df.rename(columns = {'index':'datetime'},inplace = True)
             df['TIMESERIES'] = t_con
             df['OPERATION'] = t_opn

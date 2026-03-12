@@ -145,7 +145,7 @@ def weighted_describe(df, value_col, weight_col):
 def weighted_parameter(uci,operation, table_name, table_id, parameter, opnids = None):
     
 
-    values = uci.table(operation,table_name,table_id)[['parameter']]
+    values = uci.table(operation,table_name,table_id)[[parameter]].copy()
     if opnids is not None:
         values = values.loc[opnids].reset_index()
 
@@ -154,7 +154,7 @@ def weighted_parameter(uci,operation, table_name, table_id, parameter, opnids = 
         # Merge with network data
     df = pd.merge(
         uci.network.subwatersheds().reset_index(),
-        df,
+        values,
         left_on=['SVOLNO', 'SVOL'],
         right_on=['OPNID', 'OPERATION'],
         how='inner'

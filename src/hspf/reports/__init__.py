@@ -48,25 +48,6 @@ from hspf.reports.yields import (
     average_monthly_yield,
 )
 
-# --- analytics (model-agnostic) ---
-from hspf.reports._analytics.yields import (
-    compute_yield,
-    compute_net_load,
-    average_annual,
-    average_monthly,
-    annual_totals,
-    monthly_totals,
-    yield_summary,
-)
-
-from hspf.reports._analytics.contributions import (
-    compute_fate_factors,
-    compute_path_fate_factors,
-    compute_local_load,
-    compute_contributions,
-    compute_contribution_pct,
-    contribution_summary,
-)
 
 # --- contributions ---
 from hspf.reports.contributions import (
@@ -134,16 +115,11 @@ from hspf.reports.utils import (
 )
 
 # --- analytics: timeseries ---
-from hspf.reports._analytics.timeseries import (
+from hspf.reports.timeseries import (
     filter_years,
     filter_months,
     aggregate,
 )
-
-# --- analytics: loading ---
-from hspf.reports._analytics.loading import (
-    compute_load,
-    compute_loading_rate,
 # --- residence ---
 from hspf.reports.residence import (
     get_reach_hydraulics,

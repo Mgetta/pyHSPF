@@ -3,18 +3,12 @@
 Channel contributions and allocation reports.
 """
 import pandas as pd
-
 from hspf.reports.loading import get_catchment_loading
-from hspf.reports._analytics.contributions import (
-    compute_fate_factors,
-    compute_path_fate_factors,
-    compute_local_load,
-    compute_contributions,
-    compute_contribution_pct,
-    contribution_summary,
-)
+from hspf.reports.timeseries import filter_years
+from hspf.reports.timeseries import filter_months
 
-allocation_selector = {'Q': {'input': ['IVOL'],
+
+ALLOCATION_SELECTOR = {'Q': {'input': ['IVOL'],
                              'output': ['ROVOL']},
                        'TP': {'input': ['PTOTIN'],
                               'output': ['PTOTOUT']},
@@ -28,39 +22,38 @@ allocation_selector = {'Q': {'input': ['IVOL'],
                               'output': ['TAMOUTTOT', 'NTOTORGOUT']}
                        }
 
-def channel_inflows(constituent,uci,hbn,t_code,reach_ids = None):
+def channel_inflows(constituent,hbn,t_code,reach_ids = None):
     load_in =  sum([hbn.get_multiple_timeseries('RCHRES',
                                        t_code,
                                        t_cons,
                                        opnids = reach_ids)
-               for t_cons in allocation_selector[constituent]['input']])
+               for t_cons in ALLOCATION_SELECTOR[constituent]['input']])
     
     if constituent == 'TSS':
         load_in = load_in*2000
     
     return load_in
 
-def channel_outflows(constituent,uci,hbn,t_code,reach_ids = None):
+def channel_outflows(constituent,hbn,t_code,reach_ids = None):
     load_out =  sum([hbn.get_multiple_timeseries('RCHRES',
                                        t_code,
                                        t_cons,
                                        opnids = reach_ids)
-               for t_cons in allocation_selector[constituent]['output']])
+               for t_cons in ALLOCATION_SELECTOR[constituent]['output']])
     if constituent == 'TSS':
         load_out = load_out*2000
     return load_out
 
-def channel_fate(constituent,uci,hbn,t_code,reach_ids = None):
-    load_in = channel_inflows(constituent,uci,hbn,t_code,reach_ids)
-    load_out = channel_outflows(constituent,uci,hbn,t_code,reach_ids)
-    return compute_fate_factors(load_in, load_out)
-
+def channel_fate(constituent,hbn,t_code,reach_ids = None):
+    load_in = channel_inflows(constituent,hbn,t_code,reach_ids)
+    load_out = channel_outflows(constituent,hbn,t_code,reach_ids)
+    return load_out / load_in
 
 def local_loading(constituent,uci,hbn,t_code,reach_ids = None):
-    load_in = channel_inflows(constituent,uci,hbn,t_code,reach_ids)
-    load_out = channel_outflows(constituent,uci,hbn,t_code,reach_ids)
+    load_in = channel_inflows(constituent,hbn,t_code,reach_ids)
+    load_out = channel_outflows(constituent,hbn,t_code,reach_ids)
     upstream_reach_map = {reach_id: list(uci.network.upstream(reach_id)) for reach_id in load_in.columns}
-    return compute_local_load(load_in, load_out, upstream_reach_map)
+    return _compute_local_load(load_in, load_out, upstream_reach_map)
 
 
 
@@ -68,8 +61,8 @@ def catchment_contributions(uci,hbn,constituent,target_reach_id, landcovers = No
     p = uci.network.paths(target_reach_id)
     p[target_reach_id] = [target_reach_id]
     fate = channel_fate(constituent,uci,hbn,5)
-    fate_factors = compute_path_fate_factors(fate, p)
-
+    fate_factors = _compute_path_fate_factors(fate, p)
+    target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
     fate_factors = fate_factors.reset_index().melt(id_vars = 'datetime')
     
     df = get_catchment_loading(uci,hbn,constituent)
@@ -78,7 +71,6 @@ def catchment_contributions(uci,hbn,constituent,target_reach_id, landcovers = No
     
     df['contribution'] = df['value']*df['load']
 
-    target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
     
     df = pd.merge(df,target_load.reset_index().melt(id_vars='datetime',var_name = 'target_reach',value_name = 'target_load'),left_on='datetime',right_on='datetime')
     df['contribution_perc'] = df['contribution']/(df['target_load'])*100
@@ -93,15 +85,160 @@ def catchment_contributions(uci,hbn,constituent,target_reach_id, landcovers = No
 
     return df
 
-def total_contributions(constituent,uci,hbn,target_reach_id, as_percent = True):
+def total_contributions(constituent,uci,hbn,target_reach_id, start_year = 1996, end_year = 2100):
     p = uci.network.paths(target_reach_id)
     p[target_reach_id] = [target_reach_id]
     fate = channel_fate(constituent,uci,hbn,5)
     loads = local_loading(constituent,uci,hbn,5)
-    fate_factors = compute_path_fate_factors(fate, p)
+    fate_factors = _compute_path_fate_factors(fate, p)
     target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
 
-    contribution = compute_contributions(loads, fate_factors)
-    df = contribution_summary(contribution, loads, target_load)
+    contribution = _compute_contributions(loads, fate_factors)
+    df = _summarize(contribution, loads, target_load,start_year, end_year)
     df = df.rename(columns={'source_id': 'TVOLNO', 'contribution_pct': 'contribution_perc'})
     return df[['TVOLNO','load','contribution','contribution_perc']]
+
+
+def catchment_contribution_summary(uci,hbn,target_reach_id,landcovers = None,start_year = 1996, end_year = 2100):
+    dfs = []
+    for constituent in ['Q','TP','TSS']:
+        df = catchment_contributions(uci,hbn,constituent,target_reach_id,landcovers,start_year,end_year)
+        df['constituent'] = constituent
+        dfs.append(df)
+    return pd.concat(dfs,axis = 0)
+
+
+
+##% private Utility functions for contributions report
+
+def _compute_path_fate_factors(fate_ts, routing_paths):
+    """Compute cumulative fate factors along routing paths.
+
+    For each source reach, the path fate factor at each timestep is the product
+    of the per-reach fate factors along the routing path from source to outlet.
+
+    Parameters
+    ----------
+    fate_ts : pd.DataFrame
+        Per-reach fate factors. Columns are reach IDs, index is DatetimeIndex.
+    routing_paths : dict
+        Mapping of {source_id: [list of reach_ids along path from source to outlet]}.
+        The outlet itself should have a path of [outlet_id].
+
+    Returns
+    -------
+    pd.DataFrame
+        Cumulative path fate factors. Columns are source reach IDs,
+        index is DatetimeIndex. Values are the product of fate factors
+        along each source's path.
+    """
+    fate_factors = pd.concat(
+        [fate_ts[path].prod(axis=1) for path in routing_paths.values()],
+        axis=1,
+    )
+    fate_factors.columns = list(routing_paths.keys())
+    return fate_factors
+
+
+def _compute_local_load(inflow_ts, outflow_ts, upstream_reach_map):
+    """Compute local (incremental) load at each reach.
+
+    Local load = reach total inflow - sum of upstream reach outflows.
+    This represents the contribution entering from the local catchment only.
+
+    Parameters
+    ----------
+    inflow_ts : pd.DataFrame
+        Timeseries of reach inflows. Columns are reach IDs.
+    outflow_ts : pd.DataFrame
+        Timeseries of reach outflows. Columns are reach IDs.
+    upstream_reach_map : dict
+        Mapping of {reach_id: [list of immediately upstream reach_ids]}.
+        Headwater reaches should map to an empty list.
+
+    Returns
+    -------
+    pd.DataFrame
+        Local load timeseries. Columns are reach IDs.
+    """
+    result = {}
+    for reach_id in inflow_ts.columns:
+        upstream_ids = upstream_reach_map.get(reach_id, [])
+        if upstream_ids:
+            upstream_out = outflow_ts[upstream_ids].sum(axis=1)
+        else:
+            upstream_out = 0
+        result[reach_id] = inflow_ts[reach_id] - upstream_out
+    return pd.DataFrame(result, index=inflow_ts.index)
+
+
+def _compute_contributions(local_loads, path_fate_factors):
+    """Compute source contributions at the outlet.
+
+    contribution = local_load * path_fate_factor (element-wise).
+
+    Parameters
+    ----------
+    local_loads : pd.DataFrame
+        Local load timeseries per reach. Columns are reach IDs.
+    path_fate_factors : pd.DataFrame
+        Cumulative path fate factors per reach. Columns are reach IDs.
+        Must share the same columns as local_loads (or a subset).
+
+    Returns
+    -------
+    pd.DataFrame
+        Contribution timeseries per source reach.
+    """
+    common = local_loads.columns.intersection(path_fate_factors.columns)
+    return local_loads[common].mul(path_fate_factors[common].values)
+
+
+def _compute_contribution_pct(contributions, target_load_ts):
+    """Compute percentage contribution relative to the outlet load.
+
+    Parameters
+    ----------
+    contributions : pd.DataFrame
+        Contribution timeseries per source reach.
+    target_load_ts : pd.DataFrame or pd.Series
+        Total load timeseries at the target outlet.
+
+    Returns
+    -------
+    pd.DataFrame
+        Percentage contributions per source reach (0-100 scale).
+    """
+    return contributions.div(target_load_ts.values) * 100
+
+
+def _summarize(contributions, local_loads, target_load_ts,start_year = 1996, end_year = 2100, months = None):
+    """Aggregate contributions into a summary DataFrame.
+
+    Parameters
+    ----------
+    contributions : pd.DataFrame
+        Contribution timeseries per source reach.
+    local_loads : pd.DataFrame
+        Local load timeseries per reach.
+    target_load_ts : pd.DataFrame or pd.Series
+        Total load at the target outlet.
+
+    Returns
+    -------
+    pd.DataFrame
+        Summary with columns: source_id, load, contribution, contribution_pct.
+        Values are the temporal means.
+    """
+    contributions = filter_months(filter_years(contributions, start_year, end_year), months)
+    local_loads = filter_months(filter_years(local_loads, start_year, end_year), months)
+    target_load_ts = filter_months(filter_years(target_load_ts, start_year, end_year), months)
+
+    common = local_loads.columns.intersection(contributions.columns)
+    pct = _compute_contribution_pct(contributions[common], target_load_ts)
+
+    df = contributions[common].mean().to_frame().reset_index()
+    df.columns = ['source_id', 'contribution']
+    df['load'] = local_loads[common].mean().values
+    df['contribution_pct'] = pct[common].mean().values
+    return df[['source_id', 'load', 'contribution', 'contribution_pct']]

@@ -149,19 +149,6 @@ def get_watershed_loading(uci,hbn,constituent,reach_ids=None,upstream_reach_ids 
     df = df.loc[df['TVOLNO'].isin(reach_ids)]
     return df
 
-def _temporal_aggregation(df,simulation_period,aggregation_period,agg_func):
-    temporal_col = aggregation_period_to_temporal_grouping(simulation_period, aggregation_period)
-    if temporal_col is not None:
-        group_cols = [temporal_col, 'OPERATION', 'OPNID']
-    elif aggregation_period is None:
-        group_cols = ['datetime', 'OPERATION', 'OPNID']
-    else:
-        # aggregation_period='simulation' → aggregate across all time
-        group_cols = ['OPERATION', 'OPNID']
-    
-    df = df.groupby(group_cols)['value'].agg(agg_func).reset_index()
-    return df
-
 def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean'):
     """
     Aggregate constituent loading rates with flexible temporal grouping and aggregation.

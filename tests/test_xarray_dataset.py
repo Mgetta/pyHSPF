@@ -1,256 +1,195 @@
 # -*- coding: utf-8 -*-
-"""Tests for hspf.xarray_dataset — xarray Dataset construction from HBN and UCI."""
+"""Tests for hspf.xarray_dataset — DataFrame-to-xarray converters."""
 
 import numpy as np
 import pandas as pd
 import pytest
 import xarray as xr
-from unittest.mock import MagicMock
 
-from hspf.xarray_dataset import hbn_to_xarray, uci_to_xarray, build_model_dataset
+from hspf.xarray_dataset import timeseries_to_xarray, dataframe_to_xarray
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers — simulate the pandas output of existing HBN / UCI methods
 # ---------------------------------------------------------------------------
 
-def _make_hbn_class(data_frames=None):
-    """Create a minimal mock hbnClass with data_frames already populated."""
-    hbn = MagicMock()
-    if data_frames is None:
-        idx = pd.date_range("2000-01-01", periods=5, freq="D")
-        df1 = pd.DataFrame(
-            {"PERO": [1.0, 2.0, 3.0, 4.0, 5.0], "SURO": [0.1, 0.2, 0.3, 0.4, 0.5]},
-            index=idx,
-        )
-        df2 = pd.DataFrame(
-            {"PERO": [5.0, 4.0, 3.0, 2.0, 1.0], "SURO": [0.5, 0.4, 0.3, 0.2, 0.1]},
-            index=idx,
-        )
-        data_frames = {
-            "PERLND_PWATER_001_3": df1,
-            "PERLND_PWATER_002_3": df2,
-        }
-    hbn.data_frames = data_frames
-    hbn.mapn = {}
-    # Not an interface
-    del hbn.hbns
-    return hbn
+def _wide_timeseries(n_time=5, opnids=None):
+    """Simulate output of hbn.get_multiple_timeseries (wide format).
+
+    Returns a DataFrame: index = DatetimeIndex, columns = opnid (int).
+    """
+    if opnids is None:
+        opnids = [1, 2, 3]
+    idx = pd.date_range("2000-01-01", periods=n_time, freq="D")
+    rng = np.random.default_rng(42)
+    data = {oid: rng.random(n_time) for oid in opnids}
+    df = pd.DataFrame(data, index=idx)
+    df.index.name = "datetime"
+    return df
 
 
-def _make_hbn_interface(hbn_classes=None):
-    """Create a minimal mock hbnInterface wrapping one or more hbnClass."""
-    interface = MagicMock()
-    interface.hbns = hbn_classes or [_make_hbn_class()]
-    return interface
+def _single_timeseries(n_time=5, opnid=1):
+    """Simulate output of hbn.get_time_series (Series)."""
+    idx = pd.date_range("2000-01-01", periods=n_time, freq="D")
+    return pd.Series(np.arange(1.0, n_time + 1), index=idx, name=opnid)
 
 
-def _make_mixed_hbn():
-    """HBN with both PERLND and RCHRES segments (same opnids)."""
-    idx = pd.date_range("2000-01-01", periods=5, freq="D")
-    return _make_hbn_class(data_frames={
-        "PERLND_PWATER_001_3": pd.DataFrame({"PERO": [1.0, 2.0, 3.0, 4.0, 5.0]}, index=idx),
-        "RCHRES_HYDR_001_3": pd.DataFrame({"ROVOL": [10.0, 20.0, 30.0, 40.0, 50.0]}, index=idx),
+def _subwatersheds_df():
+    """Simulate output of uci.network.subwatersheds().reset_index()."""
+    return pd.DataFrame({
+        "TVOLNO": [1, 1, 2, 2],
+        "SVOLNO": [101, 102, 103, 104],
+        "SVOL": ["PERLND", "IMPLND", "PERLND", "IMPLND"],
+        "AFACTR": [10.0, 5.0, 20.0, 8.0],
+        "LSID": ["Forest", "Urban", "Forest", "Urban"],
+        "MLNO": [1, 1, 1, 1],
     })
 
 
-def _make_uci():
-    """Create a minimal mock UCI with OPN SEQUENCE and subwatersheds."""
-    uci = MagicMock()
-    uci.name = "TestModel"
-
-    opnseq = pd.DataFrame({
-        "OPERATION": ["PERLND", "PERLND", "RCHRES"],
-        "SEGMENT": [1, 2, 1],
-    })
-    uci.table.return_value = opnseq
-
-    subwatersheds = pd.DataFrame({
-        "TVOLNO": [1, 1],
-        "SVOLNO": [1, 2],
-        "SVOL": ["PERLND", "PERLND"],
-        "AFACTR": [10.0, 20.0],
-        "LSID": ["Forest", "Cropland"],
-        "MLNO": [1, 1],
-    })
-    uci.network.subwatersheds.return_value = subwatersheds
-
-    uci.valid_opnids = {
-        "PERLND": [1, 2],
-        "IMPLND": [],
-        "RCHRES": [1],
-    }
-
-    uci.opnid_dict = {
-        "PERLND": pd.DataFrame({"metzone": [1, 1]}, index=[1, 2]),
-    }
-
-    uci.network.graph.successors.return_value = iter([])
-
-    return uci
-
-
 # ---------------------------------------------------------------------------
-# hbn_to_xarray
+# timeseries_to_xarray — wide DataFrame
 # ---------------------------------------------------------------------------
 
-class TestHbnToXarray:
-    def test_basic_dimensions(self):
-        ds = hbn_to_xarray(_make_hbn_class())
+class TestTimeseriesToXarrayWide:
+    def test_dims(self):
+        ds = timeseries_to_xarray(_wide_timeseries())
         assert "time" in ds.dims
-        assert "segment" in ds.dims
+        assert "opnid" in ds.dims
 
-    def test_constituent_variables(self):
-        ds = hbn_to_xarray(_make_hbn_class())
+    def test_default_var_name(self):
+        ds = timeseries_to_xarray(_wide_timeseries())
+        assert "value" in ds.data_vars
+
+    def test_custom_constituent_name(self):
+        ds = timeseries_to_xarray(_wide_timeseries(), constituent="PERO")
         assert "PERO" in ds.data_vars
-        assert "SURO" in ds.data_vars
 
-    def test_segment_labels(self):
-        ds = hbn_to_xarray(_make_hbn_class())
-        segs = sorted(ds.coords["segment"].values)
-        assert segs == ["PERLND_001", "PERLND_002"]
+    def test_opnid_values(self):
+        ds = timeseries_to_xarray(_wide_timeseries(opnids=[10, 20]))
+        np.testing.assert_array_equal(ds.coords["opnid"].values, [10, 20])
 
-    def test_time_coords(self):
-        ds = hbn_to_xarray(_make_hbn_class())
-        assert len(ds.coords["time"]) == 5
-        assert ds.coords["time"].values[0] == np.datetime64("2000-01-01")
+    def test_time_values(self):
+        ds = timeseries_to_xarray(_wide_timeseries(n_time=3))
+        assert len(ds.coords["time"]) == 3
 
     def test_operation_coord(self):
-        ds = hbn_to_xarray(_make_hbn_class())
+        ds = timeseries_to_xarray(_wide_timeseries(), operation="PERLND")
         assert "operation" in ds.coords
-        assert list(ds.coords["operation"].values) == ["PERLND", "PERLND"]
+        assert all(v == "PERLND" for v in ds.coords["operation"].values)
 
-    def test_opnid_coord(self):
-        ds = hbn_to_xarray(_make_hbn_class())
-        assert "opnid" in ds.coords
-        assert sorted(ds.coords["opnid"].values) == [1, 2]
+    def test_no_operation_when_omitted(self):
+        ds = timeseries_to_xarray(_wide_timeseries())
+        assert "operation" not in ds.coords
 
-    def test_activity_coord(self):
-        ds = hbn_to_xarray(_make_hbn_class())
-        assert "activity" in ds.coords
-        assert list(ds.coords["activity"].values) == ["PWATER", "PWATER"]
+    def test_activity_attribute(self):
+        ds = timeseries_to_xarray(
+            _wide_timeseries(), activity="PWATER"
+        )
+        assert ds.attrs["activity"] == "PWATER"
 
     def test_data_values(self):
-        ds = hbn_to_xarray(_make_hbn_class())
-        pero_1 = ds["PERO"].sel(segment="PERLND_001").values
-        np.testing.assert_array_almost_equal(pero_1, [1.0, 2.0, 3.0, 4.0, 5.0])
+        df = _wide_timeseries(n_time=3, opnids=[1])
+        ds = timeseries_to_xarray(df, constituent="X")
+        np.testing.assert_array_almost_equal(
+            ds["X"].sel(opnid=1).values, df[1].values
+        )
 
-    def test_mixed_operations_unique_segments(self):
-        """PERLND_001 and RCHRES_001 should be distinct segments."""
-        ds = hbn_to_xarray(_make_mixed_hbn())
-        segs = sorted(ds.coords["segment"].values)
-        assert "PERLND_001" in segs
-        assert "RCHRES_001" in segs
-        assert len(segs) == 2
 
-    def test_mixed_operation_selection(self):
-        """Can select only RCHRES segments using the operation coordinate."""
-        ds = hbn_to_xarray(_make_mixed_hbn())
-        rchres_mask = ds.coords["operation"] == "RCHRES"
-        sub = ds.sel(segment=rchres_mask)
-        assert list(sub.coords["segment"].values) == ["RCHRES_001"]
+# ---------------------------------------------------------------------------
+# timeseries_to_xarray — Series input
+# ---------------------------------------------------------------------------
 
-    def test_hbn_interface(self):
-        ds = hbn_to_xarray(_make_hbn_interface())
+class TestTimeseriesToXarraySeries:
+    def test_series_to_dataset(self):
+        s = _single_timeseries(opnid=42)
+        ds = timeseries_to_xarray(s, constituent="ROVOL")
+        assert "ROVOL" in ds.data_vars
+        assert "opnid" in ds.dims
+        np.testing.assert_array_equal(ds.coords["opnid"].values, [42])
+
+    def test_series_values(self):
+        s = _single_timeseries(n_time=4, opnid=1)
+        ds = timeseries_to_xarray(s, constituent="Q")
+        np.testing.assert_array_almost_equal(
+            ds["Q"].sel(opnid=1).values, [1.0, 2.0, 3.0, 4.0]
+        )
+
+
+# ---------------------------------------------------------------------------
+# dataframe_to_xarray
+# ---------------------------------------------------------------------------
+
+class TestDataframeToXarray:
+    def test_basic_conversion(self):
+        df = _subwatersheds_df()
+        ds = dataframe_to_xarray(df)
         assert isinstance(ds, xr.Dataset)
-        assert "PERO" in ds.data_vars
 
-    def test_empty_hbn(self):
-        ds = hbn_to_xarray(_make_hbn_class(data_frames={}))
-        assert len(ds.data_vars) == 0
+    def test_index_col(self):
+        df = _subwatersheds_df()
+        ds = dataframe_to_xarray(df, index_col="SVOLNO", index_dim="opnid")
+        assert "opnid" in ds.dims
+        np.testing.assert_array_equal(
+            ds.coords["opnid"].values, [101, 102, 103, 104]
+        )
 
-    def test_multiple_tcodes_suffixed(self):
-        idx_d = pd.date_range("2000-01-01", periods=3, freq="D")
-        idx_y = pd.date_range("2000-01-01", periods=2, freq="YE")
-        data_frames = {
-            "PERLND_PWATER_001_3": pd.DataFrame({"PERO": [1.0, 2.0, 3.0]}, index=idx_d),
-            "PERLND_PWATER_001_5": pd.DataFrame({"PERO": [10.0, 20.0]}, index=idx_y),
-        }
-        ds = hbn_to_xarray(_make_hbn_class(data_frames=data_frames))
-        assert "PERO_3" in ds.data_vars
-        assert "PERO_5" in ds.data_vars
+    def test_data_vars_from_columns(self):
+        df = _subwatersheds_df()
+        ds = dataframe_to_xarray(df, index_col="SVOLNO", index_dim="opnid")
+        assert "AFACTR" in ds.data_vars
+        assert "LSID" in ds.data_vars
+        assert "TVOLNO" in ds.data_vars
 
-    def test_source_attribute(self):
-        ds = hbn_to_xarray(_make_hbn_class())
-        assert ds.attrs["source"] == "hbn"
+    def test_values_preserved(self):
+        df = _subwatersheds_df()
+        ds = dataframe_to_xarray(df, index_col="SVOLNO", index_dim="opnid")
+        assert float(ds["AFACTR"].sel(opnid=101).values) == 10.0
 
+    def test_uses_existing_index(self):
+        df = _subwatersheds_df().set_index("SVOLNO")
+        ds = dataframe_to_xarray(df, index_dim="opnid")
+        assert "opnid" in ds.dims
 
-# ---------------------------------------------------------------------------
-# uci_to_xarray
-# ---------------------------------------------------------------------------
-
-class TestUciToXarray:
-    def test_basic_structure(self):
-        ds = uci_to_xarray(_make_uci())
-        assert isinstance(ds, xr.Dataset)
-        assert "segment" in ds.coords
-
-    def test_segment_labels(self):
-        ds = uci_to_xarray(_make_uci())
-        segs = list(ds.coords["segment"].values)
-        assert "PERLND_001" in segs
-        assert "PERLND_002" in segs
-        assert "RCHRES_001" in segs
-
-    def test_operation_variable(self):
-        ds = uci_to_xarray(_make_uci())
-        assert "operation" in ds.data_vars
-        ops = list(ds["operation"].values)
-        assert "PERLND" in ops
-        assert "RCHRES" in ops
-
-    def test_subwatershed_metadata(self):
-        ds = uci_to_xarray(_make_uci())
-        assert "area" in ds.data_vars
-        assert "landcover" in ds.data_vars
-        assert "downstream_rchres" in ds.data_vars
-
-    def test_area_values(self):
-        ds = uci_to_xarray(_make_uci())
-        area_p1 = float(ds["area"].sel(segment="PERLND_001").values)
-        assert area_p1 == 10.0
-
-    def test_source_attribute(self):
-        ds = uci_to_xarray(_make_uci())
-        assert ds.attrs["source"] == "uci"
-
-    def test_model_name_attribute(self):
-        ds = uci_to_xarray(_make_uci())
-        assert ds.attrs["model_name"] == "TestModel"
+    def test_default_dim_name(self):
+        df = pd.DataFrame({"A": [1, 2], "B": [3, 4]})
+        ds = dataframe_to_xarray(df)
+        assert "index" in ds.dims
 
 
 # ---------------------------------------------------------------------------
-# build_model_dataset
+# Joinability — datasets from different sources can merge
 # ---------------------------------------------------------------------------
 
-class TestBuildModelDataset:
-    def test_merged_contains_hbn_vars(self):
-        ds = build_model_dataset(_make_hbn_class(), _make_uci())
-        assert "PERO" in ds.data_vars
-        assert "SURO" in ds.data_vars
+class TestJoinability:
+    def test_timeseries_merge_with_metadata(self):
+        """Timeseries and metadata datasets join on opnid."""
+        ts_df = _wide_timeseries(opnids=[101, 102])
+        ds_ts = timeseries_to_xarray(
+            ts_df, operation="PERLND", constituent="PERO"
+        )
 
-    def test_merged_has_metadata_coords(self):
-        ds = build_model_dataset(_make_hbn_class(), _make_uci())
-        assert "area" in ds.coords or "area" in ds.data_vars
+        meta_df = _subwatersheds_df()
+        ds_meta = dataframe_to_xarray(
+            meta_df, index_col="SVOLNO", index_dim="opnid"
+        )
 
-    def test_hbn_only(self):
-        ds = build_model_dataset(_make_hbn_class(), uci=None)
-        assert "PERO" in ds.data_vars
-        assert ds.attrs["source"] == "hbn"
+        merged = ds_ts.merge(ds_meta, join="inner")
+        assert "PERO" in merged.data_vars
+        assert "AFACTR" in merged.data_vars
+        # Both opnids 101 and 102 should be present
+        np.testing.assert_array_equal(
+            sorted(merged.coords["opnid"].values), [101, 102]
+        )
 
-    def test_uci_only(self):
-        ds = build_model_dataset(hbn=None, uci=_make_uci())
-        assert "operation" in ds.data_vars
-        assert ds.attrs["source"] == "uci"
-
-    def test_both_none(self):
-        ds = build_model_dataset(hbn=None, uci=None)
-        assert len(ds.data_vars) == 0
-
-    def test_source_attribute(self):
-        ds = build_model_dataset(_make_hbn_class(), _make_uci())
-        assert ds.attrs["source"] == "hbn+uci"
-
-    def test_model_name_attribute(self):
-        ds = build_model_dataset(_make_hbn_class(), _make_uci())
-        assert ds.attrs["model_name"] == "TestModel"
+    def test_two_timeseries_concat(self):
+        """Two timeseries datasets with different opnids can concatenate."""
+        ds1 = timeseries_to_xarray(
+            _wide_timeseries(opnids=[1, 2]),
+            operation="PERLND", constituent="PERO",
+        )
+        ds2 = timeseries_to_xarray(
+            _wide_timeseries(opnids=[3, 4]),
+            operation="PERLND", constituent="PERO",
+        )
+        combined = xr.concat([ds1, ds2], dim="opnid")
+        assert len(combined.coords["opnid"]) == 4

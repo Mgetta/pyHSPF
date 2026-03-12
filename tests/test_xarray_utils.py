@@ -14,7 +14,9 @@ from hspf.xarray_utils import (
     PANDAS_FREQ,
     TIMESTEP_LABELS,
     UNITS_BY_VARIABLE,
+    VALID_OPERATION_VARIABLE,
     TimeStep,
+    _build_valid_mask,
     create_timestep_dataset,
 )
 
@@ -493,3 +495,213 @@ def test_to_dict_is_copy():
     d["extra"] = None
     # The original collection should not be affected
     assert "extra" not in col
+
+
+# ---------------------------------------------------------------------------
+# VALID_OPERATION_VARIABLE constant
+# ---------------------------------------------------------------------------
+
+
+def test_valid_operation_variable_has_all_three_operations():
+    assert set(VALID_OPERATION_VARIABLE.keys()) == {"PERLND", "IMPLND", "RCHRES"}
+
+
+def test_perlnd_has_pero_not_rovol():
+    assert "PERO" in VALID_OPERATION_VARIABLE["PERLND"]
+    assert "ROVOL" not in VALID_OPERATION_VARIABLE["PERLND"]
+
+
+def test_rchres_has_rovol_not_pero():
+    assert "ROVOL" in VALID_OPERATION_VARIABLE["RCHRES"]
+    assert "PERO" not in VALID_OPERATION_VARIABLE["RCHRES"]
+
+
+def test_shared_aliases_present_in_multiple_operations():
+    for op in ("PERLND", "IMPLND", "RCHRES"):
+        assert "Q" in VALID_OPERATION_VARIABLE[op]
+
+
+# ---------------------------------------------------------------------------
+# _build_valid_mask
+# ---------------------------------------------------------------------------
+
+
+def test_build_valid_mask_shape():
+    ops = ["PERLND", "IMPLND", "RCHRES"]
+    vars_ = ["PERO", "ROVOL", "Q"]
+    mask = _build_valid_mask(ops, vars_)
+    assert mask.shape == (3, 3)
+
+
+def test_build_valid_mask_dtype():
+    mask = _build_valid_mask(["PERLND"], ["PERO"])
+    assert mask.dtype == bool
+
+
+def test_build_valid_mask_correct_values():
+    ops = ["PERLND", "RCHRES"]
+    vars_ = ["PERO", "ROVOL", "Q"]
+    mask = _build_valid_mask(ops, vars_)
+    # PERLND: PERO=True, ROVOL=False, Q=True
+    assert mask[0, 0]
+    assert not mask[0, 1]
+    assert mask[0, 2]
+    # RCHRES: PERO=False, ROVOL=True, Q=True
+    assert not mask[1, 0]
+    assert mask[1, 1]
+    assert mask[1, 2]
+
+
+def test_build_valid_mask_unknown_operation():
+    mask = _build_valid_mask(["UNKNOWN_OP"], ["PERO", "ROVOL"])
+    assert not mask.any()
+
+
+# ---------------------------------------------------------------------------
+# create_timestep_dataset – valid coordinate
+# ---------------------------------------------------------------------------
+
+
+def test_valid_coord_present():
+    ds = _daily_ds()
+    assert "valid" in ds.coords
+
+
+def test_valid_coord_not_dimension():
+    ds = _daily_ds()
+    assert "valid" not in ds.dims
+
+
+def test_valid_coord_dims():
+    ds = _daily_ds()
+    assert set(ds.coords["valid"].dims) == {"operation", "variable"}
+
+
+def test_valid_coord_perlnd_rovol_is_false():
+    ds = create_timestep_dataset(
+        timestep=TimeStep.DAILY,
+        time_index=DAILY_INDEX,
+        models=["m"],
+        operations=["PERLND", "RCHRES"],
+        opnids=[1],
+        variables=["PERO", "ROVOL"],
+    )
+    assert not ds["valid"].sel(operation="PERLND", variable="ROVOL").item()
+
+
+def test_valid_coord_rchres_rovol_is_true():
+    ds = create_timestep_dataset(
+        timestep=TimeStep.DAILY,
+        time_index=DAILY_INDEX,
+        models=["m"],
+        operations=["PERLND", "RCHRES"],
+        opnids=[1],
+        variables=["PERO", "ROVOL"],
+    )
+    assert ds["valid"].sel(operation="RCHRES", variable="ROVOL").item()
+
+
+def test_valid_coord_perlnd_pero_is_true():
+    ds = create_timestep_dataset(
+        timestep=TimeStep.DAILY,
+        time_index=DAILY_INDEX,
+        models=["m"],
+        operations=["PERLND", "RCHRES"],
+        opnids=[1],
+        variables=["PERO", "ROVOL"],
+    )
+    assert ds["valid"].sel(operation="PERLND", variable="PERO").item()
+
+
+# ---------------------------------------------------------------------------
+# HspfDatasetCollection – select respects valid mask
+# ---------------------------------------------------------------------------
+
+
+def test_select_skips_invalid_operation_variable():
+    """select() should not return data for structurally invalid combinations."""
+    ds = create_timestep_dataset(
+        timestep=TimeStep.DAILY,
+        time_index=DAILY_INDEX,
+        models=["m"],
+        operations=["PERLND", "RCHRES"],
+        opnids=[1],
+        variables=["PERO", "ROVOL"],
+    )
+    col = HspfDatasetCollection()
+    col.add(ds)
+    # PERLND + ROVOL is invalid — should be excluded even though the variable exists
+    result = col.select("m", "PERLND", 1, "ROVOL")
+    assert result == {}
+
+
+def test_select_includes_valid_operation_variable():
+    """select() should return data for valid (operation, variable) pairs."""
+    ds = create_timestep_dataset(
+        timestep=TimeStep.DAILY,
+        time_index=DAILY_INDEX,
+        models=["m"],
+        operations=["PERLND", "RCHRES"],
+        opnids=[1],
+        variables=["PERO", "ROVOL"],
+    )
+    col = HspfDatasetCollection()
+    col.add(ds)
+    result = col.select("m", "RCHRES", 1, "ROVOL")
+    assert "daily" in result
+
+
+# ---------------------------------------------------------------------------
+# HspfDatasetCollection – valid_variables_for
+# ---------------------------------------------------------------------------
+
+
+def test_valid_variables_for_perlnd():
+    ds = create_timestep_dataset(
+        timestep=TimeStep.DAILY,
+        time_index=DAILY_INDEX,
+        models=["m"],
+        operations=["PERLND", "RCHRES"],
+        opnids=[1],
+        variables=["PERO", "ROVOL", "Q"],
+    )
+    col = HspfDatasetCollection()
+    col.add(ds)
+    valid = col.valid_variables_for("daily", "PERLND")
+    assert "PERO" in valid
+    assert "Q" in valid
+    assert "ROVOL" not in valid
+
+
+def test_valid_variables_for_rchres():
+    ds = create_timestep_dataset(
+        timestep=TimeStep.DAILY,
+        time_index=DAILY_INDEX,
+        models=["m"],
+        operations=["PERLND", "RCHRES"],
+        opnids=[1],
+        variables=["PERO", "ROVOL", "Q"],
+    )
+    col = HspfDatasetCollection()
+    col.add(ds)
+    valid = col.valid_variables_for("daily", "RCHRES")
+    assert "ROVOL" in valid
+    assert "Q" in valid
+    assert "PERO" not in valid
+
+
+def test_valid_variables_for_returns_all_when_no_mask():
+    """When valid coord is absent, all variables should be returned."""
+    ds = create_timestep_dataset(
+        timestep=TimeStep.DAILY,
+        time_index=DAILY_INDEX,
+        models=["m"],
+        operations=["PERLND"],
+        opnids=[1],
+        variables=["PERO", "SURO"],
+    )
+    # Remove the valid coord to simulate legacy datasets
+    ds = ds.drop_vars("valid")
+    col = HspfDatasetCollection()
+    col.add(ds)
+    assert col.valid_variables_for("daily", "PERLND") == ["PERO", "SURO"]

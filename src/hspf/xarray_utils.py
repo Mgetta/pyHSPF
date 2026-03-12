@@ -64,6 +64,59 @@ OPERATIONS = ("PERLND", "IMPLND", "RCHRES")
 #: Maximum valid operation ID (HSPF three-digit integer limitation).
 MAX_OPNID = 999
 
+#: Valid variables for each HSPF operation type.
+#:
+#: Different HSPF operations have fundamentally different sets of valid output
+#: variables — e.g., PERLNDs produce ``PERO`` but not ``ROVOL``, while
+#: RCHRESes produce ``ROVOL`` but not ``PERO``.  This mapping codifies those
+#: structural constraints so that a NaN in the dataset can be distinguished
+#: from a structurally invalid (operation, variable) combination.
+#:
+#: Variables are grouped by HSPF activity (PWATER, IWATER, HYDR, SEDMNT,
+#: SEDTRN, PQUAL, IQUAL, NUTRX, etc.) in comments below.
+VALID_OPERATION_VARIABLE: Dict[str, set] = {
+    "PERLND": {
+        # Hydrology (PWATER)
+        "PERO", "SURO", "IFWO", "AGWO", "TAET", "PETINF", "CEPE",
+        "UZET", "LZET", "AGWET", "BASET", "SURET", "PRECIP",
+        "SURI", "IFWI", "AGWI", "LZIRR", "LZSN", "UZSN", "INTFW", "IRC",
+        # Sediment (SEDMNT)
+        "SOSED",
+        # Quality (PQUAL) — names from get_tcons PERLND mapping
+        "POQUALNH3+NH4", "POQUALNO3", "POQUALORTHO P", "POQUALBOD",
+        # High-level constituent aliases (resolved by get_tcons to HBN names)
+        "Q", "TSS", "TKN", "N", "OP", "BOD",
+    },
+    "IMPLND": {
+        # Hydrology (IWATER)
+        "SURO", "IMPEV", "PETINF", "PRECIP",
+        # Solids (SLD)
+        "SOSLD",
+        # Quality (IQUAL) — names from get_tcons IMPLND mapping
+        "SOQUALNH3+NH4", "SOQUALNO3", "SOQUALORTHO P", "SOQUALBOD",
+        # High-level constituent aliases (resolved by get_tcons to HBN names)
+        "Q", "TSS", "TKN", "N", "OP", "BOD",
+    },
+    "RCHRES": {
+        # Hydraulics (HYDR)
+        "ROVOL", "IVOL", "VOLEV",
+        # Sediment (SEDTRN) — concentration and mass
+        "SSEDTOT", "ROSEDTOT", "ISEDTOT", "DEPSCOUR",
+        # Nutrient concentrations (mg/l) (NUTRX / RQUAL)
+        "TAMCONCDIS", "NTOTORGCONC", "NO2CONCDIS", "NO3CONCDIS",
+        "NTOTCONCDIS", "PO4CONCDIS", "PTOTCONC",
+        # Nutrient mass outflows (lb) (NUTRX / RQUAL)
+        "TAMOUTTOT", "NTOTORGOUT", "NO3OUTTOT", "NO2OUTTOT",
+        "NTOTOUT", "PO4OUTDIS", "PTOTOUT", "BODOUTTOT",
+        # Nutrient mass inflows (NUTRX / RQUAL)
+        "PTOTIN",
+        # Temperature (HTRCH)
+        "TW",
+        # High-level constituent aliases (resolved by get_tcons to HBN names)
+        "Q", "TSS", "TP", "OP", "TKN", "N", "TN", "BOD", "WT",
+    },
+}
+
 #: Units for each HSPF output variable and water-quality constituent.
 #:
 #: HSPF direct outputs (hydrology, sediment, routing volumes) and
@@ -113,6 +166,37 @@ UNITS_BY_VARIABLE: Dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_valid_mask(operations, variables):
+    """Build a 2D boolean array (operation × variable) of valid combinations.
+
+    Parameters
+    ----------
+    operations:
+        Sequence of HSPF operation type strings (e.g. ``["PERLND", "RCHRES"]``).
+    variables:
+        Sequence of variable/constituent name strings.
+
+    Returns
+    -------
+    np.ndarray
+        Shape ``(len(operations), len(variables))``, dtype ``bool``.
+        Entry ``[i, j]`` is ``True`` when ``variables[j]`` is a valid output
+        for ``operations[i]`` according to :data:`VALID_OPERATION_VARIABLE`.
+    """
+    ops_list = list(operations)
+    vars_list = list(variables)
+    valid_sets = [VALID_OPERATION_VARIABLE.get(op, set()) for op in ops_list]
+    return np.array(
+        [[var in valid_vars for var in vars_list] for valid_vars in valid_sets],
+        dtype=bool,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Factory function
 # ---------------------------------------------------------------------------
 
@@ -146,8 +230,10 @@ def create_timestep_dataset(
     -------
     xr.Dataset
         A dataset with a single ``"value"`` data variable spanning all five
-        dimensions and a ``"units"`` non-dimension coordinate on the
-        ``variable`` dimension.
+        dimensions, a ``"units"`` non-dimension coordinate on the ``variable``
+        dimension, and a ``"valid"`` non-dimension coordinate on the
+        ``(operation, variable)`` dimensions that marks structurally valid
+        (operation, variable) combinations per :data:`VALID_OPERATION_VARIABLE`.
 
     Raises
     ------
@@ -187,6 +273,7 @@ def create_timestep_dataset(
             "opnid": ("opnid", list(opnids)),
             "variable": ("variable", list(variables)),
             "units": ("variable", units),
+            "valid": (["operation", "variable"], _build_valid_mask(operations, variables)),
         },
         attrs={
             "timestep": label,
@@ -304,6 +391,10 @@ class HspfDatasetCollection:
         result: Dict[str, xr.DataArray] = {}
         for label, ds in self._store.items():
             if variable in ds.coords["variable"].values:
+                if "valid" in ds.coords and not ds["valid"].sel(
+                    operation=operation, variable=variable
+                ).item():
+                    continue
                 result[label] = ds["value"].sel(
                     model=model,
                     operation=operation,
@@ -311,6 +402,29 @@ class HspfDatasetCollection:
                     variable=variable,
                 )
         return result
+
+    def valid_variables_for(self, label: str, operation: str) -> List[str]:
+        """Return the variable names that are valid for *operation* at *label*.
+
+        Parameters
+        ----------
+        label:
+            Timestep label, e.g. ``"daily"``.
+        operation:
+            HSPF operation type (``"PERLND"``, ``"IMPLND"``, or ``"RCHRES"``).
+
+        Returns
+        -------
+        list[str]
+            Variable names for which the ``valid`` mask is ``True`` for the
+            given *operation*.  If the dataset has no ``valid`` coordinate,
+            all variables are returned.
+        """
+        ds = self._store[label]
+        if "valid" not in ds.coords:
+            return list(ds.coords["variable"].values)
+        mask = ds["valid"].sel(operation=operation)
+        return list(ds.coords["variable"].values[mask.values])
 
     def to_dict(self) -> Dict[str, xr.Dataset]:
         """Return the underlying ``dict[label, Dataset]``."""

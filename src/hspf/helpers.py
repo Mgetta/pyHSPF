@@ -41,11 +41,13 @@ def get_tcons(nutrient_name,operation,units = 'mg/l'):
         MAP = {'mg/l':{'TSS' :['SSEDTOT'], # TSS
                   'TKN' :['TAMCONCDIS','NTOTORGCONC'], # TKN
                   'N' :['NO2CONCDIS','NO3CONCDIS'], # N
+                  'TN': ['NTOTCONCDIS'], # Total Nitrogen
                   'OP' :['PO4CONCDIS'], # Ortho
                   'TP' :['PTOTCONC']},# BOD is the difference of ptot and ortho
          'lb': {'TSS' :['ROSEDTOT'], # TSS
                   'TKN' :['TAMOUTTOT','NTOTORGOUT'], # TKN
                   'N' :['NO3OUTTOT','NO2OUTTOT'], # N
+                  'TN': ['NTOTOUT'], # Total Nitrogen
                   'OP' :['PO4OUTDIS'], # Ortho
                   'TP' :['PTOTOUT'],
                   'BOD' :['BODOUTTOT'],},

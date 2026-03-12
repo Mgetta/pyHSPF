@@ -6,6 +6,111 @@ import numpy as np
 import pandas as pd
 
 
+# ---------------------------------------------------------------------------
+# Period constants
+# ---------------------------------------------------------------------------
+
+#: Mapping from human-readable simulation period names to HBN time-step codes.
+SIMULATION_PERIOD_TO_TIME_STEP = {
+    'hourly': 2,
+    'daily': 3,
+    'monthly': 4,
+    'seasonal': 4,   # same as monthly, but with different grouping
+    'yearly': 5,
+}
+
+#: Ordered list of period granularities from finest to coarsest.
+#: 'simulation' is a special sentinel meaning "the entire simulation span".
+PERIOD_ORDER = ['hourly', 'daily', 'monthly', 'seasonal', 'yearly', 'simulation']
+
+
+def simulation_period_to_time_step(simulation_period):
+    """Convert a *simulation_period* string to the integer HBN time-step code.
+
+    Parameters
+    ----------
+    simulation_period : str
+        One of 'hourly', 'daily', 'monthly', 'yearly'.
+
+    Returns
+    -------
+    int
+        HBN time-step code (2–5).
+
+    Raises
+    ------
+    ValueError
+        If *simulation_period* is not recognised.
+    """
+    if simulation_period not in SIMULATION_PERIOD_TO_TIME_STEP:
+        raise ValueError(
+            f"simulation_period must be one of "
+            f"{list(SIMULATION_PERIOD_TO_TIME_STEP.keys())}, "
+            f"got '{simulation_period}'"
+        )
+    return SIMULATION_PERIOD_TO_TIME_STEP[simulation_period]
+
+
+def validate_periods(simulation_period, aggregation_period):
+    """Validate that *aggregation_period* ≥ *simulation_period*.
+
+    Both values must come from :data:`PERIOD_ORDER`.  When they are equal no
+    temporal aggregation should be performed.
+
+    Parameters
+    ----------
+    simulation_period : str
+        Resolution of the raw model output.
+    aggregation_period : str or None
+        Period over which to aggregate.  ``None`` means "same as
+        *simulation_period*" (i.e. no aggregation).
+
+    Raises
+    ------
+    ValueError
+        If either period is unrecognised or if *aggregation_period* is finer
+        than *simulation_period*.
+    """
+    if simulation_period not in PERIOD_ORDER:
+        raise ValueError(
+            f"simulation_period must be one of {PERIOD_ORDER}, "
+            f"got '{simulation_period}'"
+        )
+    if aggregation_period is not None and aggregation_period not in PERIOD_ORDER:
+        raise ValueError(
+            f"aggregation_period must be one of {PERIOD_ORDER} or None, "
+            f"got '{aggregation_period}'"
+        )
+    if aggregation_period is not None:
+        sim_idx = PERIOD_ORDER.index(simulation_period)
+        agg_idx = PERIOD_ORDER.index(aggregation_period)
+        if agg_idx < sim_idx:
+            raise ValueError(
+                f"aggregation_period ('{aggregation_period}') cannot be finer "
+                f"than simulation_period ('{simulation_period}')"
+            )
+
+
+def aggregation_period_to_temporal_grouping(simulation_period, aggregation_period):
+    """Derive the *temporal_grouping* value from the period pair.
+
+    Returns
+    -------
+    str or None
+        The internal temporal-grouping key, or ``None`` when no temporal
+        grouping column is needed (raw output or full-simulation aggregate).
+    """
+    if aggregation_period is None:
+        return None
+    mapping = {
+        'monthly': 'month',
+        'seasonal': 'season',
+        'yearly': 'year',
+        'simulation': None,   # overall aggregate – no grouping column
+    }
+    return mapping.get(aggregation_period)
+
+
 def weighted_describe(df, value_col, weight_col):
     """
     Calculate weighted statistics for a DataFrame.
@@ -220,11 +325,18 @@ def _apply_time_aggregation(df, freq, group_col, agg_funcs=None):
 
 
 def weighted_mean(df,value_col,weight_col):
-   weighted_mean = (df[value_col] * df[weight_col]).sum() / df[weight_col].sum()
-   return pd.DataFrame({
-       'AFACTR' : df[weight_col].sum(),
-       value_col: [weighted_mean]})
-                         
+    total = df[weight_col].sum()
+    if total == 0:
+        df = pd.DataFrame({
+            'AFACTR' : 0,
+            value_col: [np.nan]})
+    else:
+        weighted_mean = (df[value_col] * df[weight_col]).sum() / df[weight_col].sum()
+        df = pd.DataFrame({
+            'AFACTR' : df[weight_col].sum(),
+            value_col: [weighted_mean]})
+    return df
+                            
 def annual_weighted_output(uci,hbn,ts_name,operation = 'PERLND',t_code = 5,opnids = None,group_by = None,start_year = 1996,end_year = 2100):
     assert (group_by in [None,'landcover','opnid'])
     df = hbn.get_multiple_timeseries(operation,t_code,ts_name,opnids = opnids)
@@ -246,4 +358,21 @@ def annual_weighted_output(uci,hbn,ts_name,operation = 'PERLND',t_code = 5,opnid
         df = df.groupby(df['SVOLNO'])[[ts_name,'AFACTR']].apply(lambda x: weighted_mean(x,ts_name,'AFACTR')).droplevel(1)
     
     df = df.set_index([df.index,'AFACTR'])
+    return df
+
+
+def add_temporal_groups(df,time_step):
+    assert 'datetime' in df.columns, "DataFrame must have a 'datetime' column"
+    if time_step <= 5:
+        df['year'] = df['datetime'].dt.year
+    if time_step <= 4:
+        df['month'] = df['datetime'].dt.month
+        df['season'] = df['datetime'].dt.month.map(
+    {12:'winter',1:'winter',2:'winter',3:'spring',4:'spring',5:'spring',
+     6:'summer',7:'summer',8:'summer',9:'fall',10:'fall',11:'fall'})
+    if time_step <= 3:
+        df['day'] = df['datetime'].dt.day
+    if time_step <= 2:
+        df['hour'] = df['datetime'].dt.hour
+
     return df

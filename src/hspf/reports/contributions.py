@@ -5,6 +5,14 @@ Channel contributions and allocation reports.
 import pandas as pd
 
 from hspf.reports.loading import get_catchment_loading
+from hspf.reports._analytics.contributions import (
+    compute_fate_factors,
+    compute_path_fate_factors,
+    compute_local_load,
+    compute_contributions,
+    compute_contribution_pct,
+    contribution_summary,
+)
 
 allocation_selector = {'Q': {'input': ['IVOL'],
                              'output': ['ROVOL']},
@@ -45,40 +53,40 @@ def channel_outflows(constituent,uci,hbn,t_code,reach_ids = None):
 def channel_fate(constituent,uci,hbn,t_code,reach_ids = None):
     load_in = channel_inflows(constituent,uci,hbn,t_code,reach_ids)
     load_out = channel_outflows(constituent,uci,hbn,t_code,reach_ids)
-    return load_out/load_in
+    return compute_fate_factors(load_in, load_out)
 
 
 def local_loading(constituent,uci,hbn,t_code,reach_ids = None):
     load_in = channel_inflows(constituent,uci,hbn,t_code,reach_ids)
-    load_out = channel_outflows(constituent,uci,hbn,t_code,reach_ids)    
-    df = pd.DataFrame({reach_id: load_in[reach_id] - load_out[uci.network.upstream(reach_id)].sum(axis=1) for reach_id in load_in.columns})
-    return df
+    load_out = channel_outflows(constituent,uci,hbn,t_code,reach_ids)
+    upstream_reach_map = {reach_id: list(uci.network.upstream(reach_id)) for reach_id in load_in.columns}
+    return compute_local_load(load_in, load_out, upstream_reach_map)
 
 
 
-def catchment_contributions(uci,hbn,constituent,target_reach_id, landcover = None):
+def catchment_contributions(uci,hbn,constituent,target_reach_id, landcovers = None,start_year = 1996, end_year = 2100):
     p = uci.network.paths(target_reach_id)
     p[target_reach_id] = [target_reach_id]
     fate = channel_fate(constituent,uci,hbn,5)
-    fate_factors = pd.concat([fate[v].prod(axis=1) for k,v in p.items()],axis=1)
-    fate_factors.columns = list(p.keys())
+    fate_factors = compute_path_fate_factors(fate, p)
 
-    fate_factors = fate_factors.reset_index().melt(id_vars = 'index')
-
-    df = get_catchment_loading(uci,hbn,constituent,by_landcover = True)
-    df = pd.merge(df,fate_factors,left_on = ['TVOLNO','index'],right_on = ['variable','index'])
+    fate_factors = fate_factors.reset_index().melt(id_vars = 'datetime')
+    
+    df = get_catchment_loading(uci,hbn,constituent)
+    df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
+    df = pd.merge(df,fate_factors,left_on = ['TVOLNO','datetime'],right_on = ['variable','datetime'])
     
     df['contribution'] = df['value']*df['load']
 
     target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
     
-    df = pd.merge(df,target_load.reset_index().melt(id_vars='index',var_name = 'target_reach',value_name = 'target_load'),left_on='index',right_on='index')
+    df = pd.merge(df,target_load.reset_index().melt(id_vars='datetime',var_name = 'target_reach',value_name = 'target_load'),left_on='datetime',right_on='datetime')
     df['contribution_perc'] = df['contribution']/(df['target_load'])*100
     
     df = df.groupby(['TVOLNO','landcover','landcover_area'])[['load','contribution','contribution_perc','target_load']].mean().reset_index()
 
-    if landcover is not None:
-        df = df.loc[df['landcover'] == landcover]
+    if landcovers is not None:
+        df = df.loc[df['landcover'].isin(landcovers)]
 
     else:
         df = df.groupby(['TVOLNO',])[['landcover_area','load','contribution','contribution_perc']].sum().reset_index()
@@ -90,17 +98,10 @@ def total_contributions(constituent,uci,hbn,target_reach_id, as_percent = True):
     p[target_reach_id] = [target_reach_id]
     fate = channel_fate(constituent,uci,hbn,5)
     loads = local_loading(constituent,uci,hbn,5)
-    fate_factors = pd.concat([fate[v].prod(axis=1) for k,v in p.items()],axis=1)
-    fate_factors.columns = list(p.keys())
-    loads = loads[loads.columns.intersection(fate_factors.columns)]
-    contribution = loads[fate_factors.columns].mul(fate_factors.values)
-    
+    fate_factors = compute_path_fate_factors(fate, p)
     target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
-    
-    
-    df = contribution.mean().to_frame().reset_index()
-    df.columns = ['TVOLNO','contribution']
 
-    df['load'] = loads.mean().values
-    df['contribution_perc'] = (contribution.div(target_load.values)*100).mean().values
+    contribution = compute_contributions(loads, fate_factors)
+    df = contribution_summary(contribution, loads, target_load)
+    df = df.rename(columns={'source_id': 'TVOLNO', 'contribution_pct': 'contribution_perc'})
     return df[['TVOLNO','load','contribution','contribution_perc']]

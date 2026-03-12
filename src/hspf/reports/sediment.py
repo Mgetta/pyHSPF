@@ -28,14 +28,14 @@ def scour(hbn,uci,start_year = 1996,end_year = 2030):
                                              activity = 'SOLIDS',
                                              t_code = 'yearly',
                                              opnids = None)
-    sosld = sosld.loc[(sosld.index > start_year) & (sosld.index < end_year)].mean().rename('mean').to_frame()
+    sosld = sosld.loc[(sosld.index.year >= start_year) & (sosld.index.year <= end_year)].mean().rename('mean').to_frame()
 
     depscr =  hbn.get_multiple_timeseries(t_opn = 'RCHRES',
                                                      t_con = 'DEPSCOURTOT',
                                                      activity = 'SEDTRN',
                                                      t_code = 'yearly',
                                                      opnids = None)
-    depscr = depscr.loc[(depscr.index > start_year) & (depscr.index < end_year)].mean().rename('mean').to_frame()
+    depscr = depscr.loc[(depscr.index.year >= start_year) & (depscr.index.year <= end_year)].mean().rename('mean').to_frame()
 
     lakeflag =  uci.table('RCHRES','GEN-INFO').copy()[['RCHID','LKFG']]
 
@@ -87,7 +87,7 @@ def annual_sediment_budget(uci,hbn):
     sosld.columns = ['SOSED']
     
     df = pd.concat([df,sosld])
-
+    df.fillna(0, inplace=True)
     df['Percentage'] = 100*(df['SOSED']*df.index.get_level_values('AFACTR')/sum(df['SOSED']*df.index.get_level_values('AFACTR')))
     
     df.columns = ['Sediment','Percentage']

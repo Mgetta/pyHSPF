@@ -377,7 +377,7 @@ class UCI():
         
         targets[['TSS','N','TKN','OP','BOD']] = ''
         
-        targets['dom_lc'] = ''
+        targets['dom_lc'] = pd.NA
         targets.loc[targets['area'].astype('float').argmax(),'dom_lc'] = 1
         return targets        
 

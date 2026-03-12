@@ -229,3 +229,7 @@ def watershed_water_budget(uci,hbn,reach_ids,upstream_reach_ids = None, time_ste
 
 def metzone_watershed_budget(uci,hbn,operation = None):
     raise NotImplementedError("This function is not yet implemented. It will combine the reach, implnd, and perlnd water budgets for a given metzone or set of metzones.")
+
+
+def catchment_precipitation(uci,hbn,time_step = 5, start_year = 1996, end_year = 2100):
+    raise NotImplementedError("This function is not yet implemented. It will calculate the average annual precipitation for each catchment, potentially grouped by landcover or other attributes.")

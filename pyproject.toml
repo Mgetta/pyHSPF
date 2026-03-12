@@ -13,7 +13,8 @@ dependencies = [
   "networkx",
   "numba",
   "tables",
-  "numpy"
+  "numpy",
+  "xarray"
 ]
 requires-python = ">=3.8"
 authors = [

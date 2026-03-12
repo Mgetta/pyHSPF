@@ -144,6 +144,8 @@ from hspf.reports._analytics.timeseries import (
 from hspf.reports._analytics.loading import (
     compute_load,
     compute_loading_rate,
+)
+
 # --- residence ---
 from hspf.reports.residence import (
     get_reach_hydraulics,

@@ -85,7 +85,7 @@ VALID_OPERATION_VARIABLE: Dict[str, set] = {
         # Quality (PQUAL) — names from get_tcons PERLND mapping
         "POQUALNH3+NH4", "POQUALNO3", "POQUALORTHO P", "POQUALBOD",
         # High-level constituent aliases (resolved by get_tcons to HBN names)
-        "Q", "TSS", "TKN", "N", "OP", "BOD",
+        "Q", "TSS", "TKN", "N", "OP", "BOD","TP", "TN"
     },
     "IMPLND": {
         # Hydrology (IWATER)
@@ -95,7 +95,7 @@ VALID_OPERATION_VARIABLE: Dict[str, set] = {
         # Quality (IQUAL) — names from get_tcons IMPLND mapping
         "SOQUALNH3+NH4", "SOQUALNO3", "SOQUALORTHO P", "SOQUALBOD",
         # High-level constituent aliases (resolved by get_tcons to HBN names)
-        "Q", "TSS", "TKN", "N", "OP", "BOD",
+        "Q", "TSS", "TKN", "N", "OP", "BOD","TP", "TN"
     },
     "RCHRES": {
         # Hydraulics (HYDR)
@@ -113,7 +113,7 @@ VALID_OPERATION_VARIABLE: Dict[str, set] = {
         # Temperature (HTRCH)
         "TW",
         # High-level constituent aliases (resolved by get_tcons to HBN names)
-        "Q", "TSS", "TP", "OP", "TKN", "N", "TN", "BOD", "WT",
+        "Q", "TSS", "TP", "OP", "TKN", "N", "TN", "BOD", "WT"
     },
 }
 

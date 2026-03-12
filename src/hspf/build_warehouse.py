@@ -2,7 +2,7 @@
 #%%
 from dataclasses import dataclass
 
-from hspf import uci
+from hspf import hspfModel, reports, uci
 from hspf.parser.parsers import parseTable
 from hspf import warehouse
 import duckdb
@@ -317,7 +317,14 @@ def add_model(con,model_name,uci):
 def load_to_warehouse(db_path,model_names = None,replace=True):
     if model_names is None:
         model_names = Repository.valid_models()
+    
+    
+    #load ucis to memory
+    print("Loading UCIs into memory...")
     ucis = {model_name: UCI(Repository(model_name).uci_file,True) for model_name in model_names}
+    print("UCIs loaded. Building tables...")
+    
+    
     models_df = pd.concat([build_model_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
     operations_df = pd.concat([build_operations_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
     masslinks_df = pd.concat([build_masslink_table(model_name, uci) for model_name, uci in ucis.items()]).reset_index(drop=True)
@@ -330,7 +337,7 @@ def load_to_warehouse(db_path,model_names = None,replace=True):
     props = df.query('dtype == "C"')
     flags = df.query('dtype == "I"')
     params = df.query('dtype == "R"')
-
+    print("Tables built. Loading to warehouse...")
     with duckdb.connect(db_path) as con:
         con.execute("CREATE SCHEMA IF NOT EXISTS uci")
 
@@ -345,23 +352,63 @@ def load_to_warehouse(db_path,model_names = None,replace=True):
         warehouse.load_df_to_table(con, props, 'uci.properties',replace)
         warehouse.load_df_to_table(con, flags, 'uci.flags',replace)
         warehouse.load_df_to_table(con, params, 'uci.parameters',replace)
+    print("Data loaded to warehouse.")
 
 #%% Catchment Constituent Loadings
 
-def catchment_loadings(model_name, mod):
+folder_path = Path('C:/Users/mfratki/Documents/Projects/Tests')
+db_path = 'c:/Users/mfratki/Documents/hspf.duckdb'
+
+catchment_loading_reports = []
+mod = hspfModel(folder_path / model_name / 'model' / f'{model_name}_0.uci')
+
+
+
+def build_constituent_loading_table(model_name,uci,hbn):
+    dfs = []
+    for constituent in ['Q','TSS','N','OP','TP','TKN']:
+        df = reports.get_constituent_loading(uci,hbn,constituent,4)
+        df['constituent'] = constituent
+        df['model_name'] = model_name
+        dfs.append(df)
+    return pd.concat(dfs)
+
+def build_catchment_loading_table(model_name,uci,hbn):
+    dfs = []
+    for constituent in ['Q','TSS','N','OP','TP','TKN']:
+        df = reports.catchment_loading_summary(uci,hbn,constituent)
+        df['constituent'] = constituent
+        df['model_name'] = model_name
+        dfs.append(df)
+    return pd.concat(dfs)
+
+for model_name in Repository.valid_models():
+    mod = hspfModel(folder_path / model_name / 'model' / f'{model_name}_0.uci')
+    #mod = mods[model_name]
+    mods[model_name] = mod
+    if len(mod.hbns.output_names()) > 0:
         dfs = []
         for constituent in ['Q','TSS','N','TKN','TP','OP']:
-            df_constituent = mod.reports.catchment_loading(constituent,True)
-            dfs.append(df_constituent)
+            try:
+                df_constituent = mod.reports.catchment_loading(constituent,True)
+                dfs.append(df_constituent)
+            except:
+                print(f'Constituent report failed for {model_name} : {constituent}')
+                model.append(f'{model_name} : {constituent} report failed')
         df = pd.concat(dfs)
         df['model_name'] = model_name
-        df['month'] = df['datetime'].dt.month
-        df['year'] = df['datetime'].dt.year
-        return df
+        catchment_loading_reports.append(df)
+    else:
+        print(f'No outputs for {model_name}')
+        model.append(f'{model_name} : No outputs')
 
+df = pd.concat(catchment_loading_reports,ignore_index=True)
+df.rename(columns={'index': 'datetime'}, inplace=True)
+df['month'] = df['datetime'].dt.month
+df['year'] = df['datetime'].dt.year
 
-
-
+with duckdb.connect(db_path) as con:
+    con.execute("CREATE OR REPLACE TABLE catchment_loading AS SELECT * FROM df;")
 
 
 #%% Model Scour Reports

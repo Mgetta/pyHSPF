@@ -115,6 +115,19 @@ from hspf.reports.utils import (
     annual_weighted_output,
 )
 
+# --- analytics: timeseries ---
+from hspf.reports._analytics.timeseries import (
+    filter_years,
+    filter_months,
+    aggregate,
+)
+
+# --- analytics: loading ---
+from hspf.reports._analytics.loading import (
+    compute_load,
+    compute_loading_rate,
+)
+
 # --- legacy ---
 from hspf.reports.legacy import (
     avg_subwatershed_loading,

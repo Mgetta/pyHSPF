@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import pytest
 from unittest.mock import MagicMock
 from hspf.reports.loading import (
     _join_catchments,
@@ -9,6 +10,8 @@ from hspf.reports.loading import (
     catchment_areas,
     constituent_loading_summary,
 )
+from hspf.reports._analytics.timeseries import filter_years, filter_months, aggregate
+from hspf.reports._analytics.loading import compute_load, compute_loading_rate
 
 
 def _make_mock_uci():
@@ -350,3 +353,175 @@ def test_constituent_loading_summary_invalid_grouping():
                 MagicMock(), MagicMock(), 'TP', 2000, 2001, temporal_grouping='invalid')
     finally:
         reports_mod.get_constituent_loading = original_fn
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared by timeseries and loading analytics tests
+# ---------------------------------------------------------------------------
+
+def _make_monthly_ts(n_years=3):
+    """Create a simple monthly DataFrame with DatetimeIndex spanning n_years."""
+    idx = pd.date_range('2000-01-01', periods=12 * n_years, freq='MS')
+    return pd.DataFrame(
+        {'A': np.arange(float(12 * n_years)), 'B': np.arange(12.0 * n_years, 24.0 * n_years)},
+        index=idx,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tests for filter_years
+# ---------------------------------------------------------------------------
+
+def test_filter_years_lower_bound():
+    ts = _make_monthly_ts(3)
+    result = filter_years(ts, start_year=2001)
+    assert result.index.year.min() == 2001
+
+
+def test_filter_years_upper_bound():
+    ts = _make_monthly_ts(3)
+    result = filter_years(ts, end_year=2001)
+    assert result.index.year.max() == 2001
+
+
+def test_filter_years_closed_range():
+    ts = _make_monthly_ts(3)
+    result = filter_years(ts, start_year=2001, end_year=2001)
+    assert len(result) == 12
+    assert (result.index.year == 2001).all()
+
+
+def test_filter_years_no_bounds_returns_all():
+    ts = _make_monthly_ts(3)
+    result = filter_years(ts)
+    assert len(result) == len(ts)
+
+
+def test_filter_years_preserves_series():
+    ts = _make_monthly_ts(2)['A']
+    result = filter_years(ts, start_year=2001)
+    assert isinstance(result, pd.Series)
+    assert result.index.year.min() == 2001
+
+
+# ---------------------------------------------------------------------------
+# Tests for filter_months
+# ---------------------------------------------------------------------------
+
+def test_filter_months_summer():
+    ts = _make_monthly_ts(3)
+    result = filter_months(ts, [6, 7, 8])
+    assert set(result.index.month.unique()) == {6, 7, 8}
+    assert len(result) == 9  # 3 years × 3 months
+
+
+def test_filter_months_single():
+    ts = _make_monthly_ts(3)
+    result = filter_months(ts, [1])
+    assert len(result) == 3  # one January per year
+
+
+def test_filter_months_preserves_series():
+    ts = _make_monthly_ts(2)['A']
+    result = filter_months(ts, [3, 4, 5])
+    assert isinstance(result, pd.Series)
+    assert set(result.index.month.unique()) == {3, 4, 5}
+
+
+# ---------------------------------------------------------------------------
+# Tests for aggregate
+# ---------------------------------------------------------------------------
+
+def test_aggregate_by_none_returns_series():
+    ts = _make_monthly_ts(3)
+    result = aggregate(ts, by=None, agg_func='mean')
+    assert isinstance(result, pd.Series)
+    assert len(result) == 2
+
+
+def test_aggregate_by_year_returns_n_years():
+    ts = _make_monthly_ts(3)
+    result = aggregate(ts, by='year', agg_func='sum')
+    assert len(result) == 3
+
+
+def test_aggregate_by_month_returns_12():
+    ts = _make_monthly_ts(3)
+    result = aggregate(ts, by='month', agg_func='mean')
+    assert len(result) == 12
+
+
+def test_aggregate_by_season_returns_4():
+    ts = _make_monthly_ts(3)
+    result = aggregate(ts, by='season', agg_func='sum')
+    assert len(result) == 4
+    assert set(result.index) == {'DJF', 'MAM', 'JJA', 'SON'}
+
+
+def test_aggregate_by_year_season_shape():
+    ts = _make_monthly_ts(3)
+    result = aggregate(ts, by=['year', 'season'], agg_func='sum')
+    assert len(result) == 12  # 3 years × 4 seasons
+
+
+def test_aggregate_custom_season_map():
+    ts = _make_monthly_ts(3)
+    custom = {m: 'wet' if m in [11, 12, 1, 2, 3, 4] else 'dry' for m in range(1, 13)}
+    result = aggregate(ts, by='season', season_map=custom)
+    assert set(result.index) == {'wet', 'dry'}
+
+
+def test_aggregate_invalid_key_raises():
+    ts = _make_monthly_ts(3)
+    with pytest.raises(ValueError, match="Unknown grouping key"):
+        aggregate(ts, by='quarter')
+
+
+def test_aggregate_by_string_and_list_equivalent():
+    ts = _make_monthly_ts(3)
+    r_str = aggregate(ts, by='year', agg_func='mean')
+    r_list = aggregate(ts, by=['year'], agg_func='mean')
+    pd.testing.assert_frame_equal(r_str, r_list)
+
+
+# Pipeline: average of annual summer totals
+def test_aggregate_pipeline_annual_summer():
+    ts = _make_monthly_ts(3)
+    summer = filter_months(filter_years(ts, 2000, 2002), [6, 7, 8])
+    annual_summer = aggregate(summer, by='year', agg_func='sum')
+    result = aggregate(annual_summer, by=None, agg_func='mean')
+    assert isinstance(result, pd.Series)
+    assert len(result) == 2
+
+
+# ---------------------------------------------------------------------------
+# Tests for compute_load and compute_loading_rate
+# ---------------------------------------------------------------------------
+
+def test_compute_load_scalar_area():
+    ts = _make_monthly_ts(1)
+    result = compute_load(ts, 10.0)
+    pd.testing.assert_frame_equal(result, ts * 10.0)
+
+
+def test_compute_loading_rate_scalar_area():
+    ts = _make_monthly_ts(1)
+    load = compute_load(ts, 10.0)
+    result = compute_loading_rate(load, 10.0)
+    pd.testing.assert_frame_equal(result, ts)
+
+
+def test_compute_load_series_area():
+    ts = _make_monthly_ts(1)
+    area = pd.Series({'A': 5.0, 'B': 20.0})
+    result = compute_load(ts, area)
+    assert np.allclose(result['A'], ts['A'] * 5.0)
+    assert np.allclose(result['B'], ts['B'] * 20.0)
+
+
+def test_compute_loading_rate_series_area():
+    ts = _make_monthly_ts(1)
+    area = pd.Series({'A': 5.0, 'B': 20.0})
+    load = compute_load(ts, area)
+    result = compute_loading_rate(load, area)
+    pd.testing.assert_frame_equal(result, ts)

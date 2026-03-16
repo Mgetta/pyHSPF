@@ -203,14 +203,22 @@ def mock_hbn(hbn_dataframes):
     hbn = MagicMock()
     hbn.data_frames = hbn_dataframes
 
+    # Pre-index frames by (operation, opnid) for O(1) lookup
+    _index = {}
+    for key, df in hbn_dataframes.items():
+        parts = key.split("_", 2)  # e.g. ['PERLND', 'PWATER', '001_5']
+        opn = parts[0]
+        opnid = int(parts[2].split("_")[0])
+        _index.setdefault((opn, opnid), []).append(df)
+
     def _get_perlnd_constituent(constituent, time_step=5):
         from hspf.helpers import get_tcons
         t_cons = get_tcons(constituent, "PERLND")
         frames = []
         for pid in PERLND_IDS:
-            for t_con in t_cons:
-                for key, df in hbn_dataframes.items():
-                    if key.startswith(f"PERLND_") and key.endswith(f"_{pid:03d}_5") and t_con in df.columns:
+            for df in _index.get(("PERLND", pid), []):
+                for t_con in t_cons:
+                    if t_con in df.columns:
                         series = df[t_con].copy()
                         series.name = pid
                         frames.append(series)
@@ -226,9 +234,9 @@ def mock_hbn(hbn_dataframes):
         t_cons = get_tcons(constituent, "IMPLND")
         frames = []
         for iid in IMPLND_IDS:
-            for t_con in t_cons:
-                for key, df in hbn_dataframes.items():
-                    if key.startswith(f"IMPLND_") and key.endswith(f"_{iid:03d}_5") and t_con in df.columns:
+            for df in _index.get(("IMPLND", iid), []):
+                for t_con in t_cons:
+                    if t_con in df.columns:
                         series = df[t_con].copy()
                         series.name = iid
                         frames.append(series)

@@ -34,7 +34,6 @@ REACH_IDS = [1, 2, 3, 4, 5, 6, 7]
 # ── time axis shared by every mock HBN frame ────────────────────────────────
 
 YEARLY_INDEX = pd.date_range("2000-01-01", periods=5, freq="YS")  # 2000-2004
-MONTHLY_INDEX = pd.date_range("2000-01-01", periods=60, freq="MS")  # 5 yrs
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────

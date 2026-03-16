@@ -23,15 +23,6 @@ from tests.conftest import (
     YEARLY_INDEX,
 )
 
-# Warm-up import: hspf.reports.__init__ has a pre-existing broken import
-# of a non-existent name from yields.py.  The *first* import of any
-# hspf.reports sub-module raises ImportError, but the sub-module itself
-# gets cached in sys.modules so subsequent imports succeed.
-try:
-    from hspf.reports.loading import _join_catchments  # noqa: F401
-except ImportError:
-    pass
-
 
 # ---------------------------------------------------------------------------
 # Schematic / subwatersheds structural tests

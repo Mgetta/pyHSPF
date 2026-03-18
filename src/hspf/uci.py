@@ -340,18 +340,28 @@ class UCI():
         return dsns
     
         
-    def initialize(self,name = None, default_output = 4,n=5,reach_ids = None):
+    def initialize(self,name = None, default_output = 4,n=None,reach_ids = None, constituents = None):
         if name is None:
             name = self.name
         
+        if constituents is None:
+            constituents = ['Q','WT','TSS','N','TKN','OP','BOD']
+
+        if n is None and reach_ids is not None:
+            n = int(len(reach_ids)/2)
+        else:
+            n = 5
+
         # Note that the order of these function calls matters
         setup_files(self,name,n)
-        setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids)
+        setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids,constituents = constituents)
         setup_geninfo(self)
         setup_qualid(self)
 
-    def initialize_binary_info(self,default_output = 4,reach_ids = None):
-        setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids)
+    def initialize_binary_info(self,default_output = 4,reach_ids = None,constituents = None):
+        if constituents is None:
+            constituents = ['Q','WT','TSS','N','TKN','OP','BOD']
+        setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids,constituents=constituents)
         setup_geninfo(self)
 
     
@@ -469,7 +479,19 @@ def setup_geninfo(uci):
                             uci.update_table(bino_num,operation,'GEN-INFO',0,opnids = opnid,columns = 'BUNIT1',operator = 'set')
 
 
-def setup_binaryinfo(uci,default_output = 4,reach_ids = None):
+
+
+def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None):
+
+    CONSTITUENT_MAP = {'Q': ['HYDRPR'],
+                        'TSS': ['SEDPR'],
+                        'WT': ['HEATPR'],
+                        'N': ['OXRXPR','NUTRPR','PLNKPR'],
+                        'TKN': ['OXRXPR','NUTRPR','PLNKPR'],
+                        'OP': ['OXRXPR','NUTRPR','PLNKPR'],
+                        'BOD': ['OXRXPR','NUTRPR','PLNKPR'],
+                        'TP': ['OXRXPR','NUTRPR','PLNKPR']}
+    
     # Initialize Binary-Info
     uci.update_table(default_output,'PERLND','BINARY-INFO',0,
                      columns = ['AIRTPR', 'SNOWPR', 'PWATPR', 'SEDPR', 'PSTPR', 'PWGPR', 'PQALPR','MSTLPR', 'PESTPR', 'NITRPR', 'PHOSPR', 'TRACPR'],
@@ -485,8 +507,11 @@ def setup_binaryinfo(uci,default_output = 4,reach_ids = None):
     uci.update_table(default_output,'IMPLND','BINARY-INFO',0,columns = ['SNOWPR','IWATPR','SLDPR','IQALPR'],operator = 'set')
     uci.update_table(default_output,'RCHRES','BINARY-INFO',0,columns = ['HYDRPR','SEDPR','HEATPR','OXRXPR','NUTRPR','PLNKPR'],operator = 'set')
     if reach_ids is not None:
-        uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = ['SEDPR','OXRXPR','NUTRPR','PLNKPR','HEATPR','HYDRPR'],opnids = reach_ids,operator = 'set')
-
+        if constituents is None:
+             uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = ['SEDPR','OXRXPR','NUTRPR','PLNKPR','HEATPR','HYDRPR'],opnids = reach_ids,operator = 'set')
+        else:
+            for constituent in constituents:
+                uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = CONSTITUENT_MAP[constituent],opnids = reach_ids,operator = 'set')
 
 def setup_qualid(uci):
     #### Standardize QUAL-ID Names

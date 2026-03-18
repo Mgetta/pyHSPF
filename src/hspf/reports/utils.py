@@ -23,6 +23,19 @@ SIMULATION_PERIOD_TO_TIME_STEP = {
 #: 'simulation' is a special sentinel meaning "the entire simulation span".
 PERIOD_ORDER = ['hourly', 'daily', 'monthly', 'seasonal', 'yearly', 'simulation']
 
+def filter_opnids(df,operation,opnids,drop=True):
+    indexes = (df['OPERATION'] == operation) & df['OPNID'].isin(opnids)
+    if drop:
+        return df[~indexes]
+    return df[indexes]
+
+def filter_catchments(df, tvolnos, drop=True):
+    indexes = df['TVOLNO'].isin(tvolnos)
+    if drop:
+        return df[~indexes]
+    return df[indexes]
+
+
 
 def simulation_period_to_time_step(simulation_period):
     """Convert a *simulation_period* string to the integer HBN time-step code.

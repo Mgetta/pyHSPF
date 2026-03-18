@@ -40,9 +40,7 @@ from hspf.reports.loading import (
 
 # --- yields ---
 from hspf.reports.yields import (
-    _constituent_load,
     constituent_load,
-    _constituent_yield,
     constituent_yield,
     average_annual_yield,
     average_monthly_yield,
@@ -51,7 +49,7 @@ from hspf.reports.yields import (
 
 # --- contributions ---
 from hspf.reports.contributions import (
-    allocation_selector,
+    ALLOCATION_SELECTOR,
     channel_inflows,
     channel_outflows,
     channel_fate,

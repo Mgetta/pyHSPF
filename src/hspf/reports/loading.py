@@ -83,7 +83,7 @@ def get_catchment_loading(uci,hbn,constituent,time_step=5,start_year=1996,end_ye
     return df
 
 
-def monthly_loading(uci,hbn,constituent,aggregation_period = 'yearly',start_year = 1996,end_year = 2100):
+def monthly_loading(uci,hbn,constituent,aggregation_period = 'monthly',start_year = 1996,end_year = 2100):
     df = get_constituent_loading(uci,hbn,constituent,time_step=4,start_year=start_year,end_year=end_year)
     df = add_temporal_groups(df, 4)
 
@@ -106,11 +106,14 @@ def monthly_loading(uci,hbn,constituent,aggregation_period = 'yearly',start_year
 
     return df
 
-def seasonal_loading(uci,hbn,constituent,aggregation_period = 'yearly',start_year = 1996,end_year = 2100):
+def seasonal_loading(uci,hbn,constituent,season = None,aggregation_period = 'yearly',start_year = 1996,end_year = 2100):
     df = get_constituent_loading(uci,hbn,constituent,time_step=4,start_year=start_year,end_year=end_year)
     df = add_temporal_groups(df, 4)
     df = df.groupby(['season','year','OPNID','OPERATION'])['value'].aggregate('sum').reset_index()
 
+    if season is not None:
+        df = df.loc[df['season'] == season].copy()
+        
     if aggregation_period is None:
         pass
     elif aggregation_period == 'yearly':

@@ -286,7 +286,7 @@ def adjacent_reaches(G,reach_id):
     return [G.nodes[perlnd_node_id] for perlnd_node_id in predecessors(G,'RCHRES',G.labels[('RCHRES',reach_id)])]
 
 def upstream_adjacent_reachs(G,reach_id):
-    return [G.nodes[reach_id]['id'] for reach_id in predecessors(G,'RCHRES',G.labels[('RCHRES',reach_id)])]
+    return [node['type_id'] for node in predecessors(G,'RCHRES',get_node_id(G,'RCHRES',reach_id))]
     
 def downstream_adjacent_reachs(G,reach_id):
     return successors(G,'RCHRES',G.labels[('RCHRES',reach_id)])
@@ -556,6 +556,10 @@ class reachNetwork():
         downstream.insert(0,reach_id)
         return downstream
         
+    def collect(self,reach_id,upstream_reach_ids):
+        return collect(self.G,reach_id,upstream_reach_ids)
+
+
     def calibration_order(self,reach_ids,upstream_reach_ids = None):
         '''
         Calibration order of reaches to prevent upstream influences. Equivalent to iteritivlye pruning the network remving nodes with no upstream connections.
@@ -733,10 +737,20 @@ def operation_area(uci,operation):
     return df
 
 
+def collect(G,reach_id,upstream_reach_ids):
+    def _collect(G,reach_id,upstream_reach_ids,result):
+        _upstream_reaches = upstream_adjacent_reachs(G,reach_id)
+        for upstream_reach_id in _upstream_reaches:
+            if upstream_reach_id not in upstream_reach_ids:
+                _collect(G,upstream_reach_id,upstream_reach_ids,result)
+                result.add(upstream_reach_id)
+        return result
+    
+    result = _collect(G,reach_id,upstream_reach_ids,set())
+    result.add(reach_id)
+    return result
 
-
-
-
+            
 
 
 # p = paths(G,reach_id,'RCHRES') 

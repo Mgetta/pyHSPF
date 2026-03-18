@@ -64,7 +64,7 @@ def get_tcons(nutrient_name,operation,units = 'mg/l'):
                   'BOD' :['POQUALBOD'],
                   'Q' : ['PERO']} # BOD is the difference of ptot and ortho
     elif operation == 'IMPLND':
-        t_cons = {'TSS' :['SLDS'],
+        t_cons = {'TSS' :['SOSLD'],
                   'TKN' :['SOQUALNH3+NH4'],
                   'N' :['SOQUALNO3'],
                   'OP' :['SOQUALORTHO P'],

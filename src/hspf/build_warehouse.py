@@ -65,6 +65,39 @@ def build_masslink_table(model_name, uci):
     return df
 
 
+def build_extsources_table(model_name, uci):
+    end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
+
+    extsource = uci.table('EXT SOURCES')
+    extsource['model_name'] = model_name
+    extsource['model_year'] = end_year
+    return extsource
+
+
+def build_exttargets_table(model_name, uci):
+    end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
+
+    if 'EXT TARGETS' in uci.block_names():
+        exttarget = uci.table('EXT TARGETS')
+        exttarget['model_name'] = model_name
+        exttarget['model_year'] = end_year
+    else:
+        exttarget = pd.DataFrame()
+    return exttarget
+
+
+def build_network_table(model_name, uci):
+    end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
+
+    if 'NETWORK' in uci.block_names():
+        network = uci.table('NETWORK')
+        network['model_name'] = model_name
+        network['model_year'] = end_year
+    else:
+        network = pd.DataFrame()
+    return network
+
+
 def build_ftables_table(model_name, uci):
     end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
 
@@ -152,6 +185,9 @@ def load_model(con, model_name, uci, run_id='base'):
     df_operations = build_operations_table(model_name, uci)
     df_masslinks = build_masslink_table(model_name, uci)
     df_schematics = build_schematic_table(model_name, uci)
+    df_extsources = build_extsources_table(model_name, uci)
+    df_exttargets = build_exttargets_table(model_name, uci)
+    df_networks = build_network_table(model_name, uci)
     df_ftables = build_ftables_table(model_name, uci)
     param_tables = build_parameter_table(model_name, uci, run_id=run_id)
 
@@ -159,6 +195,11 @@ def load_model(con, model_name, uci, run_id='base'):
     warehouse.load_df_to_table(con, df_operations, 'uci.operations', replace=True)
     warehouse.load_df_to_table(con, df_schematics, 'uci.schematics', replace=True)
     warehouse.load_df_to_table(con, df_masslinks, 'uci.masslinks', replace=True)
+    warehouse.load_df_to_table(con, df_extsources, 'uci.extsources', replace=True)
+    if not df_exttargets.empty:
+        warehouse.load_df_to_table(con, df_exttargets, 'uci.exttargets', replace=True)
+    if not df_networks.empty:
+        warehouse.load_df_to_table(con, df_networks, 'uci.networks', replace=True)
     warehouse.load_df_to_table(con, df_ftables, 'uci.ftables', replace=True)
     warehouse.load_df_to_table(con, param_tables['properties'], 'uci.properties', replace=True)
     warehouse.load_df_to_table(con, param_tables['flags'], 'uci.flags', replace=True)
@@ -171,6 +212,9 @@ def add_model(con, model_name, uci, run_id='base'):
     df_operations = build_operations_table(model_name, uci)
     df_masslinks = build_masslink_table(model_name, uci)
     df_schematics = build_schematic_table(model_name, uci)
+    df_extsources = build_extsources_table(model_name, uci)
+    df_exttargets = build_exttargets_table(model_name, uci)
+    df_networks = build_network_table(model_name, uci)
     df_ftables = build_ftables_table(model_name, uci)
     param_tables = build_parameter_table(model_name, uci, run_id=run_id)
 
@@ -178,6 +222,11 @@ def add_model(con, model_name, uci, run_id='base'):
     warehouse.add_df_to_table(con, df_operations, 'uci', 'operations')
     warehouse.add_df_to_table(con, df_schematics, 'uci', 'schematics')
     warehouse.add_df_to_table(con, df_masslinks, 'uci', 'masslinks')
+    warehouse.add_df_to_table(con, df_extsources, 'uci', 'extsources')
+    if not df_exttargets.empty:
+        warehouse.add_df_to_table(con, df_exttargets, 'uci', 'exttargets')
+    if not df_networks.empty:
+        warehouse.add_df_to_table(con, df_networks, 'uci', 'networks')
     warehouse.add_df_to_table(con, df_ftables, 'uci', 'ftables')
     warehouse.add_df_to_table(con, param_tables['properties'], 'uci', 'properties')
     warehouse.add_df_to_table(con, param_tables['flags'], 'uci', 'flags')
@@ -224,6 +273,18 @@ def load_to_warehouse(db_path, model_names=None, run_id='base', replace=True):
         [build_schematic_table(n, u) for n, u in ucis.items()]
     ).reset_index(drop=True)
 
+    extsources_df = pd.concat(
+        [build_extsources_table(n, u) for n, u in ucis.items()]
+    ).reset_index(drop=True)
+
+    exttargets_dfs = [build_exttargets_table(n, u) for n, u in ucis.items()]
+    exttargets_dfs = [df for df in exttargets_dfs if not df.empty]
+    exttargets_df = pd.concat(exttargets_dfs).reset_index(drop=True) if exttargets_dfs else pd.DataFrame()
+
+    networks_dfs = [build_network_table(n, u) for n, u in ucis.items()]
+    networks_dfs = [df for df in networks_dfs if not df.empty]
+    networks_df = pd.concat(networks_dfs).reset_index(drop=True) if networks_dfs else pd.DataFrame()
+
     ftables_df = pd.concat(
         [build_ftables_table(n, u) for n, u in ucis.items()]
     ).reset_index(drop=True)
@@ -243,6 +304,11 @@ def load_to_warehouse(db_path, model_names=None, run_id='base', replace=True):
         warehouse.load_df_to_table(con, operations_df, 'uci.operations', replace)
         warehouse.load_df_to_table(con, schematics_df, 'uci.schematics', replace)
         warehouse.load_df_to_table(con, masslinks_df, 'uci.masslinks', replace)
+        warehouse.load_df_to_table(con, extsources_df, 'uci.extsources', replace)
+        if not exttargets_df.empty:
+            warehouse.load_df_to_table(con, exttargets_df, 'uci.exttargets', replace)
+        if not networks_df.empty:
+            warehouse.load_df_to_table(con, networks_df, 'uci.networks', replace)
         warehouse.load_df_to_table(con, ftables_df, 'uci.ftables', replace)
         warehouse.load_df_to_table(con, props_df, 'uci.properties', replace)
         warehouse.load_df_to_table(con, flags_df, 'uci.flags', replace)

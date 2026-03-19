@@ -114,6 +114,9 @@ def drop_model_data(con: duckdb.DuckDBPyConnection, model_name: str):
         ('uci', 'operations'),
         ('uci', 'schematics'),
         ('uci', 'masslinks'),
+        ('uci', 'extsources'),
+        ('uci', 'exttargets'),
+        ('uci', 'networks'),
         ('uci', 'ftables'),
         ('uci', 'parameters'),
         ('uci', 'flags'),
@@ -123,4 +126,7 @@ def drop_model_data(con: duckdb.DuckDBPyConnection, model_name: str):
     ]
     for schema, table in tables:
         qualified = f"{schema}.{table}" if schema != 'main' else table
-        con.execute(f"DELETE FROM {qualified} WHERE model_name = ?", [model_name])
+        try:
+            con.execute(f"DELETE FROM {qualified} WHERE model_name = ?", [model_name])
+        except Exception:
+            pass

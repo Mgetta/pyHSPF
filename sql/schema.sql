@@ -64,6 +64,69 @@ CREATE TABLE IF NOT EXISTS uci.ftables (
     discharge    DOUBLE
 );
 
+CREATE TABLE IF NOT EXISTS uci.extsources (
+    model_name   VARCHAR NOT NULL,
+    model_year   INT NOT NULL,
+    SVOL         VARCHAR,
+    SVOLNO       INT,
+    SMESSION     VARCHAR,
+    SGRPN        VARCHAR,
+    SMEMN        VARCHAR,
+    SMEMSB1      INT,
+    SMEMSB2      INT,
+    SVARI        VARCHAR,
+    MFACTR       DOUBLE,
+    TRAN         VARCHAR,
+    TVOL         VARCHAR,
+    TOPFST       INT,
+    TOPLST       INT,
+    TGRPN        VARCHAR,
+    TMEMN        VARCHAR,
+    TMEMSB1      INT,
+    TMEMSB2      INT,
+    TSTEFP       VARCHAR,
+    APTS         VARCHAR
+);
+
+CREATE TABLE IF NOT EXISTS uci.exttargets (
+    model_name   VARCHAR NOT NULL,
+    model_year   INT NOT NULL,
+    SVOL         VARCHAR,
+    SVOLNO       INT,
+    SGRPN        VARCHAR,
+    SMEMN        VARCHAR,
+    SMEMSB1      INT,
+    SMEMSB2      INT,
+    MFACTR       DOUBLE,
+    TRAN         VARCHAR,
+    TVOL         VARCHAR,
+    TVOLNO       INT,
+    TGRPN        VARCHAR,
+    TMEMN        VARCHAR,
+    TMEMSB1      INT,
+    TMEMSB2      INT,
+    APTS         VARCHAR
+);
+
+CREATE TABLE IF NOT EXISTS uci.networks (
+    model_name   VARCHAR NOT NULL,
+    model_year   INT NOT NULL,
+    SVOL         VARCHAR,
+    SVOLNO       INT,
+    SGRPN        VARCHAR,
+    SMEMN        VARCHAR,
+    SMEMSB1      INT,
+    SMEMSB2      INT,
+    MFACTR       DOUBLE,
+    TVOL         VARCHAR,
+    TOPFST       INT,
+    TOPLST       INT,
+    TGRPN        VARCHAR,
+    TMEMN        VARCHAR,
+    TMEMSB1      INT,
+    TMEMSB2      INT
+);
+
 -- ============================================================
 -- 3. UCI PARAMETERS (keyed to model + run)
 -- ============================================================

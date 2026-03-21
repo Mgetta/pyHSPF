@@ -932,3 +932,307 @@ def dynamic_travel_time_exceedance(reach_volumes, reach_outflows, routing_paths,
                 t: float((series > t).sum()) / n for t in thresholds_hours
             }
     return pd.DataFrame(records).T.rename_axis('source_reach_id')
+
+
+# =============================================================================
+# Section 5: Water Age Distribution at a Target Reach
+# =============================================================================
+
+def _weighted_percentile(values, weights, p):
+    """Compute weighted percentile by interpolation on the cumulative weight curve."""
+    order = np.argsort(values)
+    v_sorted = values[order]
+    w_sorted = weights[order]
+    cum_w = np.cumsum(w_sorted)
+    cum_w_norm = cum_w / cum_w[-1]
+    return float(np.interp(p / 100.0, cum_w_norm, v_sorted))
+
+
+def water_age_distribution(uci, hbn, target_reach_id, t_code=5, bins=48):
+    """Compute the contribution-weighted water age distribution at a target reach.
+
+    Combines dynamic travel times (how long water takes to traverse the
+    network) with volumetric flow contributions (how much each source
+    delivers) to build a PDF of water age at the target.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object (provides network graph).
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where the age distribution is evaluated.
+    t_code : int, optional
+        Time-step code for HBN retrieval (default 5 = monthly).
+    bins : int or array-like, optional
+        Histogram bins for the age PDF (default 48).
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``['age_hours', 'density', 'cumulative']``.
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    # Dynamic travel times (V/Q per reach, summed along paths)
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    # Flow contributions from each source to the target
+    fate = channel_fate('Q', hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading('Q', uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    return _age_histogram(travel_times_df, contributions_df, bins)
+
+
+def water_age_summary(uci, hbn, target_reach_id, t_code=5):
+    """Compute contribution-weighted summary statistics of water age.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where age is evaluated.
+    t_code : int, optional
+        Time-step code (default 5 = monthly).
+
+    Returns
+    -------
+    dict
+        Keys: ``mean_age_hours``, ``median_age_hours``, ``std_age_hours``,
+        ``p10_age_hours``, ``p25_age_hours``, ``p75_age_hours``,
+        ``p90_age_hours``, ``young_water_fraction`` (age < 24 h).
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    fate = channel_fate('Q', hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading('Q', uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    return _age_summary(travel_times_df, contributions_df)
+
+
+def water_age_by_period(uci, hbn, target_reach_id, t_code=5,
+                        group_by='month', bins=48):
+    """Compute age distributions grouped by time period.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where age is evaluated.
+    t_code : int, optional
+        Time-step code (default 5 = monthly).
+    group_by : {'month', 'season', 'year'}
+        Temporal grouping.  ``'season'`` uses DJF/MAM/JJA/SON.
+    bins : int or array-like, optional
+        Histogram bins (default 48).
+
+    Returns
+    -------
+    dict
+        ``{period_label: pd.DataFrame}`` -- each DataFrame has columns
+        ``['age_hours', 'density', 'cumulative']``.
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    fate = channel_fate('Q', hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading('Q', uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    return _age_histogram_by_period(travel_times_df, contributions_df,
+                                    group_by=group_by, bins=bins)
+
+
+def water_age_source_table(uci, hbn, target_reach_id, t_code=5):
+    """Per-source summary: mean travel time, mean contribution, and percent of total.
+
+    Useful for identifying which sub-basins deliver the most water and
+    how quickly -- the primary input for BMP targeting.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where age is evaluated.
+    t_code : int, optional
+        Time-step code (default 5 = monthly).
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by source_reach_id with columns:
+        ``['mean_travel_time_hours', 'mean_contribution',
+        'contribution_pct', 'catchment_area_acres']``.
+        Sorted descending by ``contribution_pct``.
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    G = uci.network.G
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    fate = channel_fate('Q', hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading('Q', uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    common = travel_times_df.columns.intersection(contributions_df.columns)
+    mean_tt = travel_times_df[common].mean()
+    mean_contrib = contributions_df[common].mean()
+    total_contrib = mean_contrib.sum()
+
+    df = pd.DataFrame({
+        'mean_travel_time_hours': mean_tt,
+        'mean_contribution': mean_contrib,
+        'contribution_pct': np.where(total_contrib > 0, mean_contrib / total_contrib * 100, 0),
+    })
+
+    # Add catchment area where available
+    areas = {}
+    for rid in common:
+        areas[rid] = graph.catchment_area(G, rid)
+    df['catchment_area_acres'] = pd.Series(areas)
+
+    return df.sort_values('contribution_pct', ascending=False).rename_axis('source_reach_id')
+
+
+# =============================================================================
+# Section 5 helpers (private)
+# =============================================================================
+
+def _age_histogram(travel_times_df, contributions_df, bins=48):
+    """Build a contribution-weighted age histogram from travel time and contribution DataFrames."""
+    common = travel_times_df.columns.intersection(contributions_df.columns)
+    tt_vals = travel_times_df[common].values.ravel()
+    wt_vals = contributions_df[common].values.ravel()
+
+    valid = np.isfinite(tt_vals) & np.isfinite(wt_vals) & (wt_vals > 0) & (tt_vals > 0)
+    tt_vals = tt_vals[valid]
+    wt_vals = wt_vals[valid]
+
+    if len(tt_vals) == 0:
+        return pd.DataFrame(columns=['age_hours', 'density', 'cumulative'])
+
+    counts, edges = np.histogram(tt_vals, bins=bins, weights=wt_vals)
+    total = counts.sum()
+    density = counts / total if total > 0 else counts
+    bin_centers = 0.5 * (edges[:-1] + edges[1:])
+
+    return pd.DataFrame({
+        'age_hours': bin_centers,
+        'density': density,
+        'cumulative': np.cumsum(density),
+    })
+
+
+def _age_summary(travel_times_df, contributions_df):
+    """Compute contribution-weighted age summary statistics."""
+    common = travel_times_df.columns.intersection(contributions_df.columns)
+    tt_vals = travel_times_df[common].values.ravel()
+    wt_vals = contributions_df[common].values.ravel()
+
+    valid = np.isfinite(tt_vals) & np.isfinite(wt_vals) & (wt_vals > 0) & (tt_vals > 0)
+    tt_vals = tt_vals[valid]
+    wt_vals = wt_vals[valid]
+
+    keys = ['mean_age_hours', 'median_age_hours', 'std_age_hours',
+            'p10_age_hours', 'p25_age_hours', 'p75_age_hours',
+            'p90_age_hours', 'young_water_fraction']
+    if len(tt_vals) == 0:
+        return {k: np.nan for k in keys}
+
+    total_wt = wt_vals.sum()
+    mean_age = float(np.sum(tt_vals * wt_vals) / total_wt)
+    variance = float(np.sum(wt_vals * (tt_vals - mean_age) ** 2) / total_wt)
+    young_fraction = float(wt_vals[tt_vals < 24.0].sum() / total_wt)
+
+    return {
+        'mean_age_hours': mean_age,
+        'median_age_hours': _weighted_percentile(tt_vals, wt_vals, 50),
+        'std_age_hours': np.sqrt(variance),
+        'p10_age_hours': _weighted_percentile(tt_vals, wt_vals, 10),
+        'p25_age_hours': _weighted_percentile(tt_vals, wt_vals, 25),
+        'p75_age_hours': _weighted_percentile(tt_vals, wt_vals, 75),
+        'p90_age_hours': _weighted_percentile(tt_vals, wt_vals, 90),
+        'young_water_fraction': young_fraction,
+    }
+
+
+def _age_histogram_by_period(travel_times_df, contributions_df,
+                              group_by='month', bins=48):
+    """Compute age histograms grouped by temporal period."""
+    if group_by == 'month':
+        labels = travel_times_df.index.month
+    elif group_by == 'season':
+        month_to_season = {12: 'DJF', 1: 'DJF', 2: 'DJF',
+                           3: 'MAM', 4: 'MAM', 5: 'MAM',
+                           6: 'JJA', 7: 'JJA', 8: 'JJA',
+                           9: 'SON', 10: 'SON', 11: 'SON'}
+        labels = travel_times_df.index.month.map(month_to_season)
+    elif group_by == 'year':
+        labels = travel_times_df.index.year
+    else:
+        raise ValueError(
+            f"group_by must be 'month', 'season', or 'year', got '{group_by}'"
+        )
+
+    results = {}
+    for label in sorted(set(labels)):
+        mask = labels == label
+        results[label] = _age_histogram(
+            travel_times_df.loc[mask], contributions_df.loc[mask], bins=bins,
+        )
+    return results

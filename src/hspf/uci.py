@@ -107,7 +107,7 @@ class UCI():
     infer_metzones : bool, optional
         When *True* (default), meteorological zones and landcover assignments
         are inferred from the ``EXT SOURCES`` block and stored in
-        :pyattr:`opnid_dict`.
+        :attr:`opnid_dict`.
 
     Attributes
     ----------
@@ -198,7 +198,7 @@ class UCI():
         parser.  For operation blocks (``PERLND``, ``RCHRES``, ``IMPLND``,
         ``GENER``, ``COPY``) the returned DataFrame is indexed by ``OPNID``
         after expanding any operation-ID ranges (e.g. ``"1 10"`` →
-        ``[1, 2, …, 10]``) and filtering to :pyattr:`valid_opnids`.
+        ``[1, 2, …, 10]``) and filtering to :attr:`valid_opnids`.
 
         Parameters
         ----------
@@ -417,7 +417,7 @@ class UCI():
         Iterates over all blocks and their tables, serializes each
         :class:`~hspf.parser.parsers.Table` back to fixed-width text, and
         reassembles the complete UCI file content (including ``RUN`` /
-        ``END RUN`` delimiters).  The result is stored in :pyattr:`lines` and
+        ``END RUN`` delimiters).  The result is stored in :attr:`lines` and
         is ready for writing to disk via :meth:`write`.
         """
         lines = ['RUN']
@@ -507,7 +507,7 @@ class UCI():
 
 
     def _write(self, filepath):
-        """Write the current :pyattr:`lines` to *filepath* (internal)."""
+        """Write the current :attr:`lines` to *filepath* (internal)."""
         with open(filepath, 'w') as the_file:
             for line in self.lines:    
                 the_file.write(line+'\n')
@@ -761,7 +761,7 @@ class UCI():
         ----------
         name : str or None, optional
             Model name used for binary output file naming.  Defaults to
-            :pyattr:`name`.
+            :attr:`name`.
         default_output : int, optional
             Default output print level for BINARY-INFO tables (default ``4``).
         n : int, optional

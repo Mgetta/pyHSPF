@@ -126,6 +126,10 @@ from hspf.reports.residence import (
     path_travel_time,
     travel_times,
     travel_time_summary,
+    water_age_distribution,
+    water_age_summary,
+    water_age_by_period,
+    water_age_source_table,
 )
 
 # --- legacy ---
@@ -212,6 +216,27 @@ class ReportsAccessor:
     def catchment_contributions(self, constituent, target_reach_id, **kwargs):
         return catchment_contributions(
             self.uci, self.hbns, constituent, target_reach_id, **kwargs,
+        )
+
+    # --- water age -------------------------------------------------------
+    def water_age_distribution(self, target_reach_id, **kwargs):
+        return water_age_distribution(
+            self.uci, self.hbns, target_reach_id, **kwargs,
+        )
+
+    def water_age_summary(self, target_reach_id, **kwargs):
+        return water_age_summary(
+            self.uci, self.hbns, target_reach_id, **kwargs,
+        )
+
+    def water_age_by_period(self, target_reach_id, **kwargs):
+        return water_age_by_period(
+            self.uci, self.hbns, target_reach_id, **kwargs,
+        )
+
+    def water_age_source_table(self, target_reach_id, **kwargs):
+        return water_age_source_table(
+            self.uci, self.hbns, target_reach_id, **kwargs,
         )
 
     # --- hydrology -------------------------------------------------------

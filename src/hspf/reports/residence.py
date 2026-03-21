@@ -1149,9 +1149,216 @@ def water_age_source_table(uci, hbn, target_reach_id, t_code=5):
     return df.sort_values('contribution_pct', ascending=False).rename_axis('source_reach_id')
 
 
+def lagged_contributions(uci, hbn, target_reach_id, constituent='Q', t_code=5,
+                         source_reach_ids=None, start=None, end=None):
+    """Compute time-lagged source contributions arriving at a target reach.
+
+    Each source's instantaneous contribution (local load × path fate factor)
+    is shifted forward in time by the dynamic travel time from that source to
+    the target reach.  The result represents *what is arriving* at the target
+    at each timestep rather than what was emitted.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object (provides network graph).
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where contributions are evaluated.
+    constituent : str, optional
+        Constituent to analyse (default ``'Q'``).  Any key from
+        ``ALLOCATION_SELECTOR`` in ``contributions.py`` is accepted
+        (e.g. ``'TP'``, ``'TSS'``).
+    t_code : int, optional
+        Time-step code for HBN retrieval (default 5 = monthly).
+    source_reach_ids : list of int, optional
+        When provided, only return columns for these source reaches.
+        A :class:`ValueError` is raised if any requested ID is not found in
+        the computed routing paths.  When ``None`` (default), all upstream
+        sources are returned.
+    start : str or datetime-like, optional
+        Start of the output time window.  Applied after lag computation so
+        that contributions emitted before *start* but arriving within the
+        window are captured.  Uses :meth:`pandas.DataFrame.loc` slicing.
+    end : str or datetime-like, optional
+        End of the output time window (inclusive).
+
+    Returns
+    -------
+    pd.DataFrame
+        Index = DatetimeIndex, columns = source_reach_ids,
+        values = lagged contribution arriving at the target each timestep.
+
+    Raises
+    ------
+    ValueError
+        If any element of *source_reach_ids* is not present in the upstream
+        routing paths.
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    fate = channel_fate(constituent, hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading(constituent, uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    if source_reach_ids is not None:
+        available = set(contributions_df.columns)
+        missing = set(source_reach_ids) - available
+        if missing:
+            raise ValueError(
+                f"source_reach_ids not found in computed paths: {sorted(missing)}"
+            )
+
+    dt_hours = _infer_timestep_hours(contributions_df)
+    lagged = _apply_lag(contributions_df, travel_times_df, dt_hours)
+
+    if source_reach_ids is not None:
+        lagged = lagged[source_reach_ids]
+
+    if start is not None or end is not None:
+        lagged = lagged.loc[start:end]
+
+    return lagged
+
+
+def lagged_contribution_summary(uci, hbn, target_reach_id, constituent='Q',
+                                t_code=5, source_reach_ids=None,
+                                start=None, end=None):
+    """Summarise time-lagged source contributions at a target reach.
+
+    Calls :func:`lagged_contributions` with the same arguments and returns
+    a per-source summary table.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where contributions are evaluated.
+    constituent : str, optional
+        Constituent (default ``'Q'``).
+    t_code : int, optional
+        HBN time-step code (default 5 = monthly).
+    source_reach_ids : list of int, optional
+        Restrict output to these source reaches (see
+        :func:`lagged_contributions`).
+    start : str or datetime-like, optional
+        Start of the time window.
+    end : str or datetime-like, optional
+        End of the time window (inclusive).
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by *source_reach_id* with columns:
+
+        ``mean_lagged_contribution``
+            Temporal mean of arriving contribution per timestep.
+        ``total_lagged_contribution``
+            Sum of arriving contribution over the full (filtered) period.
+        ``pct_of_total``
+            Each source's share of the grand total arriving contribution
+            (0–100 scale).
+    """
+    lagged = lagged_contributions(
+        uci, hbn, target_reach_id,
+        constituent=constituent, t_code=t_code,
+        source_reach_ids=source_reach_ids,
+        start=start, end=end,
+    )
+
+    mean_contrib = lagged.mean()
+    total_contrib = lagged.sum()
+    grand_total = total_contrib.sum()
+    pct_of_total = np.where(grand_total > 0,
+                            total_contrib / grand_total * 100,
+                            0.0)
+
+    return pd.DataFrame({
+        'mean_lagged_contribution': mean_contrib,
+        'total_lagged_contribution': total_contrib,
+        'pct_of_total': pct_of_total,
+    }, index=lagged.columns).rename_axis('source_reach_id')
+
+
 # =============================================================================
 # Section 5 helpers (private)
 # =============================================================================
+
+def _apply_lag(contributions_df, travel_times_df, dt_hours):
+    """Shift each source's contribution timeseries forward by its travel time.
+
+    For each source column *j* and each timestep *t*, computes
+    ``lag_steps = travel_time[t, j] / dt_hours``, then distributes the
+    contribution between the floor and ceil arrival bins using linear
+    interpolation::
+
+        arrived[t + floor(lag_steps), j] += contribution[t, j] * (1 - frac)
+        arrived[t + ceil(lag_steps),  j] += contribution[t, j] * frac
+
+    where ``frac = lag_steps - floor(lag_steps)``.
+
+    Contributions whose arrival index falls beyond the end of the timeseries
+    are silently dropped.
+
+    Parameters
+    ----------
+    contributions_df : pd.DataFrame
+        Instantaneous contributions.  Index = DatetimeIndex,
+        columns = source_reach_ids.
+    travel_times_df : pd.DataFrame
+        Travel times in hours.  Must share at least some columns with
+        *contributions_df*.
+    dt_hours : float
+        Timestep size in hours (> 0).
+
+    Returns
+    -------
+    pd.DataFrame
+        Lagged contributions with the same shape, index, and columns as
+        the intersection of *contributions_df* and *travel_times_df*.
+    """
+    common = contributions_df.columns.intersection(travel_times_df.columns)
+    contrib = contributions_df[common].values.astype(float)
+    tt = travel_times_df[common].values.astype(float)
+
+    n_times, n_sources = contrib.shape
+    out = np.zeros((n_times, n_sources), dtype=float)
+
+    for j in range(n_sources):
+        for t in range(n_times):
+            c = contrib[t, j]
+            if not np.isfinite(c) or c <= 0:
+                continue
+            lag_h = tt[t, j]
+            if not np.isfinite(lag_h) or lag_h < 0:
+                continue
+            lag_steps = lag_h / dt_hours
+            arr_lo = t + int(np.floor(lag_steps))
+            arr_hi = arr_lo + 1
+            frac = lag_steps - np.floor(lag_steps)
+            if arr_lo < n_times:
+                out[arr_lo, j] += c * (1.0 - frac)
+            if arr_hi < n_times:
+                out[arr_hi, j] += c * frac
+
+    return pd.DataFrame(out, index=contributions_df.index, columns=common)
+
 
 def _age_histogram(travel_times_df, contributions_df, bins=48):
     """Build a contribution-weighted age histogram from travel time and contribution DataFrames."""

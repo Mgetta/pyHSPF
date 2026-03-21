@@ -130,6 +130,8 @@ from hspf.reports.residence import (
     water_age_summary,
     water_age_by_period,
     water_age_source_table,
+    lagged_contributions,
+    lagged_contribution_summary,
 )
 
 # --- legacy ---
@@ -236,6 +238,16 @@ class ReportsAccessor:
 
     def water_age_source_table(self, target_reach_id, **kwargs):
         return water_age_source_table(
+            self.uci, self.hbns, target_reach_id, **kwargs,
+        )
+
+    def lagged_contributions(self, target_reach_id, **kwargs):
+        return lagged_contributions(
+            self.uci, self.hbns, target_reach_id, **kwargs,
+        )
+
+    def lagged_contribution_summary(self, target_reach_id, **kwargs):
+        return lagged_contribution_summary(
             self.uci, self.hbns, target_reach_id, **kwargs,
         )
 

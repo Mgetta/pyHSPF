@@ -465,6 +465,7 @@ class UCI():
         flag2 : int or str
             Second output level flag value.
         """  
+        table_lines = self.table_lines('GLOBAL')
         for index, line in enumerate(table_lines):
             if '***' in line: #in case there are comments in the global block
                 continue
@@ -532,6 +533,7 @@ class UCI():
         list of str
             Unique parameter name(s) written into the template markers.
         """
+        table = self.table(block,table_name,0,False).reset_index()
         column_names,dtypes,starts,stops = self.uci[(block,table_name,table_id)]._delimiters()
         
         width = stops[column_names.index(column)] - starts[column_names.index(column)]
@@ -596,6 +598,7 @@ class UCI():
             Destination path for the UCI file.  The file is created or
             overwritten.
         """
+        self.merge_lines()
         self._write(new_uci_path) 
 
     def _run(self,wait_for_completion=True):
@@ -609,6 +612,7 @@ class UCI():
             When ``True`` (default), block until the model process exits.
             When ``False``, launch the process in the background.
         """
+        run_model(self.filepath, wait_for_completion=wait_for_completion)
 
     def update_bino(self,name):
         """Update binary-output (BINO) filenames in the FILES table.
@@ -704,6 +708,7 @@ class UCI():
             Absolute paths constructed by joining each matching filename with
             the directory that contains the UCI file.
         """
+        files = self.table('FILES')
         filepaths = files.loc[(files['FILENAME'].str.endswith(file_extension.lower())) |  (files['FILENAME'].str.endswith(file_extension.upper())),'FILENAME'].to_list()
         filepaths = [self.filepath.parent.joinpath(filepath) for filepath in filepaths]
         return filepaths
@@ -730,6 +735,7 @@ class UCI():
             Filtered EXT SOURCES rows with columns ``FILENAME``, ``SVOLNO``,
             ``SMEMN``, ``TOPFST``, and ``TVOL``.
         """
+        dsns = self.table('EXT SOURCES')
         assert (smemn in dsns['SMEMN'].unique())
         dsns = dsns.loc[(dsns['TVOL'] == operation) & (dsns['TOPFST'] == opnid) & (dsns['SMEMN'] == smemn)]
         files = self.table('FILES').set_index('FTYPE')
@@ -834,6 +840,7 @@ class UCI():
             * ``dom_lc`` – ``1`` for the land cover with the largest area,
               ``pd.NA`` for all others.
         """  
+        geninfo = self.table('PERLND','GEN-INFO')  
         targets = self.opnid_dict['PERLND'].loc[:,['LSID','landcover']] #.drop_duplicates(subset = 'landcover').loc[:,['LSID','landcover']].reset_index(drop = True)
         targets.columns = ['LSID','lc_number']
         schematic = self.table('SCHEMATIC')
@@ -878,6 +885,7 @@ def run_model(uci_file, wait_for_completion=True):
         On Windows, ``CREATE_NO_WINDOW`` is applied to suppress a console
         window when running in the background.
     """
+    winHSPF = str(Path(__file__).resolve().parent.parent) + '\\bin\\WinHSPFlt\\WinHspfLt.exe'
     
     # Arguments for the subprocess
     args = [winHSPF, uci_file.as_posix()]
@@ -915,6 +923,7 @@ def get_filepaths(uci,file_extension):
         Absolute paths constructed by joining each matching filename with
         the directory that contains the UCI file.
     """
+    files = uci.table('FILES')
     filepaths = files.loc[(files['FILENAME'].str.endswith(file_extension.lower())) |  (files['FILENAME'].str.endswith(file_extension.upper())),'FILENAME'].to_list()
     filepaths = [uci.filepath.parent.joinpath(filepath) for filepath in filepaths]
     return filepaths
@@ -944,6 +953,8 @@ def setup_files(uci,name,n = 5):
     n : int, optional
         Number of new BINO entries to create (default ``5``).
     """
+
+    table = uci.table('FILES',drop_comments = False)
 
     if 'PLTGEN' in uci.block_names():
         pltgen_nums = uci.table('PLTGEN','PLOTINFO')['PLOTFL'].tolist()
@@ -1185,6 +1196,7 @@ def format_opnids(table,valid_opnids):
     pandas.DataFrame
         Expanded and filtered table with ``OPNID`` (integer) as the index.
     """
+    table = table.reset_index()
     indexes = table.loc[table[~(table['OPNID'] == '')].index,'OPNID']
     for index, value in indexes.items():
         try:
@@ -1236,6 +1248,7 @@ def expand_extsources(data,valid_opnids):
     pandas.DataFrame
         Expanded and filtered EXT SOURCES table with a reset integer index.
     """
+    start_column = 'TOPFST'
     end_column = 'TOPLST'
     indexes = data.loc[~data[end_column].isna()]#[[start_column,end_column,'']]
 
@@ -1296,6 +1309,7 @@ def insert_rows(insertion_point,a,b,drop = True,reset_index = True):
     pandas.DataFrame
         Combined DataFrame with *b* inserted at the specified position.
     """
+    if drop: a = a.drop(insertion_point)
     df = pd.concat([a.loc[:insertion_point], b, a.loc[insertion_point:]])
     if reset_index: df = df.reset_index(drop=True)
     return df
@@ -1327,6 +1341,7 @@ def keep_valid_opnids(table,opnid_column,valid_opnids):
         Filtered table sorted by original row order with a reset integer
         index.
     """
+    table = table.reset_index(drop = True)
     valid_indexes = [table.index[(table[opnid_column].isin(valid_opnids[operation])) & (table['TVOL'] == operation)] for operation in valid_opnids.keys()]
     valid_indexes.append(table.index[table['comments'] != ''])
     table = pd.concat([table.loc[valid_index] for valid_index in valid_indexes])
@@ -1482,6 +1497,7 @@ def get_blocks(lines):
         <BLOCKNAME>'`` and *start_idx* is the line index of ``'<BLOCKNAME>'``
         (i.e. the block opener).
     """
+    dic = {}
     shift = len(lines)-1
     for index,line in enumerate(reversed(lines)):
         if '***' in line:
@@ -1535,6 +1551,7 @@ def build_uci(lines):
         Mapping of ``(block_name, table_name, table_id)`` tuples to
         :class:`~hspf.parser.parsers.Table` objects.
     """
+    blocks = get_blocks(lines)
     current_name = None
     keys = []
     tables = []

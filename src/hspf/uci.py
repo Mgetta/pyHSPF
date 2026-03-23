@@ -1,9 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jul 11 08:39:57 2022
+UCI file handling for HSPF (Hydrological Simulation Program - Fortran) models.
 
-@author: mfratki
-"""    
+This module provides tools to read, parse, manipulate, and write UCI (User
+Control Input) files used by HSPF.  The central class :class:`UCI` loads a
+UCI text file into a collection of :class:`~hspf.parser.parsers.Table` objects
+and exposes methods for querying and modifying individual tables, updating
+simulation periods, managing binary output configuration, building PEST/PEST++
+parameter templates, and running the model executable.
+
+Module-level helper functions cover file I/O (``reader``, ``get_blocks``,
+``build_uci``), table post-processing (``format_opnids``,
+``expand_extsources``, ``insert_rows``, ``keep_valid_opnids``), model
+execution (``run_model``), and UCI initialisation workflows (``setup_files``,
+``setup_geninfo``, ``setup_binaryinfo``, ``setup_qualid``).
+"""
 
 
 #lines = reader('C:/Users/mfratki/Documents/Projects/LacQuiParle/ucis/LacQuiParle_0.uci')
@@ -25,7 +36,57 @@ parseTable = pd.read_csv(Path(__file__).parent/'data/ParseTable.csv',
                                   'stop': 'Int64',
                                   'space': 'Int64'})
 class UCI():
+    """Represent an HSPF UCI (User Control Input) file.
+
+    Parses a UCI text file into a dictionary of
+    :class:`~hspf.parser.parsers.Table` objects, keyed by
+    ``(block, table_name, table_id)`` tuples.  Provides methods to read,
+    modify, and write those tables as well as higher-level workflows for
+    binary-output initialisation and PEST template generation.
+
+    Attributes
+    ----------
+    filepath : pathlib.Path
+        Resolved path of the UCI file on disk.
+    name : str
+        Stem of the UCI filename (no directory, no extension).
+    lines : list of str
+        Raw text lines of the UCI file as read by :func:`reader`.
+    run_comments : list of str
+        Comment lines that appear before the ``RUN`` keyword.
+    uci : dict
+        Mapping of ``(block, table_name, table_id)`` tuples to
+        :class:`~hspf.parser.parsers.Table` objects.
+    wdm_paths : list of pathlib.Path
+        Paths to WDM files referenced in the FILES block.
+    hbn_paths : list of pathlib.Path
+        Paths to HBN binary-output files referenced in the FILES block.
+    valid_opnids : dict
+        Mapping of operation name (``'PERLND'``, ``'RCHRES'``, etc.) to a
+        list of active integer segment IDs taken from the OPN SEQUENCE table.
+    network : reachNetwork
+        Reach-network graph built from the UCI schematic.
+    opnid_dict : dict or None
+        Per-operation DataFrames with met-zone and land-cover assignments,
+        populated when *infer_metzones* is ``True``.
+    """
+
     def __init__(self, filepath,infer_metzones = True):
+        """Initialise a UCI object by reading and parsing the given file.
+
+        Reads the file with :func:`reader`, extracts run-level comments, builds
+        the internal ``uci`` dict via :func:`build_uci`, derives
+        ``valid_opnids`` from the OPN SEQUENCE table, constructs the reach
+        network, and optionally infers meteorological zone assignments.
+
+        Parameters
+        ----------
+        filepath : str or pathlib.Path
+            Path to the UCI file to load.
+        infer_metzones : bool, optional
+            When ``True`` (default), call :meth:`get_metzones` during
+            initialisation and store the result in ``self.opnid_dict``.
+        """
         self.filepath = Path(filepath)
         self.name = self.filepath.name.split('.')[0]
         self.lines = reader(filepath)
@@ -65,11 +126,51 @@ class UCI():
     #                     line.split('~') # assuming there will only ever be 2 ~ in a line
     
     def get_parameter(self,parameter):
+        """Return the value of a named parameter.
+
+        Parameters
+        ----------
+        parameter : str
+            Name of the parameter to retrieve.
+
+        Raises
+        ------
+        NotImplementedError
+            Always; this method is not yet implemented.
+        """
         raise NotImplementedError()
     
                  
     def table(self,block,table_name = 'na',table_id = 0,drop_comments = True):
-        # Dynamic parsing of tables when called by user
+        """Return the parsed data for a UCI table as a DataFrame.
+
+        Tables are parsed lazily: on the first access the raw text lines are
+        converted to a :class:`pandas.DataFrame` and cached on the
+        :class:`~hspf.parser.parsers.Table` object.  Operation blocks
+        (PERLND, RCHRES, IMPLND, GENER, COPY) have their OPNID columns
+        expanded and filtered through :func:`format_opnids`; EXT SOURCES rows
+        are expanded through :func:`expand_extsources`.
+
+        Parameters
+        ----------
+        block : str
+            Block name (e.g. ``'PERLND'``, ``'GLOBAL'``, ``'EXT SOURCES'``).
+            Must be one of the recognised UCI block names.
+        table_name : str, optional
+            Sub-table name within the block (default ``'na'`` for blocks with a
+            single implicit table).
+        table_id : int, optional
+            Zero-based index used when the same table name appears multiple
+            times within a block (default ``0``).
+        drop_comments : bool, optional
+            When ``True`` (default), remove rows that contain only a comment
+            and drop the ``comments`` column from the returned DataFrame.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A copy of the parsed table data.
+        """
         assert block in ['GLOBAL','FILES','PERLND','IMPLND','RCHRES','SCHEMATIC','OPN SEQUENCE','MASS-LINK','EXT SOURCES','NETWORK','GENER','MONTH-DATA','EXT TARGETS','COPY','FTABLES','PLTGEN']
         
         table = self.uci[(block,table_name,table_id)] #[block][table_name][table_id]
@@ -89,29 +190,161 @@ class UCI():
         return table_data
     
     def _table(self,block,table_name,table_id):
+        """Return the raw :class:`~hspf.parser.parsers.Table` object.
+
+        Parameters
+        ----------
+        block : str
+            Block name.
+        table_name : str
+            Sub-table name within the block.
+        table_id : int
+            Zero-based occurrence index of the table within the block.
+
+        Returns
+        -------
+        hspf.parser.parsers.Table
+            The internal Table object (not a copy).
+        """
         return self.uci[(block,table_name,table_id)]
     
     def replace_table(self,table,block,table_name = 'na',table_id = 0): #replace an entire table 
+        """Replace the data stored in a UCI table.
+
+        Delegates to :meth:`~hspf.parser.parsers.Table.replace` on the
+        underlying :class:`~hspf.parser.parsers.Table` object so that
+        subsequent calls to :meth:`merge_lines` will serialise the new data.
+
+        Parameters
+        ----------
+        table : pandas.DataFrame
+            New data to store.  Column names and dtypes must be compatible with
+            the original table schema.
+        block : str
+            Block name.
+        table_name : str, optional
+            Sub-table name (default ``'na'``).
+        table_id : int, optional
+            Zero-based occurrence index (default ``0``).
+        """
         self.uci[(block,table_name,table_id)].replace(table)
 
     def table_lines(self,block,table_name = 'na',table_id = 0):
+        """Return a copy of the raw text lines for a table.
+
+        Parameters
+        ----------
+        block : str
+            Block name.
+        table_name : str, optional
+            Sub-table name (default ``'na'``).
+        table_id : int, optional
+            Zero-based occurrence index (default ``0``).
+
+        Returns
+        -------
+        list of str
+            A shallow copy of the list of raw text lines stored on the
+            underlying :class:`~hspf.parser.parsers.Table` object.
+        """
         return self.uci[(block,table_name,table_id)].lines.copy()
         
     def comments(block,table_name = None,table_id = 0): # comments of a table
+        """Return comment lines for a table.
+
+        Parameters
+        ----------
+        block : str
+            Block name.
+        table_name : str or None, optional
+            Sub-table name (default ``None``).
+        table_id : int, optional
+            Zero-based occurrence index (default ``0``).
+
+        Raises
+        ------
+        NotImplementedError
+            Always; this method is not yet implemented.
+        """
         raise NotImplementedError()
         
     def table_names(self,block):
+        """Return the unique sub-table names present within a block.
+
+        Parameters
+        ----------
+        block : str
+            Block name (e.g. ``'PERLND'``).
+
+        Returns
+        -------
+        list of str
+            Deduplicated list of table names found under the given block.
+        """
         return list(set([key[1] for key in list(self.uci.keys()) if key[0] == block]))
         
     def block_names(self): #blocks present in a particular uci file
+        """Return the set of block names present in this UCI file.
+
+        Returns
+        -------
+        set of str
+            Block names (e.g. ``{'GLOBAL', 'FILES', 'PERLND', ...}``).
+        """
         return set([key[0] for key in list(self.uci.keys())])
     
     def add_comment(self,comment):
+        """Add a comment to the UCI file.
+
+        Parameters
+        ----------
+        comment : str
+            Comment text to insert.
+
+        Raises
+        ------
+        NotImplementedError
+            Always; this method is not yet implemented.
+        """
         raise NotImplementedError()
                 
     def update_table(self,value,operation,table_name,table_id,opnids = None,columns = None,operator = '*',axis = 0):
-        # This should be moved up one layer as this is a user/business requirement. I would pass a Table object from this layer (data lyaer?) to the business layer, make changes, then pass it back down to this layer.
-        # ensures data has been parsed and allows for determining opnids and column values
+        """Apply an arithmetic or assignment operation to a subset of a table.
+
+        The target table is parsed on first access (via :meth:`table`).  The
+        operation is then dispatched to the appropriate method on the
+        underlying :class:`~hspf.parser.parsers.Table` object.
+
+        Parameters
+        ----------
+        value : scalar or array-like
+            Value(s) to use in the operation.  For ``'chuck'``, pass the
+            adjustment array; for ``'set'``, the literal value to assign.
+        operation : str
+            Block name that contains the table (e.g. ``'PERLND'``).
+        table_name : str
+            Sub-table name (e.g. ``'MON-IFLW-CONC'``).
+        table_id : int
+            Zero-based occurrence index of the table within the block.
+        opnids : array-like or None, optional
+            Subset of OPNID index values to update.  When ``None`` (default),
+            all rows are updated.
+        columns : str, list of str, or None, optional
+            Column(s) to update.  When ``None`` (default), all columns are
+            updated.
+        operator : str, optional
+            Arithmetic operator to apply.  One of ``'set'``, ``'*'``,
+            ``'/'``, ``'-'``, ``'+'``, or ``'chuck'`` (default ``'*'``).
+        axis : int, optional
+            Axis along which to apply the operation (passed to Table methods;
+            default ``0``).
+
+        Notes
+        -----
+        The ``'chuck'`` operator is only valid for ``MON-IFLW-CONC`` and
+        ``MON-GRND-CONC`` table names and uses :func:`chuck` to compute
+        adjusted concentration values.
+        """
         table = self.table(operation,table_name,table_id,True)
         
         if opnids is None:
@@ -141,6 +374,19 @@ class UCI():
             print('Select valid operator (set,*,/,-,+')
     
     def merge_lines(self): # write uci to a txt file
+        """Reconstitute the UCI text from internal Table objects.
+
+        Assembles the full list of text lines in proper UCI block order:
+        ``RUN``, run-level comment lines, each block with its tables
+        (including ``END <table>`` / ``END <block>`` markers), and a
+        closing ``END RUN``.  The result is stored in ``self.lines``,
+        overwriting the previously read content.
+
+        Notes
+        -----
+        This method must be called before :meth:`_write`, :meth:`write`, or
+        :meth:`write_tpl` to ensure any in-memory edits are serialised.
+        """
         lines = ['RUN']
         lines += self.run_comments
         
@@ -170,7 +416,19 @@ class UCI():
         self.lines = lines       
 
     def set_simulation_period(self,start_year,end_year):
-        # Update GLOBAL table with new start and end dates very janky implementation but not a priority.
+        """Update the simulation start and end dates in the GLOBAL block.
+
+        Locates the ``START`` line inside the GLOBAL table and rewrites it
+        with ``<start_year>/01/01 00:00`` and ``<end_year>/12/31 24:00``.
+        Comment lines in the GLOBAL block are skipped.
+
+        Parameters
+        ----------
+        start_year : int
+            Four-digit start year for the simulation.
+        end_year : int
+            Four-digit end year for the simulation.
+        """
 
         # if start_hour < 10:
         #     start_hour = f'0{int(start_hour+1)}:00'
@@ -194,7 +452,19 @@ class UCI():
         self.uci[('GLOBAL','na',0)].lines = table_lines
 
     def set_echo_flags(self,flag1,flag2):
-        table_lines = self.table_lines('GLOBAL')  
+        """Update the ``RUN INTERP OUTPT LEVELS`` line in the GLOBAL block.
+
+        Locates the line starting with ``RUN INTERP OUTPT LEVELS`` and
+        replaces it with the supplied flag values.  Comment lines in the
+        GLOBAL block are skipped.
+
+        Parameters
+        ----------
+        flag1 : int or str
+            First output level flag value.
+        flag2 : int or str
+            Second output level flag value.
+        """  
         for index, line in enumerate(table_lines):
             if '***' in line: #in case there are comments in the global block
                 continue
@@ -208,13 +478,60 @@ class UCI():
 
 
     def _write(self,filepath):
+        """Write ``self.lines`` to a text file.
+
+        Each element of ``self.lines`` is written as a separate line
+        terminated by ``'\\n'``.  Call :meth:`merge_lines` first to ensure
+        the lines reflect any in-memory edits.
+
+        Parameters
+        ----------
+        filepath : str or pathlib.Path
+            Destination file path.  The file is created or overwritten.
+        """
         with open(filepath, 'w') as the_file:
             for line in self.lines:    
                 the_file.write(line+'\n')
 
     def add_parameter_template(self,block,table_name,table_id,column,parname = None,tpl_char = '~',opnids = None,single_template = True, group_id = ''):
-        
-        table = self.table(block,table_name,0,False).reset_index()
+        """Insert PEST/PEST++ parameter template markers into a table column.
+
+        Replaces cell values in *column* with template strings of the form
+        ``~parname~`` (padded to the column width) so that a PEST ``.tpl``
+        file can be generated via :meth:`write_tpl`.
+
+        Parameters
+        ----------
+        block : str
+            Block name containing the target table.
+        table_name : str
+            Sub-table name.
+        table_id : int
+            Zero-based occurrence index of the table.
+        column : str
+            Name of the column whose values will be replaced by template
+            markers.
+        parname : str or None, optional
+            Base parameter name.  Defaults to the lower-cased *column* name.
+        tpl_char : str, optional
+            Template delimiter character used in the ``.tpl`` file
+            (default ``'~'``).
+        opnids : list of int or None, optional
+            Restrict template insertion to these OPNID values.  When ``None``
+            (default), all non-comment rows are updated.
+        single_template : bool, optional
+            When ``True`` (default), use a single shared parameter name for
+            all selected rows.  When ``False``, append each row's OPNID to
+            the parameter name to create per-opnid parameters.
+        group_id : str, optional
+            Prefix string prepended to the parameter name, used to group
+            related parameters (default ``''``).
+
+        Returns
+        -------
+        list of str
+            Unique parameter name(s) written into the template markers.
+        """
         column_names,dtypes,starts,stops = self.uci[(block,table_name,table_id)]._delimiters()
         
         width = stops[column_names.index(column)] - starts[column_names.index(column)]
@@ -246,6 +563,21 @@ class UCI():
         return list(set(pest_param))
 
     def write_tpl(self,tpl_char = '~',new_tpl_path = None):    
+        """Write a PEST parameter template (``.tpl``) file.
+
+        Calls :meth:`merge_lines` to serialise current in-memory state, then
+        inserts ``'ptf <tpl_char>'`` as the first line before writing.  The
+        resulting file is compatible with PEST and PEST++ template-file
+        conventions.
+
+        Parameters
+        ----------
+        tpl_char : str, optional
+            Template delimiter character (default ``'~'``).
+        new_tpl_path : str or pathlib.Path or None, optional
+            Destination path for the ``.tpl`` file.  Defaults to the same
+            directory and stem as the UCI file with a ``.tpl`` extension.
+        """
         if new_tpl_path is None:
             new_tpl_path = self.filepath.parent.joinpath(self.filepath.stem + '.tpl')
         self.merge_lines()
@@ -253,14 +585,44 @@ class UCI():
         self._write(new_tpl_path)
 
     def write(self,new_uci_path):
-        self.merge_lines()
+        """Write the UCI to disk at the specified path.
+
+        Calls :meth:`merge_lines` to serialise the current in-memory state
+        and then :meth:`_write` to persist it.
+
+        Parameters
+        ----------
+        new_uci_path : str or pathlib.Path
+            Destination path for the UCI file.  The file is created or
+            overwritten.
+        """
         self._write(new_uci_path) 
 
     def _run(self,wait_for_completion=True):
-        run_model(self.filepath, wait_for_completion=wait_for_completion)
+        """Run the HSPF model using this UCI file.
+
+        Delegates to the module-level :func:`run_model` function.
+
+        Parameters
+        ----------
+        wait_for_completion : bool, optional
+            When ``True`` (default), block until the model process exits.
+            When ``False``, launch the process in the background.
+        """
 
     def update_bino(self,name):
-        #TODO: Move up to busniess/presentation layer
+        """Update binary-output (BINO) filenames in the FILES table.
+
+        For every row in the FILES table whose ``FTYPE`` is ``'BINO'``,
+        replaces the filename prefix (everything before the last ``'-'``)
+        with *name*, preserving the original suffix (e.g. numeric index and
+        ``.hbn`` extension).
+
+        Parameters
+        ----------
+        name : str
+            New prefix to use for all BINO filenames.
+        """
         table = self.table('FILES',drop_comments = False) # initialize the table
         indexs = table[table['FTYPE'] == 'BINO'].index
         for index in indexs: 
@@ -269,10 +631,22 @@ class UCI():
         #self.uci[('FILES','na',0)].set_value(index,'FILENAME',filename)
     
     def get_metzones(self):
-        '''
-        Only keeps reaches that are recieving meteorlogical inputs.
-        
-        '''
+        """Infer meteorological zone assignments from the EXT SOURCES table.
+
+        For each operation (PERLND, IMPLND, RCHRES), identifies which
+        operation IDs receive PREC (precipitation) input, maps them to met
+        zones based on the ``SVOLNO`` column of EXT SOURCES, and merges with
+        GEN-INFO to attach land-cover (LSID) or reach (RCHID/LKFG) metadata.
+
+        Returns
+        -------
+        dict
+            Mapping of operation name (``'PERLND'``, ``'IMPLND'``,
+            ``'RCHRES'``) to a :class:`pandas.DataFrame` containing at
+            minimum the columns ``metzone`` and ``SVOLNO``.  PERLND and
+            IMPLND DataFrames additionally contain ``LSID`` and ``landcover``
+            columns; RCHRES DataFrames contain ``RCHID`` and ``LKFG``.
+        """
         operations = ['PERLND','IMPLND','RCHRES']
         dic = {}
         
@@ -316,13 +690,46 @@ class UCI():
     
 # Convience methods. TODO: put in separate module that takes uci object as input. Should not be instance method
     def get_filepaths(self,file_extension):
-        files = self.table('FILES')
+        """Return file paths from the FILES table matching the given extension.
+
+        Parameters
+        ----------
+        file_extension : str
+            File extension to filter by, including the leading dot
+            (e.g. ``'.wdm'``).  The comparison is case-insensitive.
+
+        Returns
+        -------
+        list of pathlib.Path
+            Absolute paths constructed by joining each matching filename with
+            the directory that contains the UCI file.
+        """
         filepaths = files.loc[(files['FILENAME'].str.endswith(file_extension.lower())) |  (files['FILENAME'].str.endswith(file_extension.upper())),'FILENAME'].to_list()
         filepaths = [self.filepath.parent.joinpath(filepath) for filepath in filepaths]
         return filepaths
     
     def get_dsns(self,operation,opnid,smemn):
-        dsns = self.table('EXT SOURCES')
+        """Return dataset numbers (DSNs) for a given operation, OPNID, and member name.
+
+        Looks up matching rows in the EXT SOURCES table, then joins with the
+        FILES table to attach the source filename to each DSN record.
+
+        Parameters
+        ----------
+        operation : str
+            Target volume operation name (``TVOL``), e.g. ``'RCHRES'``.
+        opnid : int
+            Target operation ID (``TOPFST``) to filter on.
+        smemn : str
+            Source member name (e.g. ``'PREC'``, ``'EVAP'``).  Must be
+            present in the ``SMEMN`` column of EXT SOURCES.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Filtered EXT SOURCES rows with columns ``FILENAME``, ``SVOLNO``,
+            ``SMEMN``, ``TOPFST``, and ``TVOL``.
+        """
         assert (smemn in dsns['SMEMN'].unique())
         dsns = dsns.loc[(dsns['TVOL'] == operation) & (dsns['TOPFST'] == opnid) & (dsns['SMEMN'] == smemn)]
         files = self.table('FILES').set_index('FTYPE')
@@ -332,21 +739,35 @@ class UCI():
     
         
     def initialize(self,name = None, default_output = 4,n=None,reach_ids = None, constituents = None):
-        '''
-        Initializes a uci file with new binary files and GEN-INFO and BINARY-INFO tables that are consistent with those binary files. Does not change any other tables so that the user can customize the binary outputs as needed.
-        
-        Parameters        ----------
-        name: str, optional
-            Name of the model. If None, will use the name of the uci file. The name is used as the prefix for the new binary files that are created.
-        default_output: int, optional
-            The default output number to use for the new binary files. This is the number that will be used in the BINARY-INFO tables for the new binary files. Default is 4 (monthly).
-        n: int, optional
-            The number of binary files to create. If None, will create enough binary files to cover all reach ids in the uci file. Note that the number of binary files created will be the same for all operations and that the reach ids will be split evenly across the binary files. If reach_ids is not None, n will be set to half the number of reach_ids. This is because the number of reach ids should be split evenly across the binary files and it is assumed that each binary file can handle at least half the number of reach ids. Default is None.
-        reach_ids: list, optional
-            A list of reach ids to include in the new binary files. If None, will include all reach ids in the uci file. If n is None, the number of binary files created will be based on the number of reach ids provided. If n is not None, the number of binary files created will be based on n and the reach ids provided will be split evenly across the binary files. Default is None.
-        constituents: list, optional
-            A convience parameter to specify which BINARY flags to set to hourly RCHRES output for the constituents of interest. Defaults to setting all constituent relevant Binary flags to hourly for specified reach ids.        
-        '''
+        """Perform a full initialisation of the UCI binary-output configuration.
+
+        Creates new BINO entries in the FILES table, configures BINARY-INFO
+        output time codes for all operations, assigns GEN-INFO binary unit
+        numbers, and standardises QUAL-ID names in QUAL-PROPS tables.  Calls
+        :func:`setup_files`, :func:`setup_binaryinfo`, :func:`setup_geninfo`,
+        and :func:`setup_qualid` in that order.
+
+        Parameters
+        ----------
+        name : str or None, optional
+            Prefix used when naming the new binary (``.hbn``) output files.
+            Defaults to the UCI file stem when ``None``.
+        default_output : int, optional
+            Output time-code applied to all BINARY-INFO flags for all
+            operations (default ``4`` = monthly).
+        n : int or None, optional
+            Number of binary output files to create.  When ``None`` and
+            *reach_ids* is provided, defaults to ``len(reach_ids) // 2``.
+            When both are ``None``, defaults to ``5``.
+        reach_ids : list of int or None, optional
+            Reach IDs for which hourly (time-code ``2``) output should be
+            enabled.  When ``None``, hourly output is not set for any reach.
+        constituents : list of str or None, optional
+            Constituent keys that control which BINARY-INFO columns are set
+            to hourly output for *reach_ids* (e.g. ``['Q', 'TSS', 'N']``).
+            Defaults to ``['Q', 'WT', 'TSS', 'N', 'TKN', 'OP', 'BOD']``
+            when ``None``.
+        """
         
         if name is None:
             name = self.name
@@ -366,6 +787,25 @@ class UCI():
         setup_qualid(self)
 
     def initialize_binary_info(self,default_output = 4,reach_ids = None,constituents = None):
+        """Initialise only the BINARY-INFO and GEN-INFO tables.
+
+        A lighter-weight alternative to :meth:`initialize` that skips FILES
+        table setup and QUAL-ID standardisation.  Calls
+        :func:`setup_binaryinfo` followed by :func:`setup_geninfo`.
+
+        Parameters
+        ----------
+        default_output : int, optional
+            Output time-code applied to all BINARY-INFO flags (default ``4``
+            = monthly).
+        reach_ids : list of int or None, optional
+            Reach IDs for which hourly (time-code ``2``) output is enabled.
+            When ``None``, hourly output is not set for any reach.
+        constituents : list of str or None, optional
+            Constituent keys controlling which BINARY-INFO columns are set
+            to hourly output for *reach_ids*.  Defaults to
+            ``['Q', 'WT', 'TSS', 'N', 'TKN', 'OP', 'BOD']`` when ``None``.
+        """
         if constituents is None:
             constituents = ['Q','WT','TSS','N','TKN','OP','BOD']
         setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids,constituents=constituents)
@@ -373,7 +813,27 @@ class UCI():
 
     
     def build_targets(self):
-        geninfo = self.table('PERLND','GEN-INFO')  
+        """Build a calibration target table from PERLND land covers.
+
+        Uses ``self.opnid_dict['PERLND']`` together with the SCHEMATIC table
+        to compute the total contributing area for each unique land-cover
+        type.  The result is a summary DataFrame suitable for calibration
+        target specification.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per unique land-cover type with columns:
+
+            * ``uci_name`` – LSID string from GEN-INFO.
+            * ``lc_number`` – integer land-cover index.
+            * ``area`` – total area (sum of AFACTR values from SCHEMATIC).
+            * ``npsl_name`` – empty string placeholder for an external name.
+            * ``TSS``, ``N``, ``TKN``, ``OP``, ``BOD`` – empty string
+              placeholders for constituent calibration targets.
+            * ``dom_lc`` – ``1`` for the land cover with the largest area,
+              ``pd.NA`` for all others.
+        """  
         targets = self.opnid_dict['PERLND'].loc[:,['LSID','landcover']] #.drop_duplicates(subset = 'landcover').loc[:,['LSID','landcover']].reset_index(drop = True)
         targets.columns = ['LSID','lc_number']
         schematic = self.table('SCHEMATIC')
@@ -402,7 +862,22 @@ class UCI():
 #TODO: More conveince methods that should probably be in a separate module
 
 def run_model(uci_file, wait_for_completion=True):
-    winHSPF = str(Path(__file__).resolve().parent.parent) + '\\bin\\WinHSPFlt\\WinHspfLt.exe'
+    """Run the WinHSPF executable for a given UCI file.
+
+    Resolves the path to ``WinHspfLt.exe`` relative to this package's
+    ``bin`` directory and launches it as a subprocess.
+
+    Parameters
+    ----------
+    uci_file : pathlib.Path
+        Path to the UCI file to pass as the model input.
+    wait_for_completion : bool, optional
+        When ``True`` (default), block until the model process finishes
+        (uses :func:`subprocess.run`).  When ``False``, launch the
+        process in the background (uses :class:`subprocess.Popen`).
+        On Windows, ``CREATE_NO_WINDOW`` is applied to suppress a console
+        window when running in the background.
+    """
     
     # Arguments for the subprocess
     args = [winHSPF, uci_file.as_posix()]
@@ -422,7 +897,24 @@ def run_model(uci_file, wait_for_completion=True):
             subprocess.Popen(args)
 
 def get_filepaths(uci,file_extension):
-    files = uci.table('FILES')
+    """Return file paths from a UCI FILES table matching the given extension.
+
+    Module-level counterpart to :meth:`UCI.get_filepaths`.
+
+    Parameters
+    ----------
+    uci : UCI
+        Loaded UCI object whose FILES table will be queried.
+    file_extension : str
+        File extension to filter by, including the leading dot
+        (e.g. ``'.wdm'``).  The comparison is case-insensitive.
+
+    Returns
+    -------
+    list of pathlib.Path
+        Absolute paths constructed by joining each matching filename with
+        the directory that contains the UCI file.
+    """
     filepaths = files.loc[(files['FILENAME'].str.endswith(file_extension.lower())) |  (files['FILENAME'].str.endswith(file_extension.upper())),'FILENAME'].to_list()
     filepaths = [uci.filepath.parent.joinpath(filepath) for filepath in filepaths]
     return filepaths
@@ -430,7 +922,28 @@ def get_filepaths(uci,file_extension):
 
 
 def setup_files(uci,name,n = 5):
-    table = uci.table('FILES',drop_comments = False)
+    """Initialise the FILES table with new binary output (BINO) entries.
+
+    Performs the following operations in order:
+
+    1. Strips directory paths from existing ``.wdm``, ``.ech``, ``.out``,
+       and ``.hbn`` filenames, keeping only the bare filename.
+    2. Removes any ``.plt`` entries.
+    3. Removes all existing BINO entries.
+    4. Selects *n* unique unit numbers (starting from 15) not already used
+       by other FILES UNIT numbers or PLTGEN PLOTFL numbers.
+    5. Appends *n* new BINO rows with filenames ``<name>-0.hbn``,
+       ``<name>-1.hbn``, … and the chosen unit numbers.
+
+    Parameters
+    ----------
+    uci : UCI
+        The UCI object whose FILES table will be modified in-place.
+    name : str
+        Base name used to construct new binary output filenames.
+    n : int, optional
+        Number of new BINO entries to create (default ``5``).
+    """
 
     if 'PLTGEN' in uci.block_names():
         pltgen_nums = uci.table('PLTGEN','PLOTINFO')['PLOTFL'].tolist()
@@ -467,7 +980,21 @@ def setup_files(uci,name,n = 5):
 
 
 def setup_geninfo(uci):
-    # Initialize Gen-Info
+    """Assign binary output unit numbers to GEN-INFO tables.
+
+    Reads the BINO unit numbers from the FILES table and distributes all
+    operation IDs (for RCHRES, PERLND, and IMPLND) evenly across the
+    available BINO files according to each BINARY-INFO time-code value.
+    Updates the ``BUNITE`` column (RCHRES) or ``BUNIT1`` column
+    (PERLND/IMPLND) in the corresponding GEN-INFO table.
+
+    Parameters
+    ----------
+    uci : UCI
+        The UCI object whose GEN-INFO tables will be modified in-place.
+        The FILES and BINARY-INFO tables must already be configured (e.g.
+        via :func:`setup_files` and :func:`setup_binaryinfo`).
+    """
     bino_nums = uci.table('FILES').set_index('FTYPE').loc['BINO','UNIT'].tolist()
     if isinstance(bino_nums,int): #Pands is poorly designed. Why would tolist not return a goddamn list...?
         bino_nums = [bino_nums]
@@ -492,7 +1019,35 @@ def setup_geninfo(uci):
 
 
 def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None):
+    """Set BINARY-INFO output time codes for all operations.
 
+    Applies *default_output* to every BINARY-INFO flag column for PERLND,
+    IMPLND, and RCHRES.  If *reach_ids* is provided, additionally sets
+    hourly output (time-code ``2``) for the flag columns associated with
+    each constituent in *constituents* for the specified reaches.
+
+    Parameters
+    ----------
+    uci : UCI
+        The UCI object whose BINARY-INFO tables will be modified in-place.
+    default_output : int, optional
+        Time-code written to all BINARY-INFO flag columns (default ``4``
+        = monthly).
+    reach_ids : list of int or None, optional
+        RCHRES operation IDs for which hourly output is enabled.  When
+        ``None``, no hourly overrides are applied.
+    constituents : list of str or None, optional
+        Constituent keys used to look up the BINARY-INFO columns that
+        should be set to hourly output for *reach_ids*.  Supported keys:
+        ``'Q'``, ``'TSS'``, ``'WT'``, ``'N'``, ``'TKN'``, ``'OP'``,
+        ``'BOD'``, ``'TP'``.  When ``None`` and *reach_ids* is provided,
+        all relevant columns are set to hourly.
+
+    Notes
+    -----
+    The mapping from constituent key to BINARY-INFO column name(s) is
+    defined internally via ``CONSTITUENT_MAP``.
+    """
     CONSTITUENT_MAP = {'Q': ['HYDRPR'],
                         'TSS': ['SEDPR'],
                         'WT': ['HEATPR'],
@@ -524,7 +1079,17 @@ def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None
                 uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = CONSTITUENT_MAP[constituent],opnids = reach_ids,operator = 'set')
 
 def setup_qualid(uci):
-    #### Standardize QUAL-ID Names
+    """Standardise QUAL-ID names in QUAL-PROPS tables.
+
+    Sets the ``QUALID`` column in the PERLND and IMPLND QUAL-PROPS tables
+    (indices 0–3) to the standard names ``'NH3+NH4'``, ``'NO3'``,
+    ``'ORTHO P'``, and ``'BOD'`` respectively.
+
+    Parameters
+    ----------
+    uci : UCI
+        The UCI object whose QUAL-PROPS tables will be modified in-place.
+    """
     # Perlands
     uci.update_table('NH3+NH4','PERLND','QUAL-PROPS',0,columns = 'QUALID',operator = 'set')
     uci.update_table('NO3','PERLND','QUAL-PROPS',1,columns = 'QUALID',operator = 'set')
@@ -541,7 +1106,34 @@ def setup_qualid(uci):
 
 
 def chuck(adjustment,table):
-    # If increasing monthly concentration increase the minimum concnetration value of Mi and Mi+1
+    """Adjust monthly concentration table values using min/max neighbour logic.
+
+    For each month index *i*, if ``adjustment[i] > 1``, the *minimum* of the
+    adjacent pair ``(table[:,i], table[:,i+1])`` is increased by the
+    adjustment factor.  If ``adjustment[i] < 1``, the *maximum* of the pair
+    is decreased.  Months with ``adjustment[i] == 1`` are left unchanged.
+    When a cell is updated multiple times it is averaged over the update
+    count.
+
+    A circular "dummy" column equal to the first column is appended before
+    processing so that December wraps around to January.
+
+    Parameters
+    ----------
+    adjustment : array-like of float
+        One multiplier per month (length 12).  Values greater than ``1``
+        increase the lower neighbour; values less than ``1`` decrease the
+        upper neighbour.
+    table : pandas.DataFrame
+        Monthly concentration table with shape ``(n_opnids, 12)``.  The
+        DataFrame index corresponds to operation IDs.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Adjusted concentration table with the same shape and index as the
+        input *table*.
+    """
     # If decreasing monthly concentration decrease the maximum concnetration value of Mi and Mi+1
     # If concnetration values are equal increase both equally
     table['dummy'] = table.iloc[:,0]
@@ -572,7 +1164,27 @@ def chuck(adjustment,table):
 
 # Expanding opnid-opnid in tables
 def format_opnids(table,valid_opnids):
-    table = table.reset_index()
+    """Expand range-style OPNID entries and filter to valid operation IDs.
+
+    UCI tables sometimes encode a range of operation IDs as a single row with
+    an OPNID value like ``'1 5'`` (meaning IDs 1 through 5 inclusive).  This
+    function expands such rows into one row per ID, filters the result to only
+    those IDs present in *valid_opnids*, and sets OPNID as the DataFrame index.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        Parsed table data that includes an ``OPNID`` column.  Comment rows
+        (where ``OPNID`` is empty) are preserved.
+    valid_opnids : list of int
+        The set of active operation IDs for the block being processed
+        (typically one of the per-operation lists from ``UCI.valid_opnids``).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Expanded and filtered table with ``OPNID`` (integer) as the index.
+    """
     indexes = table.loc[table[~(table['OPNID'] == '')].index,'OPNID']
     for index, value in indexes.items():
         try:
@@ -602,7 +1214,28 @@ def format_opnids(table,valid_opnids):
     return table
 
 def expand_extsources(data,valid_opnids):
-    start_column = 'TOPFST'
+    """Expand range-style EXT SOURCES entries and filter to valid operation IDs.
+
+    EXT SOURCES rows may specify a range of target operation IDs via
+    ``TOPFST`` and ``TOPLST`` columns.  This function expands such rows into
+    one row per operation ID, sets ``TOPLST`` to ``pd.NA`` for expanded rows,
+    and then removes rows for operation IDs not present in *valid_opnids* for
+    their respective ``TVOL`` operation.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Parsed EXT SOURCES table containing at minimum the columns
+        ``TOPFST``, ``TOPLST``, and ``TVOL``.
+    valid_opnids : dict
+        Mapping of operation name (e.g. ``'PERLND'``) to a list of active
+        integer operation IDs (typically ``UCI.valid_opnids``).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Expanded and filtered EXT SOURCES table with a reset integer index.
+    """
     end_column = 'TOPLST'
     indexes = data.loc[~data[end_column].isna()]#[[start_column,end_column,'']]
 
@@ -638,7 +1271,31 @@ def expand_extsources(data,valid_opnids):
 
 
 def insert_rows(insertion_point,a,b,drop = True,reset_index = True):    
-    if drop: a = a.drop(insertion_point)
+    """Insert DataFrame *b* into DataFrame *a* at *insertion_point*.
+
+    Parameters
+    ----------
+    insertion_point : int
+        Index label in *a* at which to insert *b*.  All rows of *a* with
+        label ``<= insertion_point`` precede *b*; rows with label
+        ``> insertion_point`` follow it.
+    a : pandas.DataFrame
+        Base DataFrame.
+    b : pandas.DataFrame
+        Rows to insert.
+    drop : bool, optional
+        When ``True`` (default), the row at *insertion_point* is dropped
+        from *a* before inserting *b*.
+    reset_index : bool, optional
+        When ``True`` (default), reset the integer index of the result.
+        Set to ``False`` to preserve original index labels (used by
+        :func:`format_opnids` and :func:`expand_extsources`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Combined DataFrame with *b* inserted at the specified position.
+    """
     df = pd.concat([a.loc[:insertion_point], b, a.loc[insertion_point:]])
     if reset_index: df = df.reset_index(drop=True)
     return df
@@ -647,7 +1304,29 @@ def insert_rows(insertion_point,a,b,drop = True,reset_index = True):
 
 
 def keep_valid_opnids(table,opnid_column,valid_opnids):
-    table = table.reset_index(drop = True)
+    """Filter a table to rows with valid operation IDs, preserving comment rows.
+
+    For each operation in *valid_opnids*, keeps rows where the value in
+    *opnid_column* matches that operation's active ID list and ``TVOL``
+    equals the operation name.  Comment rows (non-empty ``comments`` column)
+    are always retained regardless of OPNID.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        Table to filter.  Must contain *opnid_column*, ``TVOL``, and
+        ``comments`` columns.
+    opnid_column : str
+        Name of the column containing operation IDs (e.g. ``'TOPFST'``).
+    valid_opnids : dict
+        Mapping of operation name to list of active integer operation IDs.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered table sorted by original row order with a reset integer
+        index.
+    """
     valid_indexes = [table.index[(table[opnid_column].isin(valid_opnids[operation])) & (table['TVOL'] == operation)] for operation in valid_opnids.keys()]
     valid_indexes.append(table.index[table['comments'] != ''])
     table = pd.concat([table.loc[valid_index] for valid_index in valid_indexes])
@@ -656,7 +1335,22 @@ def keep_valid_opnids(table,opnid_column,valid_opnids):
 
 
 def  RUN_comments(lines):
-    # assuems no blank lines (ie lines have been read in using the reader function)
+    """Extract comment lines that appear before the ``RUN`` keyword.
+
+    Scans *lines* for the ``'RUN'`` sentinel, then collects any lines
+    containing ``'***'`` that appear before it.  Stops collecting as soon
+    as a non-comment, non-blank line is encountered.
+
+    Parameters
+    ----------
+    lines : list of str
+        UCI file lines as returned by :func:`reader` (no blank lines).
+
+    Returns
+    -------
+    list of str
+        Comment lines (those containing ``'***'``) found before ``'RUN'``.
+    """
     comments = []
     
     RUN_start = lines.index('RUN')
@@ -675,7 +1369,26 @@ def  RUN_comments(lines):
 
 # Functions for converting the uci text file into a dictionary structure made up of my custom Table class
 def reader(filepath):
-    # simple reader to return non blank, non comment and proper length lines
+    """Read a UCI file and return its non-blank, properly-trimmed lines.
+
+    Opens the file with UTF-8 encoding (ignoring undecodable bytes) and
+    processes each line as follows:
+
+    * Blank lines are skipped.
+    * Comment lines (containing ``'***'``) are kept as-is after
+      right-stripping whitespace.
+    * All other lines are truncated to 80 characters and right-stripped.
+
+    Parameters
+    ----------
+    filepath : str or pathlib.Path
+        Path to the UCI file.
+
+    Returns
+    -------
+    list of str
+        Cleaned lines from the file, with blank lines removed.
+    """
     
     #TODO: Address this encoding issue that seems pretty common across our text files.
     # It's not a huge deal since we are using ASCII and no information will be lost.
@@ -692,6 +1405,26 @@ def reader(filepath):
     return lines
                                               
 def decompose_perlands(metzones,landcovers):
+    """Decompose perland IDs into (metzone, landcover) component tuples.
+
+    Creates a dictionary keyed by the integer sum ``metzone + landcover``
+    (the combined perland ID used internally by HSPF) mapping to the
+    constituent ``(metzone, landcover)`` tuple.
+
+    Parameters
+    ----------
+    metzones : iterable of int or str
+        Meteorological zone IDs.
+    landcovers : iterable of int or str
+        Land-cover type IDs.
+
+    Returns
+    -------
+    dict
+        Mapping of ``int(metzone) + int(landcover)`` to
+        ``(int(metzone), int(landcover))`` tuples for every combination of
+        *metzones* and *landcovers*.
+    """
     perlands = {}
     for metzone in metzones:
         metzone = int(metzone)
@@ -701,13 +1434,54 @@ def decompose_perlands(metzones,landcovers):
     return perlands
 
 def split_number(s):
-     head = s.rstrip('0123456789')
-     tail = s[len(head):]
-     return head.strip(), tail
+    """Split trailing digits from a string.
+
+    Parameters
+    ----------
+    s : str
+        Input string, optionally ending with one or more digit characters.
+
+    Returns
+    -------
+    head : str
+        The leading non-digit portion of *s*, right-stripped of whitespace.
+    tail : str
+        The trailing digit substring (empty string if *s* has no trailing
+        digits).
+
+    Examples
+    --------
+    >>> split_number('GEN-INFO3')
+    ('GEN-INFO', '3')
+    >>> split_number('GLOBAL')
+    ('GLOBAL', '')
+    """
+    head = s.rstrip('0123456789')
+    tail = s[len(head):]
+    return head.strip(), tail
 
 #TODO merge the get_blocks and build_uci into a single function to reduce number of for loops
 def get_blocks(lines):
-    dic = {}
+    """Identify block start and end line indices in a UCI file.
+
+    Iterates through *lines* in reverse to locate ``'END <BLOCKNAME>'`` and
+    matching ``'<BLOCKNAME>'`` sentinel lines for each top-level block
+    defined in ``parseTable``.  Only recognised block names (present in the
+    ``'block'`` column of ``parseTable``) are processed.
+
+    Parameters
+    ----------
+    lines : list of str
+        UCI file lines as returned by :func:`reader`.
+
+    Returns
+    -------
+    dict
+        Mapping of block name (str) to a sub-dict ``{'indcs': [end_idx,
+        start_idx]}`` where *end_idx* is the line index of ``'END
+        <BLOCKNAME>'`` and *start_idx* is the line index of ``'<BLOCKNAME>'``
+        (i.e. the block opener).
+    """
     shift = len(lines)-1
     for index,line in enumerate(reversed(lines)):
         if '***' in line:
@@ -732,7 +1506,35 @@ def get_blocks(lines):
     return dic
 
 def build_uci(lines):
-    blocks = get_blocks(lines)
+    """Parse UCI line data into a dict of :class:`~hspf.parser.parsers.Table` objects.
+
+    Uses :func:`get_blocks` to locate block boundaries, then iterates within
+    each block (in reverse) to identify individual sub-tables by their
+    ``END <TABLE>`` / ``<TABLE>`` sentinel pairs.  Two categories of blocks
+    are handled:
+
+    * **Simple blocks** (``table_name = 'na'`` in ``parseTable``): the entire
+      block content is stored as a single Table.
+    * **Complex blocks**: each named sub-table is stored separately.
+
+    Tables are stored with ``data = None``; parsing is deferred to the first
+    call of :meth:`UCI.table`.
+
+    Duplicate table names within the same block are disambiguated by a
+    zero-based ``table_id`` counter assigned after reversing the parse order
+    to match top-to-bottom appearance in the file.
+
+    Parameters
+    ----------
+    lines : list of str
+        UCI file lines as returned by :func:`reader`.
+
+    Returns
+    -------
+    dict
+        Mapping of ``(block_name, table_name, table_id)`` tuples to
+        :class:`~hspf.parser.parsers.Table` objects.
+    """
     current_name = None
     keys = []
     tables = []

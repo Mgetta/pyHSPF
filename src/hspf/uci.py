@@ -24,15 +24,6 @@ parseTable = pd.read_csv(Path(__file__).parent/'data/ParseTable.csv',
                                   'start': 'Int64',
                                   'stop': 'Int64',
                                   'space': 'Int64'})
-
-#timeseriesCatalog = pd.read_csv(Path(__file__).parent/'TimeseriesCatalog.csv')
-
-#timeseriesCatalog = pd.read_csv('C:/Users/mfratki/Documents/GitHub/hspf_tools/parser/TimeseriesCatalog.csv')
-#                             dtype = {'width': 'Int64',
-#                                       'start': 'Int64',
-#                                       'stop': 'Int64',
-#                                       'space': 'Int64'})
-#uci interface
 class UCI():
     def __init__(self, filepath,infer_metzones = True):
         self.filepath = Path(filepath)
@@ -79,7 +70,7 @@ class UCI():
                  
     def table(self,block,table_name = 'na',table_id = 0,drop_comments = True):
         # Dynamic parsing of tables when called by user
-        assert block in ['GLOBAL','FILES','PERLND','IMPLND','RCHRES','SCHEMATIC','OPN SEQUENCE','MASS-LINK','EXT SOURCES','NETWORK','GENER','MONTH-DATA','EXT TARGETS','COPY','FTABLES']
+        assert block in ['GLOBAL','FILES','PERLND','IMPLND','RCHRES','SCHEMATIC','OPN SEQUENCE','MASS-LINK','EXT SOURCES','NETWORK','GENER','MONTH-DATA','EXT TARGETS','COPY','FTABLES','PLTGEN']
         
         table = self.uci[(block,table_name,table_id)] #[block][table_name][table_id]
         #TODO move the format_opnids into the Table class?
@@ -341,6 +332,22 @@ class UCI():
     
         
     def initialize(self,name = None, default_output = 4,n=None,reach_ids = None, constituents = None):
+        '''
+        Initializes a uci file with new binary files and GEN-INFO and BINARY-INFO tables that are consistent with those binary files. Does not change any other tables so that the user can customize the binary outputs as needed.
+        
+        Parameters        ----------
+        name: str, optional
+            Name of the model. If None, will use the name of the uci file. The name is used as the prefix for the new binary files that are created.
+        default_output: int, optional
+            The default output number to use for the new binary files. This is the number that will be used in the BINARY-INFO tables for the new binary files. Default is 4 (monthly).
+        n: int, optional
+            The number of binary files to create. If None, will create enough binary files to cover all reach ids in the uci file. Note that the number of binary files created will be the same for all operations and that the reach ids will be split evenly across the binary files. If reach_ids is not None, n will be set to half the number of reach_ids. This is because the number of reach ids should be split evenly across the binary files and it is assumed that each binary file can handle at least half the number of reach ids. Default is None.
+        reach_ids: list, optional
+            A list of reach ids to include in the new binary files. If None, will include all reach ids in the uci file. If n is None, the number of binary files created will be based on the number of reach ids provided. If n is not None, the number of binary files created will be based on n and the reach ids provided will be split evenly across the binary files. Default is None.
+        constituents: list, optional
+            A convience parameter to specify which BINARY flags to set to hourly RCHRES output for the constituents of interest. Defaults to setting all constituent relevant Binary flags to hourly for specified reach ids.        
+        '''
+        
         if name is None:
             name = self.name
         
@@ -424,6 +431,9 @@ def get_filepaths(uci,file_extension):
 
 def setup_files(uci,name,n = 5):
     table = uci.table('FILES',drop_comments = False)
+
+    if 'PLTGEN' in uci.block_names():
+        pltgen_nums = uci.table('PLTGEN','PLOTINFO')['PLOTFL'].tolist()
     for index, row in table.iterrows():
         filename = Path(row['FILENAME'])
         if filename.suffix in ['.wdm','.ech','.out']:
@@ -435,7 +445,7 @@ def setup_files(uci,name,n = 5):
             
     # Get new binary number and create new BINO rows
     bino_nums = []
-    invalid = table['UNIT'].values
+    invalid = table['UNIT'].dropna().to_list() + pltgen_nums
     for num in range(15,100):
         if num not in invalid:
             bino_nums.append(num)

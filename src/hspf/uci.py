@@ -464,7 +464,7 @@ class UCI():
             First output level flag value.
         flag2 : int or str
             Second output level flag value.
-        """  
+        """
         table_lines = self.table_lines('GLOBAL')
         for index, line in enumerate(table_lines):
             if '***' in line: #in case there are comments in the global block

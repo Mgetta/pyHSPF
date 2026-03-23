@@ -33,17 +33,11 @@ def build_operations_table(model_name, uci):
     df = df.rename(columns={'SEGMENT': 'operation_id', 'OPERATION': 'operation_type'})
     df['model_name'] = model_name
     df['model_year'] = end_year
-
-    df_metzones = pd.concat(uci.get_metzones()).reset_index()
-    df = pd.merge(df, df_metzones, right_on=['level_0', 'TOPFST'],
-                  left_on=['operation_type', 'operation_id'], how='left')
-    df = df[['model_name', 'model_year', 'operation_type', 'operation_id', 'metzone']]
     return df
 
 
 def build_schematic_table(model_name, uci):
     end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
-
     df = uci.table('SCHEMATIC')
     df['model_name'] = model_name
     df['model_year'] = end_year
@@ -52,7 +46,6 @@ def build_schematic_table(model_name, uci):
 
 def build_masslink_table(model_name, uci):
     end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
-
     dfs = []
     for table_name in uci.table_names('MASS-LINK'):
         mlno = table_name.split('MASS-LINK')[1]
@@ -62,6 +55,8 @@ def build_masslink_table(model_name, uci):
         masslink['model_year'] = end_year
         dfs.append(masslink)
     df = pd.concat(dfs).reset_index(drop=True)
+    
+
     return df
 
 
@@ -100,26 +95,16 @@ def build_network_table(model_name, uci):
 
 def build_ftables_table(model_name, uci):
     end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
-
     dfs = []
-    if 'FTABLES' in uci.block_names():
-        for ftable_name in uci.table_names('FTABLES'):
-            ftable_num = int(ftable_name.split('FTABLE')[1])
-            ftable = uci.table('FTABLES', ftable_name)
-            ftable['reach_id'] = ftable_num
-            ftable['model_name'] = model_name
-            ftable['model_year'] = end_year
-            dfs.append(ftable)
-    if dfs:
-        df = pd.concat(dfs).reset_index(drop=True)
-        # Normalize column names to match schema: depth, area, volume, discharge
-        col_map = {col: col.lower() for col in df.columns
-                   if col.lower() in ('depth', 'area', 'volume', 'discharge')}
-        df = df.rename(columns=col_map)
-        df = df[['model_name', 'model_year', 'reach_id'] +
-                [c for c in ['depth', 'area', 'volume', 'discharge'] if c in df.columns]]
-    else:
-        df = pd.DataFrame()
+    for ftable_name in uci.table_names('FTABLES'):
+        ftable_num = int(ftable_name.split('FTABLE')[1])
+        ftable = uci.table('FTABLES', ftable_name)
+        ftable['reach_id'] = ftable_num
+        ftable['model_name'] = model_name
+        ftable['model_year'] = end_year
+        dfs.append(ftable)
+
+    df = pd.concat(dfs).reset_index(drop=True)
     return df
 
 

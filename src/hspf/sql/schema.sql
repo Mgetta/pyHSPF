@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS models (
     run_id       VARCHAR NOT NULL DEFAULT 'base',     -- 'base', 'cal_47', etc.
     start_year   INT,
     notes        VARCHAR,
-    created_at   TIMESTAMP DEFAULT current_timestamp,
+    -- created_at   TIMESTAMP DEFAULT current_timestamp,
     UNIQUE (model_name, model_year, run_id)
 );
 
@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS uci.operations (
     model_year       INT NOT NULL,
     operation_type   VARCHAR NOT NULL,
     operation_id     INT NOT NULL,
-    metzone          VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS uci.schematics (
@@ -33,8 +32,8 @@ CREATE TABLE IF NOT EXISTS uci.schematics (
     TVOLNO       INT,
     MLNO         VARCHAR,
     AFACTR       DOUBLE,
-    TMEMSB1      INT,
-    TMEMSB2      INT
+    TMEMSB1      VARCHAR,
+    TMEMSB2      VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS uci.masslinks (
@@ -44,24 +43,28 @@ CREATE TABLE IF NOT EXISTS uci.masslinks (
     SVOL         VARCHAR,
     SGRPN        VARCHAR,
     SMEMN        VARCHAR,
-    SMEMSB1      INT,
-    SMEMSB2      INT,
-    MFACTR       DOUBLE,
+    SMEMSB1      VARCHAR,
+    SMEMSB2      VARCHAR,
+    MFACTOR      DOUBLE,
     TVOL         VARCHAR,
     TGRPN        VARCHAR,
     TMEMN        VARCHAR,
-    TMEMSB1      INT,
-    TMEMSB2      INT
+    TMEMSB1      VARCHAR,
+    TMEMSB2      VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS uci.ftables (
     model_name   VARCHAR NOT NULL,
     model_year   INT NOT NULL,
     reach_id     INT NOT NULL,
-    depth        DOUBLE,
-    area         DOUBLE,
-    volume       DOUBLE,
-    discharge    DOUBLE
+    Depth        DOUBLE,
+    Area         DOUBLE,
+    Volume       DOUBLE,
+    Disch1       DOUBLE,
+    Disch2       DOUBLE,
+    Disch3       DOUBLE,
+    Disch4       DOUBLE,
+    Disch5       DOUBLE
 );
 
 CREATE TABLE IF NOT EXISTS uci.extsources (
@@ -69,23 +72,19 @@ CREATE TABLE IF NOT EXISTS uci.extsources (
     model_year   INT NOT NULL,
     SVOL         VARCHAR,
     SVOLNO       INT,
-    SMESSION     VARCHAR,
-    SGRPN        VARCHAR,
     SMEMN        VARCHAR,
-    SMEMSB1      INT,
-    SMEMSB2      INT,
-    SVARI        VARCHAR,
-    MFACTR       DOUBLE,
+    SMEMSB       VARCHAR,
+    SSYST        VARCHAR,
+    SGAPST       VARCHAR,
+    MFACTOR      DOUBLE,
     TRAN         VARCHAR,
     TVOL         VARCHAR,
     TOPFST       INT,
     TOPLST       INT,
     TGRPN        VARCHAR,
     TMEMN        VARCHAR,
-    TMEMSB1      INT,
-    TMEMSB2      INT,
-    TSTEFP       VARCHAR,
-    APTS         VARCHAR
+    TMEMSB1      VARCHAR,
+    TMEMSB2      VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS uci.exttargets (
@@ -95,17 +94,17 @@ CREATE TABLE IF NOT EXISTS uci.exttargets (
     SVOLNO       INT,
     SGRPN        VARCHAR,
     SMEMN        VARCHAR,
-    SMEMSB1      INT,
-    SMEMSB2      INT,
+    SMEMSB1      VARCHAR,
+    SMEMSB2      VARCHAR,
     MFACTR       DOUBLE,
     TRAN         VARCHAR,
     TVOL         VARCHAR,
     TVOLNO       INT,
-    TGRPN        VARCHAR,
     TMEMN        VARCHAR,
-    TMEMSB1      INT,
-    TMEMSB2      INT,
-    APTS         VARCHAR
+    QLFG         INT,
+    TSYST        VARCHAR,
+    AGGST        VARCHAR,
+    AMDST        VARCHAR
 );
 
 CREATE TABLE IF NOT EXISTS uci.networks (
@@ -115,16 +114,16 @@ CREATE TABLE IF NOT EXISTS uci.networks (
     SVOLNO       INT,
     SGRPN        VARCHAR,
     SMEMN        VARCHAR,
-    SMEMSB1      INT,
-    SMEMSB2      INT,
-    MFACTR       DOUBLE,
+    SMEMSB1      VARCHAR,
+    SMEMSB2      VARCHAR,
+    MFACTOR       DOUBLE,
     TVOL         VARCHAR,
     TOPFST       INT,
     TOPLST       INT,
     TGRPN        VARCHAR,
     TMEMN        VARCHAR,
-    TMEMSB1      INT,
-    TMEMSB2      INT
+    TMEMSB1      VARCHAR,
+    TMEMSB2      VARCHAR
 );
 
 -- ============================================================

@@ -2,7 +2,7 @@ import duckdb
 from pathlib import Path
 import pandas as pd
 
-_SQL_SCHEMA = Path(__file__).parent.parent.parent / 'sql' / 'schema.sql'
+_SQL_SCHEMA = Path(__file__).parent / 'sql' / 'schema.sql'
 
 
 def init_hspf_db(db_path: str, reset: bool = False):

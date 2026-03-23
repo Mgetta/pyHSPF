@@ -2,7 +2,7 @@
 """Static geometry-based channel travel time (residence time) calculations."""
 import numpy as np
 import pandas as pd
-
+from hspf.hbn import CF2CFS
 from hspf.parser import graph
 
 ACFT_TO_FT3 = 43560.0  # 1 acre-ft = 43,560 ft³
@@ -984,7 +984,7 @@ def water_age_distribution(uci, hbn, target_reach_id, t_code=5, bins=48):
 
     # Dynamic travel times (V/Q per reach, summed along paths)
     volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
-    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
     travel_times_df = dynamic_travel_times(volumes, outflows, p)
 
     # Flow contributions from each source to the target
@@ -1027,7 +1027,7 @@ def water_age_summary(uci, hbn, target_reach_id, t_code=5):
     reach_ids = list(p.keys())
 
     volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
-    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
     travel_times_df = dynamic_travel_times(volumes, outflows, p)
 
     fate = channel_fate('Q', hbn, t_code, reach_ids)
@@ -1073,7 +1073,7 @@ def water_age_by_period(uci, hbn, target_reach_id, t_code=5,
     reach_ids = list(p.keys())
 
     volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
-    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
     travel_times_df = dynamic_travel_times(volumes, outflows, p)
 
     fate = channel_fate('Q', hbn, t_code, reach_ids)
@@ -1121,7 +1121,7 @@ def water_age_source_table(uci, hbn, target_reach_id, t_code=5):
     reach_ids = list(p.keys())
 
     volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
-    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
     travel_times_df = dynamic_travel_times(volumes, outflows, p)
 
     fate = channel_fate('Q', hbn, t_code, reach_ids)
@@ -1206,7 +1206,7 @@ def lagged_contributions(uci, hbn, target_reach_id, constituent='Q', t_code=5,
     reach_ids = list(p.keys())
 
     volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
-    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
     travel_times_df = dynamic_travel_times(volumes, outflows, p)
 
     fate = channel_fate(constituent, hbn, t_code, reach_ids)

@@ -192,7 +192,28 @@ def weighted_describe(df, value_col, weight_col):
 
 
 def weighted_parameter(uci,operation, table_name, table_id, parameter, opnids = None):
-    
+    """Compute area-weighted statistics for a UCI table parameter by catchment.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    operation : str
+        Operation type (``'PERLND'``, ``'IMPLND'``, or ``'RCHRES'``).
+    table_name : str
+        UCI table name containing the parameter.
+    table_id : int or str
+        Table identifier within the block.
+    parameter : str
+        Column name of the parameter to analyse.
+    opnids : list of int, optional
+        Operation IDs to include.  If ``None``, all IDs are used.
+
+    Returns
+    -------
+    pd.DataFrame
+        Weighted statistics grouped by catchment (``TVOLNO``).
+    """
 
     values = uci.table(operation,table_name,table_id)[[parameter]].copy()
     if opnids is not None:

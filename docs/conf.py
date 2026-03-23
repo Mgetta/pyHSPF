@@ -47,6 +47,7 @@ autodoc_mock_imports = [
     'networkx',
     'tables',
     'requests',
+    'scipy',
 ]
 
 autodoc_default_options = {

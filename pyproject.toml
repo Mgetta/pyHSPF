@@ -30,3 +30,6 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Programming Language :: Python"
 ]
+
+[project.optional-dependencies]
+docs = ["sphinx>=7.0", "sphinx-rtd-theme"]

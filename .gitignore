@@ -2,3 +2,4 @@
 *.whl
 *.gz
 __pycache__/
+docs/_build/

@@ -1145,8 +1145,8 @@ def chuck(adjustment,table):
         Adjusted concentration table with the same shape and index as the
         input *table*.
     """
-    # If decreasing monthly concentration decrease the maximum concnetration value of Mi and Mi+1
-    # If concnetration values are equal increase both equally
+    # If decreasing monthly concentration decrease the maximum concentration value of Mi and Mi+1
+    # If concentration values are equal increase both equally
     table['dummy'] = table.iloc[:,0]
     zero_table = table.copy()*0
     count_table = zero_table.copy()

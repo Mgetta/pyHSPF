@@ -1,7 +1,7 @@
-UCI Module
-==========
+uci.py
+==============================
 
 .. automodule:: hspf.uci
    :members:
-   :undoc-members:
+   :exclude-members: UCI
    :show-inheritance:

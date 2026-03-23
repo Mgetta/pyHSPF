@@ -60,9 +60,9 @@ def local_loading(constituent,uci,hbn,t_code,reach_ids = None):
 def catchment_contributions(uci,hbn,constituent,target_reach_id, landcovers = None,start_year = 1996, end_year = 2100):
     p = uci.network.paths(target_reach_id)
     p[target_reach_id] = [target_reach_id]
-    fate = channel_fate(constituent,uci,hbn,5)
+    fate = channel_fate(constituent,hbn,5)
     fate_factors = _compute_path_fate_factors(fate, p)
-    target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
+    target_load = channel_outflows(constituent,hbn,5,[target_reach_id])
     fate_factors = fate_factors.reset_index().melt(id_vars = 'datetime')
     
     df = get_catchment_loading(uci,hbn,constituent)
@@ -88,10 +88,10 @@ def catchment_contributions(uci,hbn,constituent,target_reach_id, landcovers = No
 def total_contributions(constituent,uci,hbn,target_reach_id, start_year = 1996, end_year = 2100):
     p = uci.network.paths(target_reach_id)
     p[target_reach_id] = [target_reach_id]
-    fate = channel_fate(constituent,uci,hbn,5)
+    fate = channel_fate(constituent,hbn,5)
     loads = local_loading(constituent,uci,hbn,5)
     fate_factors = _compute_path_fate_factors(fate, p)
-    target_load = channel_outflows(constituent,uci,hbn,5,[target_reach_id])
+    target_load = channel_outflows(constituent,hbn,5,[target_reach_id])
 
     contribution = _compute_contributions(loads, fate_factors)
     df = _summarize(contribution, loads, target_load,start_year, end_year)

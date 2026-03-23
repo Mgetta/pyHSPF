@@ -10,8 +10,9 @@ files, and building calibration workflows.
    :maxdepth: 2
    :caption: API Reference
 
+   uci_class
    uci
-   modules
+   
 
 Indices and tables
 ==================

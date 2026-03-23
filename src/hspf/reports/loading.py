@@ -23,6 +23,18 @@ def watershed_loading_summary(uci,hbn,constituent,reach_ids=None,upstream_reach_
 
 
 def catchment_areas(uci):
+    """Compute total catchment area for each TVOLNO (reach).
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns ``TVOLNO`` and ``catchment_area`` (sum of AFACTR values).
+    """
     df = uci.network.subwatersheds().reset_index()
     df = df.groupby('TVOLNO')['AFACTR'].sum().reset_index()
     df.rename(columns = {'AFACTR':'catchment_area'},inplace = True)
@@ -30,6 +42,30 @@ def catchment_areas(uci):
 
 
 def get_constituent_loading(uci,hbn,constituent,time_step =5,start_year = 1996,end_year = 2100):
+    """Retrieve per-OPNID constituent loading rates for PERLNDs and IMPLNDs.
+
+    For ``'TP'`` the loading is computed via :func:`total_phosphorous`;
+    for all other constituents the HBN timeseries are read directly.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    time_step : int, optional
+        HBN time-step code (default 5 = yearly).
+    start_year, end_year : int, optional
+        Year range filter (inclusive, defaults 1996–2100).
+
+    Returns
+    -------
+    pd.DataFrame
+        Long-format DataFrame with columns ``datetime``, ``OPNID``,
+        ``value``, and ``OPERATION``.
+    """
     if constituent == 'TP':
         perlnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'PERLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
         implnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'IMPLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
@@ -55,6 +91,24 @@ def get_constituent_loading(uci,hbn,constituent,time_step =5,start_year = 1996,e
 
 
 def _join_catchments(df,uci,constituent):
+    """Join loading data with catchment and subwatershed metadata.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Loading data with ``OPERATION``, ``OPNID``, and ``value`` columns.
+    uci : UCI
+        Parsed UCI model object.
+    constituent : str
+        Constituent name used to label the output.
+
+    Returns
+    -------
+    pd.DataFrame
+        Input data enriched with ``load``, ``loading_rate``,
+        ``landcover_area``, ``landcover``, ``catchment_area``, and
+        ``constituent`` columns.
+    """
     subwatersheds = uci.network.subwatersheds().reset_index()
     subwatersheds = subwatersheds.loc[subwatersheds['SVOL'].isin(['PERLND','IMPLND'])]
     areas = catchment_areas(uci)
@@ -77,6 +131,31 @@ def _join_catchments(df,uci,constituent):
     return df
 
 def get_catchment_loading(uci,hbn,constituent,time_step=5,start_year=1996,end_year=2100):
+    """Compute catchment-level loading for a constituent.
+
+    Combines :func:`get_constituent_loading` with catchment metadata via
+    :func:`_join_catchments`.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    time_step : int, optional
+        HBN time-step code (default 5 = yearly).
+    start_year, end_year : int, optional
+        Year range filter (inclusive, defaults 1996–2100).
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``datetime``, ``constituent``, ``TVOLNO``, ``SVOLNO``,
+        ``SVOL``, ``landcover``, ``landcover_area``, ``catchment_area``,
+        ``loading_rate``, ``load``.
+    """
     df = get_constituent_loading(uci,hbn,constituent,time_step,start_year,end_year)
     df = _join_catchments(df,uci,constituent)
     df = df[['datetime','constituent','TVOLNO','SVOLNO','SVOL','landcover','landcover_area','catchment_area','loading_rate','load']]
@@ -84,6 +163,29 @@ def get_catchment_loading(uci,hbn,constituent,time_step=5,start_year=1996,end_ye
 
 
 def monthly_loading(uci,hbn,constituent,aggregation_period = 'monthly',start_year = 1996,end_year = 2100):
+    """Aggregate monthly constituent loading with flexible temporal grouping.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    aggregation_period : str or None, optional
+        Period over which to aggregate: ``'monthly'``, ``'yearly'``,
+        ``'seasonal'``, ``'simulation'``, or ``None`` (no aggregation).
+        Default ``'monthly'``.
+    start_year, end_year : int, optional
+        Year range filter (inclusive, defaults 1996–2100).
+
+    Returns
+    -------
+    pd.DataFrame
+        Aggregated loading rates with columns ``OPERATION``, ``OPNID``,
+        ``value``, plus a temporal grouping column when applicable.
+    """
     df = get_constituent_loading(uci,hbn,constituent,time_step=4,start_year=start_year,end_year=end_year)
     df = add_temporal_groups(df, 4)
 
@@ -107,6 +209,30 @@ def monthly_loading(uci,hbn,constituent,aggregation_period = 'monthly',start_yea
     return df
 
 def seasonal_loading(uci,hbn,constituent,season = None,aggregation_period = 'yearly',start_year = 1996,end_year = 2100):
+    """Aggregate seasonal constituent loading.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    season : str or None, optional
+        If provided, filter to a single season (e.g. ``'winter'``).
+    aggregation_period : str or None, optional
+        ``'yearly'`` averages across years per season; ``None`` keeps
+        per-year seasonal totals.  Default ``'yearly'``.
+    start_year, end_year : int, optional
+        Year range filter (inclusive, defaults 1996–2100).
+
+    Returns
+    -------
+    pd.DataFrame
+        Aggregated seasonal loading with columns ``season``,
+        ``OPERATION``, ``OPNID``, ``value``, and optionally ``year``.
+    """
     df = get_constituent_loading(uci,hbn,constituent,time_step=4,start_year=start_year,end_year=end_year)
     df = add_temporal_groups(df, 4)
     df = df.groupby(['season','year','OPNID','OPERATION'])['value'].aggregate('sum').reset_index()
@@ -124,6 +250,28 @@ def seasonal_loading(uci,hbn,constituent,season = None,aggregation_period = 'yea
     return df
 
 def annual_loading(uci,hbn,constituent,aggregation_period = None,start_year = 1996,end_year = 2100):
+    """Aggregate annual constituent loading.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    aggregation_period : str or None, optional
+        ``'yearly'`` or ``'simulation'`` averages across years;
+        ``None`` keeps per-year values.  Default ``None``.
+    start_year, end_year : int, optional
+        Year range filter (inclusive, defaults 1996–2100).
+
+    Returns
+    -------
+    pd.DataFrame
+        Aggregated annual loading with columns ``OPERATION``, ``OPNID``,
+        ``value``, and optionally ``year``.
+    """
     df = get_constituent_loading(uci,hbn,constituent,time_step=5,start_year=start_year,end_year=end_year)
     df = add_temporal_groups(df, 5)
 
@@ -139,11 +287,33 @@ def annual_loading(uci,hbn,constituent,aggregation_period = None,start_year = 19
 
 
 def get_watershed_loading(uci,hbn,constituent,reach_ids=None,upstream_reach_ids = None,by_landcover = False,time_step = 5):
-    '''
-    Edge of field loading for all catchments within a watershed defined by reach_ids and upstream_reach_ids
-    
-    
-    '''
+    """Edge-of-field loading for all catchments within a watershed.
+
+    The watershed is defined by *reach_ids* and *upstream_reach_ids*.
+    When *reach_ids* is ``None``, the network outlet(s) are used.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    reach_ids : list of int or None, optional
+        Reach IDs defining the watershed outlet.
+    upstream_reach_ids : list of int or None, optional
+        Upstream boundary reach IDs.
+    by_landcover : bool, optional
+        Currently unused; reserved for future land-cover breakdown.
+    time_step : int, optional
+        HBN time-step code (default 5 = yearly).
+
+    Returns
+    -------
+    pd.DataFrame
+        Catchment loading filtered to the specified watershed.
+    """
     if reach_ids is None:
         reach_ids = uci.network.outlets()
     reach_ids = uci.network.get_opnids('RCHRES',reach_ids,upstream_reach_ids)
@@ -190,6 +360,26 @@ def constituent_loading_summary(uci,hbn,constituent,start_year = 1996,end_year =
 
 
 def _filter_to_watershed(df,uci,reach_ids=None,upstream_reach_ids = None,drainage_area = None):
+    """Filter a loading DataFrame to reaches within a watershed.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Loading data containing a ``TVOLNO`` column.
+    uci : UCI
+        Parsed UCI model object.
+    reach_ids : list of int or None, optional
+        Reach IDs defining the watershed outlet.
+    upstream_reach_ids : list of int or None, optional
+        Upstream boundary reach IDs.
+    drainage_area : float or None, optional
+        Custom drainage area.  If ``None``, computed from the network.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered DataFrame with an added ``watershed_area`` column.
+    """
     if reach_ids is None:
         reach_ids = uci.network.outlets()
     reach_ids = uci.network.get_opnids('RCHRES',reach_ids,upstream_reach_ids)

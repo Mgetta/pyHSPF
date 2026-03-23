@@ -208,7 +208,27 @@ _DEFAULT_SEASON_MAP = {
 
 
 def _resolve_grouper(key, index, season_map=None):
-    """Map a grouping key name to an array-like grouper."""
+    """Map a grouping key name to an array-like grouper.
+
+    Parameters
+    ----------
+    key : str
+        Grouping key: ``'year'``, ``'month'``, or ``'season'``.
+    index : pd.DatetimeIndex
+        Index of the timeseries being grouped.
+    season_map : dict, optional
+        Custom month-to-season mapping.  Defaults to DJF/MAM/JJA/SON.
+
+    Returns
+    -------
+    array-like
+        Grouper array derived from *index*.
+
+    Raises
+    ------
+    ValueError
+        If *key* is not recognised.
+    """
     if key == 'year':
         return index.year
     elif key == 'month':

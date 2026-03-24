@@ -11,6 +11,26 @@ ACFT_TO_FT3 = 43560.0  # 1 acre-ft = 43,560 ft³
 
 
 def get_reach_hydraulics(uci,hbn):
+    """Extract hydraulic geometry for all RCHRES operations.
+
+    For each reach, computes the median-flow channel geometry from the
+    FTABLE, including width, depth, slope, Manning's roughness, and
+    hydraulic radius.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by OPNID with columns ``LEN``, ``DEPTH``, ``WIDTH``,
+        ``WETTED_PERIMETER``, ``LEN_FT``, ``SLOPE``, ``HYDR_RADIUS``,
+        ``DELTH``, ``KS``.
+    """
     dfs = []
     parm2 = uci.table('RCHRES', 'HYDR-PARM2')
     for table_name in uci.table_names('FTABLES'):
@@ -46,7 +66,18 @@ def get_reach_hydraulics(uci,hbn):
     return pd.concat(dfs)
     
 def _is_invalid(v):
-    """Return True if v is None, NaN, or non-positive."""
+    """Return ``True`` if *v* is ``None``, NaN, or non-positive.
+
+    Parameters
+    ----------
+    v : scalar
+        Value to check.
+
+    Returns
+    -------
+    bool
+        ``True`` when the value cannot be used in hydraulic calculations.
+    """
     if v is None:
         return True
     try:
@@ -128,14 +159,21 @@ def travel_time_summary(uci, hbn,outlet_reach_id):
 # =============================================================================
 
 def _infer_timestep_hours(series):
-    """Infer the timestep size in hours from a pd.Series or pd.DataFrame index.
+    """Infer the timestep size in hours from a timeseries index.
 
-    Returns 1.0 for hourly data, 24.0 for daily data.  Falls back to the
-    median difference between consecutive index timestamps if pd.infer_freq()
-    cannot determine the frequency.
+    Uses :func:`pandas.infer_freq` when possible, parsing optional
+    leading multipliers (e.g. ``'2H'`` → 2 hours).  Falls back to the
+    median difference between consecutive index timestamps.
 
-    Multipliers on frequency strings (e.g. '2H' for 2-hourly) are parsed and
-    applied so that irregular sub-daily frequencies are handled correctly.
+    Parameters
+    ----------
+    series : pd.Series or pd.DataFrame
+        Timeseries with a DatetimeIndex.
+
+    Returns
+    -------
+    float
+        Timestep size in hours (e.g. 1.0 for hourly, 24.0 for daily).
     """
     try:
         freq = pd.infer_freq(series.index)
@@ -1361,7 +1399,22 @@ def _apply_lag(contributions_df, travel_times_df, dt_hours):
 
 
 def _age_histogram(travel_times_df, contributions_df, bins=48):
-    """Build a contribution-weighted age histogram from travel time and contribution DataFrames."""
+    """Build a contribution-weighted age histogram.
+
+    Parameters
+    ----------
+    travel_times_df : pd.DataFrame
+        Travel times in hours.  Columns are source reach IDs.
+    contributions_df : pd.DataFrame
+        Contribution weights.  Must share columns with *travel_times_df*.
+    bins : int or array-like, optional
+        Number of histogram bins (default 48).
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``age_hours``, ``density``, ``cumulative``.
+    """
     common = travel_times_df.columns.intersection(contributions_df.columns)
     tt_vals = travel_times_df[common].values.ravel()
     wt_vals = contributions_df[common].values.ravel()
@@ -1386,7 +1439,22 @@ def _age_histogram(travel_times_df, contributions_df, bins=48):
 
 
 def _age_summary(travel_times_df, contributions_df):
-    """Compute contribution-weighted age summary statistics."""
+    """Compute contribution-weighted age summary statistics.
+
+    Parameters
+    ----------
+    travel_times_df : pd.DataFrame
+        Travel times in hours.  Columns are source reach IDs.
+    contributions_df : pd.DataFrame
+        Contribution weights.  Must share columns with *travel_times_df*.
+
+    Returns
+    -------
+    dict
+        Keys: ``mean_age_hours``, ``median_age_hours``, ``std_age_hours``,
+        ``p10_age_hours``, ``p25_age_hours``, ``p75_age_hours``,
+        ``p90_age_hours``, ``young_water_fraction``.
+    """
     common = travel_times_df.columns.intersection(contributions_df.columns)
     tt_vals = travel_times_df[common].values.ravel()
     wt_vals = contributions_df[common].values.ravel()
@@ -1420,7 +1488,31 @@ def _age_summary(travel_times_df, contributions_df):
 
 def _age_histogram_by_period(travel_times_df, contributions_df,
                               group_by='month', bins=48):
-    """Compute age histograms grouped by temporal period."""
+    """Compute age histograms grouped by temporal period.
+
+    Parameters
+    ----------
+    travel_times_df : pd.DataFrame
+        Travel times with DatetimeIndex.
+    contributions_df : pd.DataFrame
+        Contribution weights with DatetimeIndex.
+    group_by : str, optional
+        Temporal grouping: ``'month'``, ``'season'``, or ``'year'``
+        (default ``'month'``).
+    bins : int or array-like, optional
+        Number of histogram bins (default 48).
+
+    Returns
+    -------
+    dict
+        Mapping of ``{period_label: pd.DataFrame}`` where each DataFrame
+        has columns ``age_hours``, ``density``, ``cumulative``.
+
+    Raises
+    ------
+    ValueError
+        If *group_by* is not recognised.
+    """
     if group_by == 'month':
         labels = travel_times_df.index.month
     elif group_by == 'season':

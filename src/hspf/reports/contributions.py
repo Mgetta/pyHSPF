@@ -23,6 +23,24 @@ ALLOCATION_SELECTOR = {'Q': {'input': ['IVOL'],
                        }
 
 def channel_inflows(constituent,hbn,t_code,reach_ids = None):
+    """Retrieve total channel inflow timeseries for a constituent.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name (key in :data:`ALLOCATION_SELECTOR`).
+    hbn : hbnInterface
+        HBN binary output interface.
+    t_code : int
+        HBN time-step code.
+    reach_ids : list of int or None, optional
+        Reach IDs to retrieve.  ``None`` retrieves all.
+
+    Returns
+    -------
+    pd.DataFrame
+        Inflow timeseries with DatetimeIndex and reach IDs as columns.
+    """
     load_in =  sum([hbn.get_multiple_timeseries('RCHRES',
                                        t_code,
                                        t_cons,
@@ -35,6 +53,24 @@ def channel_inflows(constituent,hbn,t_code,reach_ids = None):
     return load_in
 
 def channel_outflows(constituent,hbn,t_code,reach_ids = None):
+    """Retrieve total channel outflow timeseries for a constituent.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name (key in :data:`ALLOCATION_SELECTOR`).
+    hbn : hbnInterface
+        HBN binary output interface.
+    t_code : int
+        HBN time-step code.
+    reach_ids : list of int or None, optional
+        Reach IDs to retrieve.  ``None`` retrieves all.
+
+    Returns
+    -------
+    pd.DataFrame
+        Outflow timeseries with DatetimeIndex and reach IDs as columns.
+    """
     load_out =  sum([hbn.get_multiple_timeseries('RCHRES',
                                        t_code,
                                        t_cons,
@@ -45,11 +81,52 @@ def channel_outflows(constituent,hbn,t_code,reach_ids = None):
     return load_out
 
 def channel_fate(constituent,hbn,t_code,reach_ids = None):
+    """Compute channel fate factors (outflow / inflow ratio) per reach.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name (key in :data:`ALLOCATION_SELECTOR`).
+    hbn : hbnInterface
+        HBN binary output interface.
+    t_code : int
+        HBN time-step code.
+    reach_ids : list of int or None, optional
+        Reach IDs to compute.  ``None`` computes all.
+
+    Returns
+    -------
+    pd.DataFrame
+        Fate factor timeseries (outflow / inflow) with DatetimeIndex.
+    """
     load_in = channel_inflows(constituent,hbn,t_code,reach_ids)
     load_out = channel_outflows(constituent,hbn,t_code,reach_ids)
     return load_out / load_in
 
 def local_loading(constituent,uci,hbn,t_code,reach_ids = None):
+    """Compute local (incremental) loading at each reach.
+
+    Local load is the channel inflow minus the sum of upstream outflows,
+    representing contributions from the local catchment only.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name (key in :data:`ALLOCATION_SELECTOR`).
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    t_code : int
+        HBN time-step code.
+    reach_ids : list of int or None, optional
+        Reach IDs to compute.  ``None`` computes all.
+
+    Returns
+    -------
+    pd.DataFrame
+        Local load timeseries with reach IDs as columns.
+    """
     load_in = channel_inflows(constituent,hbn,t_code,reach_ids)
     load_out = channel_outflows(constituent,hbn,t_code,reach_ids)
     upstream_reach_map = {reach_id: list(uci.network.upstream(reach_id)) for reach_id in load_in.columns}
@@ -58,6 +135,33 @@ def local_loading(constituent,uci,hbn,t_code,reach_ids = None):
 
 
 def catchment_contributions(uci,hbn,constituent,target_reach_id, landcovers = None,start_year = 1996, end_year = 2100):
+    """Compute per-catchment contributions to the target reach outlet.
+
+    Combines edge-of-field loading with routing fate factors to estimate
+    each catchment's contribution to the load at *target_reach_id*.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    target_reach_id : int
+        Reach ID of the outlet where contributions are evaluated.
+    landcovers : list of str or None, optional
+        If provided, filter results to these land-cover types.
+    start_year, end_year : int, optional
+        Year range filter (inclusive, defaults 1996–2100).
+
+    Returns
+    -------
+    pd.DataFrame
+        Contribution summary per catchment (and optionally per land cover)
+        with columns including ``TVOLNO``, ``load``, ``contribution``, and
+        ``contribution_perc``.
+    """
     p = uci.network.paths(target_reach_id)
     p[target_reach_id] = [target_reach_id]
     fate = channel_fate(constituent,hbn,5)
@@ -86,6 +190,30 @@ def catchment_contributions(uci,hbn,constituent,target_reach_id, landcovers = No
     return df
 
 def total_contributions(constituent,uci,hbn,target_reach_id, start_year = 1996, end_year = 2100):
+    """Compute total reach-level contributions to the target outlet.
+
+    Uses local loading and cumulative fate factors along routing paths
+    to determine each reach's contribution.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    target_reach_id : int
+        Reach ID of the outlet where contributions are evaluated.
+    start_year, end_year : int, optional
+        Year range filter (inclusive, defaults 1996–2100).
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``TVOLNO``, ``load``, ``contribution``,
+        ``contribution_perc``.
+    """
     p = uci.network.paths(target_reach_id)
     p[target_reach_id] = [target_reach_id]
     fate = channel_fate(constituent,hbn,5)
@@ -100,6 +228,30 @@ def total_contributions(constituent,uci,hbn,target_reach_id, start_year = 1996, 
 
 
 def catchment_contribution_summary(uci,hbn,target_reach_id,landcovers = None,start_year = 1996, end_year = 2100):
+    """Summarise catchment contributions for Q, TP, and TSS.
+
+    Concatenates :func:`catchment_contributions` results for each of the
+    default constituents (``'Q'``, ``'TP'``, ``'TSS'``).
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    target_reach_id : int
+        Reach ID of the outlet where contributions are evaluated.
+    landcovers : list of str or None, optional
+        If provided, filter results to these land-cover types.
+    start_year, end_year : int, optional
+        Year range filter (inclusive, defaults 1996–2100).
+
+    Returns
+    -------
+    pd.DataFrame
+        Combined contribution summary with an additional ``constituent``
+        column.
+    """
     dfs = []
     for constituent in ['Q','TP','TSS']:
         df = catchment_contributions(uci,hbn,constituent,target_reach_id,landcovers,start_year,end_year)

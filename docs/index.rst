@@ -12,7 +12,24 @@ files, and building calibration workflows.
 
    uci_class
    uci
-   
+   hbn_class
+   hbn
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reports
+
+   reports
+   reports_loading
+   reports_yields
+   reports_contributions
+   reports_hydrology
+   reports_sediment
+   reports_phosphorus
+   reports_utils
+   reports_timeseries
+   reports_residence
+   reports_legacy
 
 Indices and tables
 ==================

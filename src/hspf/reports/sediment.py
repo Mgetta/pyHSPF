@@ -9,6 +9,26 @@ from hspf.reports.utils import annual_weighted_output
 
 
 def scour(hbn,uci,start_year = 1996,end_year = 2030):
+    """Compute nonpoint vs. channel scour ratios for each reach.
+
+    Compares edge-of-field sediment loading (PERLND SOSED + IMPLND SOSLD)
+    against net in-channel deposition/scour (RCHRES DEPSCOURTOT).
+
+    Parameters
+    ----------
+    hbn : hbnInterface
+        HBN binary output interface.
+    uci : UCI
+        Parsed UCI model object.
+    start_year, end_year : int, optional
+        Year range for averaging (inclusive, defaults 1996–2030).
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by ``TVOLNO`` with columns ``LKFG``, ``nonpoint``,
+        ``depscour``, and ``ratio`` (nonpoint / total).
+    """
     # Should eventually create an entire reports module or class indorder to calculate all of the different model checks
     # TODO: Incorporate IMPLNDS
     schematic = uci.table('SCHEMATIC').copy()
@@ -79,6 +99,24 @@ def scour(hbn,uci,start_year = 1996,end_year = 2030):
 
 
 def annual_sediment_budget(uci,hbn):
+    """Compute the area-weighted annual sediment budget by land cover.
+
+    Combines PERLND (SOSED) and IMPLND (SOSLD) sediment outputs into
+    a percentage breakdown by land-cover type.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Sediment`` (weighted output) and ``Percentage``
+        (percent of total), indexed by land cover and AFACTR.
+    """
     ts_names = ['SOSED']
     df = pd.concat([annual_weighted_output(uci,hbn,ts_name,'PERLND', group_by='landcover')  for ts_name in ts_names],axis = 1)
 

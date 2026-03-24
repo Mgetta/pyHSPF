@@ -35,6 +35,22 @@ from hspf.reports.yields import (
 
 
 def avg_subwatershed_loading(constituent,t_code,uci,hbn):
+    """Compute average subwatershed loading rates per catchment.
+
+    .. deprecated::
+        Use :func:`~hspf.reports.loading.loading_summary` instead.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    t_code : int
+        HBN time-step code.
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    """
     dfs = []
     for t_opn in ['PERLND','IMPLND']:
         t_cons = helpers.get_tcons(constituent,t_opn,'lb')
@@ -63,6 +79,25 @@ def avg_subwatershed_loading(constituent,t_code,uci,hbn):
 
 
 def monthly_avg_constituent_loading(constituent,uci,hbn):
+    """Compute monthly average constituent loading per OPNID.
+
+    .. deprecated::
+        Use :func:`~hspf.reports.loading.loading_summary` instead.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+
+    Returns
+    -------
+    pd.DataFrame
+        Monthly average loading joined with subwatershed metadata.
+    """
     dfs = []
     for t_opn in ['PERLND','IMPLND']:
         t_cons = helpers.get_tcons(constituent,t_opn,'lb')
@@ -86,11 +121,57 @@ def monthly_avg_constituent_loading(constituent,uci,hbn):
     return df  
 
 def monthly_avg_subwatershed_loading(constituent,month,uci,hbn):
+    """Compute area-weighted monthly average loading per subwatershed.
+
+    .. deprecated::
+        Use :func:`~hspf.reports.loading.loading_summary` instead.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name.
+    month : int
+        Calendar month number (1–12).
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+
+    Returns
+    -------
+    pd.DataFrame
+        Weighted loading statistics per TVOLNO.
+    """
     df = monthly_avg_constituent_loading(constituent,uci,hbn)
     df = df.groupby(df['TVOLNO'])[[month,'AFACTR']].apply(lambda x: weighted_describe(x,month,'AFACTR')).droplevel(1)
     return df
 
 def monthly_avg_watershed_loading(constituent,reach_ids,month,uci,hbn, by_landcover = False):
+    """Compute area-weighted monthly average loading for a watershed.
+
+    .. deprecated::
+        Use :func:`~hspf.reports.loading.watershed_loading_summary` instead.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name.
+    reach_ids : list of int
+        Reach IDs defining the watershed.
+    month : int
+        Calendar month number (1–12).
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    by_landcover : bool, optional
+        If True, group results by land-cover type.
+
+    Returns
+    -------
+    pd.DataFrame
+        Weighted loading statistics for the watershed.
+    """
     df = monthly_avg_constituent_loading(constituent,uci,hbn)
     df = df.loc[df['TVOLNO'].isin(reach_ids)]
     if by_landcover:
@@ -103,6 +184,25 @@ def monthly_avg_watershed_loading(constituent,reach_ids,month,uci,hbn, by_landco
 
 
 def ann_avg_constituent_loading(constituent,uci,hbn):
+    """Compute annual average constituent loading per OPNID.
+
+    .. deprecated::
+        Use :func:`~hspf.reports.loading.loading_summary` instead.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name (e.g. ``'TP'``, ``'TSS'``, ``'Q'``).
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+
+    Returns
+    -------
+    pd.DataFrame
+        Annual average loading joined with subwatershed metadata.
+    """
     
     if constituent == 'TP':
         df = total_phosphorous(uci,hbn,5).mean().reset_index()
@@ -130,11 +230,53 @@ def ann_avg_constituent_loading(constituent,uci,hbn):
     return df  
 
 def ann_avg_subwatershed_loading(constituent,uci,hbn):
+    """Compute area-weighted annual average loading per subwatershed.
+
+    .. deprecated::
+        Use :func:`~hspf.reports.loading.loading_summary` instead.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name.
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+
+    Returns
+    -------
+    pd.DataFrame
+        Weighted loading statistics per TVOLNO.
+    """
     df = ann_avg_constituent_loading(constituent,uci,hbn)
     df = df.groupby(df['TVOLNO'])[[constituent,'AFACTR']].apply(lambda x: weighted_describe(x,constituent,'AFACTR')).droplevel(1)
     return df
 
 def ann_avg_watershed_loading(constituent,uci,hbn,reach_ids=None, by_landcover = False):
+    """Compute area-weighted annual average loading for a watershed.
+
+    .. deprecated::
+        Use :func:`~hspf.reports.loading.watershed_loading_summary` instead.
+
+    Parameters
+    ----------
+    constituent : str
+        Constituent name.
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    reach_ids : list of int or None, optional
+        Reach IDs defining the watershed.  ``None`` uses network outlets.
+    by_landcover : bool, optional
+        If True, group results by land-cover type.
+
+    Returns
+    -------
+    pd.DataFrame
+        Weighted loading statistics for the watershed.
+    """
     if reach_ids is None:
         reach_ids = uci.network.outlets()
     reach_ids = [item for sublist in [uci.network._upstream(reach_id) for reach_id in reach_ids] for item in sublist]
@@ -161,18 +303,22 @@ class Reports():
         self.uci = uci
         self.wdms = wdms
 
+    # --- Sediment Reports ---
 
-#Sediment Reports        
     def scour(self,start_year = '1996',end_year = '2030'):
+        """Delegate to :func:`~hspf.reports.sediment.scour`."""
         return scour(self.hbns,self.uci,start_year = start_year,end_year=end_year)
 
-# Hydrology Reports
+    # --- Hydrology Reports ---
+
     def landcover_area(self,reach_ids=None,upstream_reach_ids = None):
+        """Return landcover area breakdown with percentage column."""
         df = self.uci.network.drainage_area_landcover(reach_ids,upstream_reach_ids,group=True).reset_index()
         df['percent'] = 100*(df['area']/df['area'].sum())
         return df
     
     def annual_water_budget(self,operation):
+        """Return annual water budget for *operation* (``'PERLND'``, ``'IMPLND'``, or ``'RCHRES'``)."""
         assert operation in ['PERLND','RCHRES','IMPLND']
         if operation =='PERLND':
             return annual_perlnd_water_budget(self.uci,self.hbns)
@@ -182,30 +328,37 @@ class Reports():
             return annual_reach_water_budget(self.uci,self.hbns)
 
     def annual_precip(self):
+        """Delegate to :func:`~hspf.reports.hydrology.avg_annual_precip`."""
         return avg_annual_precip(self.uci,self.wdms)
     
     def simulated_et(self):
+        """Delegate to :func:`~hspf.reports.hydrology.simulated_et`."""
         return simulated_et(self.uci,self.hbns)
     
     def annual_perlnd_runoff(self,reach_ids = None,upstream_reach_ids = None,start_year = 1996,end_year = 2100):
+        """Delegate to :func:`~hspf.reports.hydrology.annual_perlnd_runoff`."""
         if (reach_ids is None) and (upstream_reach_ids is None):
             opnids = None
         else:
             opnids = self.uci.network.get_opnids('PERLND',reach_ids,upstream_reach_ids)
         return annual_perlnd_runoff(self.uci,self.hbns,opnids,start_year,end_year)
     
-    #% Catchment and Watershed Loading (Edge of Field Load) Reports 
-    # 
+    # --- Catchment and Watershed Loading (Edge of Field Load) Reports ---
+
     def average_annual_catchment_loading(self,constituent,by_landcover = False,start_year = 1996,end_year = 2100):
+        """Average annual catchment loading via :func:`~hspf.reports.loading.catchment_loading_summary`."""
         return catchment_loading_summary(self.uci,self.hbns,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover,simulation_period='yearly',aggregation_period='yearly',agg_func='mean')
     
     def average_monthly_catchment_loading(self,constituent,by_landcover = False,start_year = 1996,end_year = 2100):
+        """Average monthly catchment loading via :func:`~hspf.reports.loading.catchment_loading_summary`."""
         return catchment_loading_summary(self.uci,self.hbns,constituent,start_year=start_year,end_year=end_year,by_landcover=by_landcover,simulation_period='monthly',aggregation_period='monthly',agg_func='mean')
     
     def average_annual_watershed_loading(self,constituent,reach_ids=None,upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
+        """Average annual watershed loading via :func:`~hspf.reports.loading.watershed_loading_summary`."""
         return watershed_loading_summary(self.uci,self.hbns,constituent,reach_ids=reach_ids,upstream_reach_ids=upstream_reach_ids,start_year=start_year,end_year=end_year,by_landcover=by_landcover,drainage_area=drainage_area,simulation_period='yearly',aggregation_period='yearly',agg_func='mean')
     
     def average_monthly_watershed_loading(self,constituent,reach_ids=None,upstream_reach_ids = None, start_year = 1996, end_year = 2100, by_landcover = False,drainage_area = None):
+        """Average monthly watershed loading via :func:`~hspf.reports.loading.watershed_loading_summary`."""
         return watershed_loading_summary(self.uci,self.hbns,constituent,reach_ids=reach_ids,upstream_reach_ids=upstream_reach_ids,start_year=start_year,end_year=end_year,by_landcover=by_landcover,drainage_area=drainage_area,simulation_period='monthly',aggregation_period='monthly',agg_func='mean')
         
     def watershed_loading(self,constituent,reach_ids,upstream_reach_ids = None,by_landcover = False):
@@ -226,21 +379,27 @@ class Reports():
         return get_watershed_loading(self.uci,self.hbns,reach_ids,constituent,upstream_reach_ids,by_landcover)
     
     def catchment_loading(self,constituent,by_landcover = False):
+        """Delegate to :func:`~hspf.reports.loading.get_catchment_loading`."""
         return get_catchment_loading(self.uci,self.hbns,constituent,by_landcover)
     
-    # Contributions Reports
+    # --- Contributions Reports ---
+
     def contributions(self,constituent,target_reach_id):
+        """Delegate to :func:`~hspf.reports.contributions.total_contributions`."""
         return total_contributions(constituent,self.uci,self.hbns,target_reach_id)
 
     def landcover_contributions(self,constituent,target_reach_id,landcover = None):
+        """Delegate to :func:`~hspf.reports.contributions.catchment_contributions`."""
         return catchment_contributions(self.uci,self.hbns,constituent,target_reach_id)
     
-    # Landscape Yield Reports
+    # --- Landscape Yield Reports ---
   
     def average_annual_yield(self,constituent,reach_ids=None,upstream_reach_ids = None,start_year = 1996,end_year = 2100):
+        """Delegate to :func:`~hspf.reports.yields.average_annual_yield`."""
         df= average_annual_yield(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids,start_year,end_year)
         return df
 
     def average_monthly_yield(self,constituent,reach_ids=None,upstream_reach_ids = None,start_year = 1996,end_year = 2100):
+        """Delegate to :func:`~hspf.reports.yields.average_monthly_yield`."""
         df= average_monthly_yield(self.uci,self.hbns,constituent,reach_ids,upstream_reach_ids,start_year,end_year)
         return df

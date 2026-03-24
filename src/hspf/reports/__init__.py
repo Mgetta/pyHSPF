@@ -2,24 +2,7 @@
 """
 Reports package for HSPF model output analysis.
 
-Submodules
-----------
-loading
-    Constituent loading reports (catchment and watershed edge-of-field loading).
-yields
-    Landscape yield reports (constituent loads and yields at reach outlets).
-contributions
-    Channel contributions and allocation reports.
-hydrology
-    Water balance, precipitation, ET, runoff, and meteorological reports.
-sediment
-    Scour and sediment budget reports.
-phosphorus
-    TP-specific calculations (masslink scheme, qualprop transforms).
-utils
-    Utility functions for weighted statistics and time aggregation.
-legacy
-    Older loading implementations kept for backward compatibility.
+This package provides a suite of functions for generating various reports and analyses
 """
 
 import pandas as pd

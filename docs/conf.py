@@ -64,3 +64,5 @@ intersphinx_mapping = {
 # -- HTML output options -----------------------------------------------------
 html_theme = 'alabaster'
 html_static_path = ['_static']
+html_theme_options = {
+    'sidebar_collapse': True,}

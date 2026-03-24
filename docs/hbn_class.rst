@@ -1,4 +1,4 @@
-HBN Classes
+HBN Objects
 ===========
 
 .. currentmodule:: hspf.hbn

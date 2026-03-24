@@ -1,7 +1,13 @@
-UCI Class
-=========
+UCI Object
+==========
 
 .. currentmodule:: hspf.uci
+
+.. autoclass:: UCI
+   :members:
+   :exclude-members: table, table_names, block_names, table_lines, replace_table, update_table, add_parameter_template, set_simulation_period, set_echo_flags, initialize, initialize_binary_info, write, write_tpl, merge_lines, update_bino, get_metzones, get_filepaths, get_dsns, build_targets
+   :show-inheritance:
+   :no-index:
 
 Table Access
 ------------

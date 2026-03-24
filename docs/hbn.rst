@@ -1,5 +1,5 @@
-hbn.py
-==============================
+HBN Helpers
+===========
 
 .. automodule:: hspf.hbn
    :members:

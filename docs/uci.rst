@@ -1,5 +1,5 @@
-uci.py
-==============================
+UCI Helpers
+===========
 
 .. automodule:: hspf.uci
    :members:

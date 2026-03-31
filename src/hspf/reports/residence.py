@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Static geometry-based channel travel time (residence time) calculations."""
+import math
 import numpy as np
 import pandas as pd
 from hspf.hbn import CF2CFS
@@ -1535,3 +1536,307 @@ def _age_histogram_by_period(travel_times_df, contributions_df,
             travel_times_df.loc[mask], contributions_df.loc[mask], bins=bins,
         )
     return results
+
+
+# =============================================================================
+# Section 6: Lagrangian Travel Time (Time-Lagged Packet Tracing)
+# =============================================================================
+
+def _interpolate_tau(tau_df, reach_id, arrival_hours, t0_epoch_hours, dt_hours):
+    """Linearly interpolate the pre-computed τ DataFrame at an arbitrary time.
+
+    Parameters
+    ----------
+    tau_df : pd.DataFrame
+        Residence-time DataFrame from :func:`dynamic_reach_residence_time`.
+        Index = timestamps, columns = reach_ids, values = τ in hours.
+    reach_id : hashable
+        Column label of the reach to look up.
+    arrival_hours : float
+        Hours elapsed since the start of the timeseries when the parcel
+        arrives at this reach.
+    t0_epoch_hours : float
+        Epoch hour of the first timestamp.  Pass ``0.0`` when
+        *arrival_hours* is already expressed relative to the timeseries
+        start.
+    dt_hours : float
+        Timestep size in hours.
+
+    Returns
+    -------
+    float
+        Interpolated τ in hours for *reach_id* at *arrival_hours*.
+        Returns ``NaN`` if the arrival time is out of range or τ is
+        unavailable.
+    """
+    relative_hours = arrival_hours - t0_epoch_hours
+    idx_float = relative_hours / dt_hours
+    idx_lo = int(math.floor(idx_float))
+    idx_hi = idx_lo + 1
+    n = len(tau_df)
+
+    if idx_lo < 0 or idx_lo >= n:
+        return np.nan
+
+    col = tau_df[reach_id]
+    tau_lo = col.iloc[idx_lo]
+    if np.isnan(tau_lo):
+        return np.nan
+
+    frac = idx_float - idx_lo
+    if frac == 0.0:
+        return float(tau_lo)
+    if idx_hi >= n:
+        return np.nan
+
+    tau_hi = col.iloc[idx_hi]
+    if np.isnan(tau_hi):
+        return np.nan
+
+    return float(tau_lo + (tau_hi - tau_lo) * frac)
+
+
+def lagrangian_travel_time(tau_df, path, release_idx, dt_hours):
+    """Trace a single parcel from the first reach in *path* to the last.
+
+    Uses time-lagged Lagrangian tracing: the clock advances by each
+    reach's interpolated residence time before evaluating the *next*
+    reach's conditions.  This is physically more correct than the
+    simultaneous-timestep approach used in Section 4.
+
+    Parameters
+    ----------
+    tau_df : pd.DataFrame
+        Residence-time DataFrame from :func:`dynamic_reach_residence_time`.
+        Index = timestamps, columns = reach_ids, values = τ in hours.
+    path : list
+        Ordered list of reach_ids from upstream to downstream.
+    release_idx : int
+        Integer index into *tau_df* corresponding to the release timestep.
+    dt_hours : float
+        Timestep size in hours.
+
+    Returns
+    -------
+    float
+        Total Lagrangian travel time in hours.  ``NaN`` if the parcel
+        runs off the end of the timeseries or encounters invalid data.
+
+    Notes
+    -----
+    Unlike :func:`dynamic_path_travel_time` (Section 4), which sums
+    ``τ(reach, t₀)`` for all reaches at the *same* release timestep,
+    this function evaluates each downstream reach's τ at the parcel's
+    **arrival time**, properly accounting for changing hydraulic
+    conditions.
+    """
+    elapsed = 0.0
+    for reach_id in path:
+        if reach_id not in tau_df.columns:
+            return np.nan
+        current_hours = release_idx * dt_hours + elapsed
+        tau_here = _interpolate_tau(tau_df, reach_id, current_hours, 0.0, dt_hours)
+        if np.isnan(tau_here):
+            return np.nan
+        elapsed += tau_here
+    return elapsed
+
+
+def lagrangian_travel_times(reach_volumes, reach_outflows, routing_paths):
+    """Compute Lagrangian travel times from every source reach for all timesteps.
+
+    For every source reach and every release timestep, traces a parcel
+    through the routing path using time-lagged Lagrangian tracing and
+    records the total travel time.  This is the bulk counterpart of
+    :func:`lagrangian_travel_time`.
+
+    Parameters
+    ----------
+    reach_volumes : pd.DataFrame
+        Columns = reach_ids, values = volume in acre-ft.
+    reach_outflows : pd.DataFrame
+        Columns = reach_ids, values = outflow in cfs.
+    routing_paths : dict
+        ``{source_reach_id: [reach_id, ...]}`` — same format as
+        ``graph.paths()`` returns.
+
+    Returns
+    -------
+    pd.DataFrame
+        Same index as the input timeseries, columns = source_reach_ids,
+        values = total Lagrangian travel time in hours (``NaN`` where a
+        parcel runs off the end of the available data).
+
+    Notes
+    -----
+    Unlike :func:`dynamic_travel_times` (Section 4), each downstream
+    reach's τ is evaluated at the parcel's **arrival time** rather than
+    at the release timestep, giving a physically correct time-lagged
+    result.
+    """
+    tau_df = dynamic_reach_residence_time(reach_volumes, reach_outflows)
+    dt_hours = _infer_timestep_hours(tau_df)
+    result = {}
+    for source_id, path in routing_paths.items():
+        values = [
+            lagrangian_travel_time(tau_df, path, i, dt_hours)
+            for i in range(len(tau_df))
+        ]
+        result[source_id] = pd.Series(values, index=tau_df.index)
+    return pd.DataFrame(result)
+
+
+def lagrangian_travel_time_summary(reach_volumes, reach_outflows, routing_paths,
+                                   catchment_areas=None):
+    """Summary statistics for each source reach's Lagrangian travel time.
+
+    Parameters
+    ----------
+    reach_volumes : pd.DataFrame
+        Columns = reach_ids, values = volume in acre-ft.
+    reach_outflows : pd.DataFrame
+        Columns = reach_ids, values = outflow in cfs.
+    routing_paths : dict
+        ``{source_reach_id: [reach_id, ...]}``
+    catchment_areas : pd.Series, optional
+        Catchment area in acres indexed by reach_id.
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by source_reach_id with columns
+        ``['mean_travel_time_hours', 'median_travel_time_hours',
+        'std_travel_time_hours', 'min_travel_time_hours',
+        'max_travel_time_hours', 'catchment_area_acres']``.
+
+    Notes
+    -----
+    Uses time-lagged Lagrangian tracing (Section 6) rather than the
+    simultaneous-timestep approach of :func:`dynamic_travel_time_summary`
+    (Section 4).
+    """
+    tt_df = lagrangian_travel_times(reach_volumes, reach_outflows, routing_paths)
+    records = {}
+    for source_id in tt_df.columns:
+        series = tt_df[source_id].dropna()
+        records[source_id] = {
+            'mean_travel_time_hours': series.mean() if not series.empty else np.nan,
+            'median_travel_time_hours': series.median() if not series.empty else np.nan,
+            'std_travel_time_hours': series.std() if not series.empty else np.nan,
+            'min_travel_time_hours': series.min() if not series.empty else np.nan,
+            'max_travel_time_hours': series.max() if not series.empty else np.nan,
+            'catchment_area_acres': (
+                catchment_areas[source_id]
+                if catchment_areas is not None and source_id in catchment_areas.index
+                else np.nan
+            ),
+        }
+    return pd.DataFrame(records).T.rename_axis('source_reach_id')
+
+
+def lagrangian_travel_time_exceedance(reach_volumes, reach_outflows, routing_paths,
+                                      thresholds_hours=None):
+    """Fraction of release times where Lagrangian travel time exceeds thresholds.
+
+    Parameters
+    ----------
+    reach_volumes : pd.DataFrame
+        Columns = reach_ids, values = volume in acre-ft.
+    reach_outflows : pd.DataFrame
+        Columns = reach_ids, values = outflow in cfs.
+    routing_paths : dict
+        ``{source_reach_id: [reach_id, ...]}``
+    thresholds_hours : list of float, optional
+        Threshold values in hours.  Defaults to ``[6, 12, 24, 48, 72, 168]``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Rows = source_reach_ids, columns = threshold values, values =
+        fraction of valid release timesteps where travel time exceeds the
+        threshold.
+
+    Notes
+    -----
+    Uses time-lagged Lagrangian tracing (Section 6) rather than the
+    simultaneous-timestep approach of
+    :func:`dynamic_travel_time_exceedance` (Section 4).
+    """
+    if thresholds_hours is None:
+        thresholds_hours = [6, 12, 24, 48, 72, 168]
+    tt_df = lagrangian_travel_times(reach_volumes, reach_outflows, routing_paths)
+    records = {}
+    for source_id in tt_df.columns:
+        series = tt_df[source_id].dropna()
+        if series.empty:
+            records[source_id] = {t: np.nan for t in thresholds_hours}
+        else:
+            n = len(series)
+            records[source_id] = {
+                t: float((series > t).sum()) / n for t in thresholds_hours
+            }
+    return pd.DataFrame(records).T.rename_axis('source_reach_id')
+
+
+def compare_lagrangian_vs_dynamic(reach_volumes, reach_outflows, routing_paths):
+    """Side-by-side comparison of Lagrangian vs. simultaneous-timestep travel times.
+
+    Computes both the Section 4 simultaneous-timestep travel times and
+    the Section 6 time-lagged Lagrangian travel times, then summarises
+    the mean of each and their difference and ratio.
+
+    Parameters
+    ----------
+    reach_volumes : pd.DataFrame
+        Columns = reach_ids, values = volume in acre-ft.
+    reach_outflows : pd.DataFrame
+        Columns = reach_ids, values = outflow in cfs.
+    routing_paths : dict
+        ``{source_reach_id: [reach_id, ...]}``
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by source_reach_id with columns:
+
+        * ``dynamic_mean_hours`` — mean of the Section 4 travel times.
+        * ``lagrangian_mean_hours`` — mean of the Lagrangian travel times.
+        * ``mean_difference_hours`` — ``lagrangian_mean - dynamic_mean``.
+        * ``mean_ratio`` — ``lagrangian_mean / dynamic_mean``.
+
+    Notes
+    -----
+    The Lagrangian approach (Section 6) evaluates each reach's τ at the
+    parcel's **arrival time**, whereas the dynamic approach (Section 4)
+    evaluates all reaches at the same release timestep.  Under steady
+    (constant) hydraulic conditions the two methods yield identical
+    results; differences grow during rapidly varying flows.
+    """
+    dynamic_tt = dynamic_travel_times(reach_volumes, reach_outflows, routing_paths)
+    lagrangian_tt = lagrangian_travel_times(reach_volumes, reach_outflows, routing_paths)
+    all_ids = sorted(set(dynamic_tt.columns) | set(lagrangian_tt.columns))
+    records = {}
+    for source_id in all_ids:
+        dyn_mean = (
+            dynamic_tt[source_id].dropna().mean()
+            if source_id in dynamic_tt.columns
+            else np.nan
+        )
+        lag_mean = (
+            lagrangian_tt[source_id].dropna().mean()
+            if source_id in lagrangian_tt.columns
+            else np.nan
+        )
+        if np.isnan(dyn_mean) or np.isnan(lag_mean):
+            diff = np.nan
+            ratio = np.nan
+        else:
+            diff = lag_mean - dyn_mean
+            ratio = lag_mean / dyn_mean if dyn_mean != 0.0 else np.nan
+        records[source_id] = {
+            'dynamic_mean_hours': dyn_mean,
+            'lagrangian_mean_hours': lag_mean,
+            'mean_difference_hours': diff,
+            'mean_ratio': ratio,
+        }
+    return pd.DataFrame(records).T.rename_axis('source_reach_id')

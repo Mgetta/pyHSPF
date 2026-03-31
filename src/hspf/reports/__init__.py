@@ -115,6 +115,11 @@ from hspf.reports.residence import (
     water_age_source_table,
     lagged_contributions,
     lagged_contribution_summary,
+    lagrangian_travel_time,
+    lagrangian_travel_times,
+    lagrangian_travel_time_summary,
+    lagrangian_travel_time_exceedance,
+    compare_lagrangian_vs_dynamic,
 )
 
 # --- legacy ---

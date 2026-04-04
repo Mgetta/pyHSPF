@@ -48,19 +48,11 @@ from hspf.reports.sediment import (
 )
 
 # --- phosphorus ---
-from hspf.reports.phosphorus import (
+from hspf.reports.nutrients import (
     MASSLINK_SCHEME,
-    qualprop_transform,
-    dissolved_orthophosphate,
-    particulate_orthophosphate_sand,
-    particulate_orthophosphate_silt,
-    particulate_orthophosphate_clay,
-    organic_refactory_phosphorous,
-    organic_refactory_carbon,
-    labile_oxygen_demand,
-    particulate_orthophosphate,
-    total_phosphorous,
-    subwatershed_total_phosphorous_loading,
+    get_timeseries,
+    total_phosphorus,
+    total_nitrogen,
 )
 
 # --- hydrology ---

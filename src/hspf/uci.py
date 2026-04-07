@@ -955,9 +955,8 @@ def setup_files(uci,name,n = 5):
     """
 
     table = uci.table('FILES',drop_comments = False)
+    
 
-    if 'PLTGEN' in uci.block_names():
-        pltgen_nums = uci.table('PLTGEN','PLOTINFO')['PLOTFL'].tolist()
     for index, row in table.iterrows():
         filename = Path(row['FILENAME'])
         if filename.suffix in ['.wdm','.ech','.out']:
@@ -967,6 +966,11 @@ def setup_files(uci,name,n = 5):
         if filename.suffix in ['.plt']:
             table.drop(index,inplace = True)
             
+    # Get the unit numbers used by PLTGEN PLOTFL entries
+    pltgen_nums = []
+    if 'PLTGEN' in uci.block_names():
+        pltgen_nums = uci.table('PLTGEN','PLOTINFO')['PLOTFL'].tolist()
+
     # Get new binary number and create new BINO rows
     bino_nums = []
     invalid = table['UNIT'].dropna().to_list() + pltgen_nums

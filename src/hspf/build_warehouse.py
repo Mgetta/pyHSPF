@@ -26,6 +26,16 @@ def build_model_table(model_name, uci, run_id='base', notes=None):
     return df_model
 
 
+
+
+def build_files_table(model_name, uci):
+    end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
+    df = uci.table('FILES')
+    df['FTYPE'] = df['FTYPE'].str.upper().replace({'WDM': 'WDM1'})
+    df['model_name'] = model_name
+    df['model_year'] = end_year
+    return df
+
 def build_operations_table(model_name, uci):
     end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
 
@@ -64,6 +74,8 @@ def build_extsources_table(model_name, uci):
     end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
 
     extsource = uci.table('EXT SOURCES')
+    extsource['SVOL'] = extsource['SVOL'].str.upper().replace({'WDM': 'WDM1'})
+
     extsource['model_name'] = model_name
     extsource['model_year'] = end_year
     return extsource
@@ -74,6 +86,7 @@ def build_exttargets_table(model_name, uci):
 
     if 'EXT TARGETS' in uci.block_names():
         exttarget = uci.table('EXT TARGETS')
+        exttarget['SVOL'] = exttarget['SVOL'].str.upper().replace({'WDM': 'WDM1'})
         exttarget['model_name'] = model_name
         exttarget['model_year'] = end_year
     else:
@@ -91,6 +104,22 @@ def build_network_table(model_name, uci):
     else:
         network = pd.DataFrame()
     return network
+ 
+def build_gener_table(model_name, uci):
+    end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
+
+    table_names = set(uci.table_names('GENER'))
+    if len(table_names) > 0:
+        # ORDER of tables is important, start with OPCODE
+        df = uci.table('GENER','OPCODE')
+        table_names.remove('OPCODE')
+        for table_name in table_names:
+            df = df.join(uci.table('GENER',table_name))
+        df['model_name'] = model_name
+        df['model_year'] = end_year
+    else:
+        df = pd.DataFrame()
+    return df
 
 
 def build_ftables_table(model_name, uci):
@@ -194,6 +223,7 @@ def load_model(con, model_name, uci, run_id='base'):
 def add_model(con, model_name, uci, run_id='base'):
     """Append a single model's UCI data into the warehouse."""
     df_model = build_model_table(model_name, uci, run_id=run_id)
+    df_files = build_files_table(model_name, uci)
     df_operations = build_operations_table(model_name, uci)
     df_masslinks = build_masslink_table(model_name, uci)
     df_schematics = build_schematic_table(model_name, uci)
@@ -319,3 +349,6 @@ def build_catchment_loading_table(model_name, uci, hbn, run_id='base'):
         df['run_id'] = run_id
         dfs.append(df)
     return pd.concat(dfs)
+
+
+

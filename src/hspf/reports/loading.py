@@ -4,47 +4,21 @@ Constituent loading reports — catchment and watershed edge-of-field loading.
 """
 import pandas as pd
 
-from hspf.reports.phosphorus import total_phosphorous
+from hspf.reports.nutrients import (
+    total_phosphorus, 
+    total_nitrogen
+)
 from hspf.reports.utils import (
     validate_periods,
-    aggregation_period_to_temporal_grouping,
     add_temporal_groups,
     SIMULATION_PERIOD_TO_TIME_STEP
 )
 
-
-def catchment_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,by_landcover = False,simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean'):
-    """Thin wrapper around :func:`loading_summary` with ``spatial_grouping='catchment'``."""
-    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,simulation_period=simulation_period,aggregation_period=aggregation_period,agg_func=agg_func,spatial_grouping='catchment',by_landcover=by_landcover)
-
-def watershed_loading_summary(uci,hbn,constituent,reach_ids=None,upstream_reach_ids = None,start_year = 1996,end_year = 2100,by_landcover = False,drainage_area = None,simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean'):
-    """Thin wrapper around :func:`loading_summary` with ``spatial_grouping='watershed'``."""
-    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,simulation_period=simulation_period,aggregation_period=aggregation_period,agg_func=agg_func,reach_ids=reach_ids,upstream_reach_ids=upstream_reach_ids,spatial_grouping='watershed',by_landcover=by_landcover,drainage_area=drainage_area)
-
-
-def catchment_areas(uci):
-    """Compute total catchment area for each TVOLNO (reach).
-
-    Parameters
-    ----------
-    uci : UCI
-        Parsed UCI model object.
-
-    Returns
-    -------
-    pd.DataFrame
-        Columns ``TVOLNO`` and ``catchment_area`` (sum of AFACTR values).
-    """
-    df = uci.network.subwatersheds().reset_index()
-    df = df.groupby('TVOLNO')['AFACTR'].sum().reset_index()
-    df.rename(columns = {'AFACTR':'catchment_area'},inplace = True)
-    return df
-
-
 def get_constituent_loading(uci,hbn,constituent,time_step =5,start_year = 1996,end_year = 2100):
     """Retrieve per-OPNID constituent loading rates for PERLNDs and IMPLNDs.
 
-    For ``'TP'`` the loading is computed via :func:`total_phosphorous`;
+    For ``'TP'`` the loading is computed via :func:`total_phosphorus`;
+    For ``'TN'`` the loading is computed via :func:`total_nitrogen`;
     for all other constituents the HBN timeseries are read directly.
 
     Parameters
@@ -67,8 +41,11 @@ def get_constituent_loading(uci,hbn,constituent,time_step =5,start_year = 1996,e
         ``value``, and ``OPERATION``.
     """
     if constituent == 'TP':
-        perlnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'PERLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
-        implnds = total_phosphorous(uci,hbn,t_code=time_step,operation = 'IMPLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
+        perlnds = total_phosphorus(uci,hbn,t_code=time_step,operation = 'PERLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
+        implnds = total_phosphorus(uci,hbn,t_code=time_step,operation = 'IMPLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
+    elif constituent == 'TN':
+        perlnds = total_nitrogen(uci,hbn,t_code=time_step,operation = 'PERLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
+        implnds = total_nitrogen(uci,hbn,t_code=time_step,operation = 'IMPLND').reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
     else:
         perlnds = hbn.get_perlnd_constituent(constituent,time_step = time_step).reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
         implnds = hbn.get_implnd_constituent(constituent,time_step = time_step).reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID')
@@ -517,3 +494,32 @@ def loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,
             df['loading_rate'] = df['load'] / df['landcover_area']
 
     return df
+
+
+def catchment_loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,by_landcover = False,simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean'):
+    """Thin wrapper around :func:`loading_summary` with ``spatial_grouping='catchment'``."""
+    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,simulation_period=simulation_period,aggregation_period=aggregation_period,agg_func=agg_func,spatial_grouping='catchment',by_landcover=by_landcover)
+
+def watershed_loading_summary(uci,hbn,constituent,reach_ids=None,upstream_reach_ids = None,start_year = 1996,end_year = 2100,by_landcover = False,drainage_area = None,simulation_period = 'yearly',aggregation_period = None,agg_func = 'mean'):
+    """Thin wrapper around :func:`loading_summary` with ``spatial_grouping='watershed'``."""
+    return loading_summary(uci,hbn,constituent,start_year=start_year,end_year=end_year,simulation_period=simulation_period,aggregation_period=aggregation_period,agg_func=agg_func,reach_ids=reach_ids,upstream_reach_ids=upstream_reach_ids,spatial_grouping='watershed',by_landcover=by_landcover,drainage_area=drainage_area)
+
+
+def catchment_areas(uci):
+    """Compute total catchment area for each TVOLNO (reach).
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns ``TVOLNO`` and ``catchment_area`` (sum of AFACTR values).
+    """
+    df = uci.network.subwatersheds().reset_index()
+    df = df.groupby('TVOLNO')['AFACTR'].sum().reset_index()
+    df.rename(columns = {'AFACTR':'catchment_area'},inplace = True)
+    return df
+

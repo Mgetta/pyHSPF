@@ -16,7 +16,7 @@ ALLOCATION_SELECTOR = {'Q': {'input': ['IVOL'],
                               'output': ['ROSEDTOT']},
                        'OP': {'input': ['PO4INDIS'],
                               'output': ['PO4OUTDIS']},                      
-                       'N': {'input': ['NO3INTOT','NO2INTOT'],
+                       'TN': {'input': ['NO3INTOT','NO2INTOT'],
                               'output': ['NO2OUTTOT','NO3OUTTOT']},
                        'TKN': {'input': ['TAMINTOT','NTOTORGIN'],
                               'output': ['TAMOUTTOT', 'NTOTORGOUT']}

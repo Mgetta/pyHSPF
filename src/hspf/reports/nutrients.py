@@ -45,9 +45,10 @@ MASSLINK_SCHEME = {
                 'organic_refactory_nitrogen': {'tmemn': 'PKIF',
                                          'tmemsb1': '3',
                                          'tmemsb2':''},
-                'labile_oxygen_demand_nitrogen': {'tmemn': 'OXIF2',
+                'labile_oxygen_demand_nitrogen': {'tmemn': 'OXIF',
                                          'tmemsb1': '2',
-                                         'tmemsb2':''}
+                                         'tmemsb2':'',
+                                         }
 }
 
 def _calculate_BOD_nitrogen(uci):
@@ -127,7 +128,7 @@ def get_timeseries(ts_name,uci,hbn,operation,mlno,t_code = 4):
     return _qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2,t_code)
 
 
-def total_nitrogen(uci,hbn,t_code,operation = 'PERLND'):
+def total_nitrogen(uci,hbn,t_code,operation = 'PERLND',constituents = None,pathways = None):
     """Compute total nitrogen loading for all OPNIDs in an operation.
 
     Sums dissolved nitrate, dissolved total ammonia, organic refractory
@@ -150,29 +151,20 @@ def total_nitrogen(uci,hbn,t_code,operation = 'PERLND'):
     pd.DataFrame
         Total nitrogen timeseries with OPNID columns and DatetimeIndex.
     """
-    opnids = uci.network.subwatersheds()
-    # Get BOD conversion that is actually used in the model
-    opnids = opnids.join(_calculate_BOD_nitrogen(uci).to_frame())
-    opnids = opnids.loc[opnids['SVOL'] == operation].drop_duplicates(subset = ['SVOLNO','MLNO'])
-    
-    totals = []
-    for mlno in opnids['MLNO'].unique():
-        bod_conversion = opnids['TN_BOD_CONVERSION'].loc[opnids['MLNO'] == mlno].iloc[0] # assume only a single bod conversion but really there could be 1 for each reach
-        total = sum([get_timeseries('dissolved_nitrate',uci,hbn,operation,mlno,t_code),
-                     get_timeseries('dissolved_total_ammonia',uci,hbn,operation,mlno,t_code),
-                     get_timeseries('organic_refactory_nitrogen',uci,hbn,operation,mlno,t_code),
-                     get_timeseries('labile_oxygen_demand_nitrogen',uci,hbn,operation,mlno,t_code)*bod_conversion])
-        if isinstance(total, (int, float)): #TODO fix for when no data is present. Don't like this workaround.
-            pass
-        elif not total.empty:
-            valid_opnids = total.columns.intersection(opnids['SVOLNO'].loc[opnids['MLNO'] == mlno])
-            totals.append(total[valid_opnids])
+    if constituents is None:
+        constituents = ['dissolved_total_ammonia',
+                        'dissolved_nitrate',
+                        'organic_refactory_nitrogen',
+                        'labile_oxygen_demand_nitrogen']
 
-    if len(totals) > 0:
-        total = pd.concat(totals,axis=1)
-        total = total.T.groupby(total.columns).sum().T
-    else:
-        total = pd.DataFrame()
+
+    opnids = uci.network.subwatersheds()
+    opnids = list(set(uci.table('SCHEMATIC').query('TVOL == "RCHRES" & SVOL == @operation')['SVOLNO'].to_list()))
+    #opnids = opnids.join(_calculate_BOD_phosphorus(uci).to_frame())
+    
+    
+
+    total = get_timeseries(uci,hbn,operation,constituents,pathways,t_code)[opnids]
     return total
     
 
@@ -209,65 +201,84 @@ def total_phosphorus(uci,hbn,t_code,operation = 'PERLND',constituents = None,pat
 
 
     opnids = uci.network.subwatersheds()
-    opnids = uci.table('SCHEMATIC').query('TVOL == "RCHRES" & SVOL == @operation')
+    opnids = list(set(uci.table('SCHEMATIC').query('TVOL == "RCHRES" & SVOL == @operation')['SVOLNO'].to_list()))
     #opnids = opnids.join(_calculate_BOD_phosphorus(uci).to_frame())
-    opnids = opnids.drop_duplicates(subset = ['SVOLNO','MLNO'])
+    
     
 
     total = get_timeseries(uci,hbn,operation,constituents,pathways,t_code)[opnids]
     return total
-    
-def _pathway_transform(uci,hbn,operation,mlno,ts_name,pathways = None,t_code = 4):
+
+def _pathway_transform(uci, hbn, operation, mlno, ts_name, pathways=None, t_code=4):
     
     tmemn = MASSLINK_SCHEME[ts_name]['tmemn']
     tmemsb1 = MASSLINK_SCHEME[ts_name]['tmemsb1']
     tmemsb2 = MASSLINK_SCHEME[ts_name]['tmemsb2']
     
-    masslink = uci.table('MASS-LINK',f'MASS-LINK{mlno}')
-    masslink = masslink.loc[(masslink['TMEMN'] == tmemn) & (masslink['TMEMSB1'] == tmemsb1) & (masslink['TMEMSB2'] == tmemsb2)]
+    masslink = uci.table('MASS-LINK', f'MASS-LINK{mlno}')
+    masslink = masslink.loc[
+        (masslink['TMEMN'] == tmemn) &
+        (masslink['TMEMSB1'] == tmemsb1) &
+        (masslink['TMEMSB2'] == tmemsb2)
+    ]
     masslink.fillna({'MFACTOR': 1}, inplace=True)
     
     if pathways is not None:
         masslink = masslink.loc[masslink['SMEMN'].isin(pathways)]
 
-    ts = 0
-    if len(masslink) > 0:
-        for index,row in masslink.iterrows():
-            hbn_name = row['SMEMN']
-            if hbn_name in ['IOQUAL','SOQUAL','POQUAL','AOQUAL']:
-                qual_name = uci.table(operation,'QUAL-PROPS', int(row['SMEMSB1']) - 1).iloc[0]['QUALID']
-                hbn_name = row['SMEMN'] + qual_name
-            mfactor = row['MFACTOR']
-            print(hbn_name)
-            ts = hbn.get_multiple_timeseries(row['SVOL'],t_code,hbn_name)*mfactor + ts
-    
-        if ts_name == 'labile_oxygen_demand_phosphorous':
-            ts = ts*_BOD_PHOSPHORUS_CONVERSION
-        elif ts_name == 'labile_oxygen_demand_nitrogen':
-            ts = ts*_BOD_NITROGEN_CONVERSION
+    if masslink.empty:
+        return None  # <-- consistent "no data" sentinel
 
+    parts = []
+    for _, row in masslink.iterrows():
+        hbn_name = row['SMEMN']
+        if hbn_name in ['IOQUAL', 'SOQUAL', 'POQUAL', 'AOQUAL']:
+            qual_name = uci.table(
+                operation, 'QUAL-PROPS', int(row['SMEMSB1']) - 1
+            ).iloc[0]['QUALID']
+            hbn_name = row['SMEMN'] + qual_name
+        mfactor = row['MFACTOR']
+        parts.append(hbn.get_multiple_timeseries(row['SVOL'], t_code, hbn_name) * mfactor)
+
+    ts = parts[0]
+    for part in parts[1:]:
+        ts = ts + part
+
+    if ts_name == 'labile_oxygen_demand_phosphorous':
+        ts = ts * _BOD_PHOSPHORUS_CONVERSION
+    elif ts_name == 'labile_oxygen_demand_nitrogen':
+        ts = ts * _BOD_NITROGEN_CONVERSION
 
     return ts
 
 
-def get_timeseries(uci,hbn,operation,ts_names,pathways = None,t_code = 5):
-
+def get_timeseries(uci, hbn, operation, ts_names, pathways=None, t_code=5):
 
     subset = uci.table('SCHEMATIC').query('SVOL == @operation')
 
     totals = []
     for mlno in subset['MLNO'].unique():
-        ts = 0
-        weight = subset.query('MLNO == @mlno').groupby('SVOLNO')['AFACTR'].sum()/subset.groupby('SVOLNO')['AFACTR'].sum()
-        _ts = sum(_pathway_transform(uci,hbn,operation,mlno,ts_name,pathways,t_code) for ts_name in ts_names)
-        if _ts.empty:
-            totals.append(_ts)
-        else:
-            _ts = _ts[weight.index]
-            ts = ts + _ts*weight
-            totals.append(ts)
+        weight = (subset.query('MLNO == @mlno').groupby('SVOLNO')['AFACTR'].sum()/ subset.groupby('SVOLNO')['AFACTR'].sum())
 
-    ts = pd.concat(totals,axis=1).T.groupby(level=0).sum().T
+        # Collect per-ts_name results, dropping Nones
+        parts = [_pathway_transform(uci, hbn, operation, mlno, ts_name, pathways, t_code)
+            for ts_name in ts_names
+        ]
+        parts = [p for p in parts if p is not None]
+        if not parts:
+            continue  # <-- nothing to contribute, skip this mlno entirely
+
+        _ts = parts[0]
+        for part in parts[1:]:
+            _ts = _ts + part
+
+        _ts = _ts[weight.index]
+        totals.append(_ts * weight)
+
+    if not totals:
+        return pd.DataFrame()  # <-- caller gets a single, predictable type
+
+    ts = pd.concat(totals, axis=1).T.groupby(level=0).sum().T
     return ts
 
 def _qualprop_transform(uci,hbn,operation,mlno,tmemn,tmemsb1,tmemsb2 = '',t_code = 4):

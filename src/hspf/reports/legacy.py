@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from hspf import helpers
 
-from hspf.reports.phosphorus import total_phosphorous
+from hspf.reports.nutrients import total_phosphorus
 from hspf.reports.utils import weighted_describe
 
 from hspf.reports.loading import (

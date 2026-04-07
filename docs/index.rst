@@ -6,6 +6,21 @@ pyHSPF Documentation
 API for reading and writing UCI control files, post-processing binary output
 files, and building calibration workflows.
 
+
+
+User's Guide
+------------
+
+.. toctree::
+   :maxdepth: 3
+   :caption: User's Guide
+
+   user-guide/index
+
+
+API Reference
+-------------
+
 .. toctree::
    :maxdepth: 3
    :caption: API Reference

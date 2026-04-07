@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Static geometry-based channel travel time (residence time) calculations."""
+import math
 import numpy as np
 import pandas as pd
-
+from hspf.hbn import CF2CFS
 from hspf.parser import graph
 
 ACFT_TO_FT3 = 43560.0  # 1 acre-ft = 43,560 ft³
@@ -11,6 +12,26 @@ ACFT_TO_FT3 = 43560.0  # 1 acre-ft = 43,560 ft³
 
 
 def get_reach_hydraulics(uci,hbn):
+    """Extract hydraulic geometry for all RCHRES operations.
+
+    For each reach, computes the median-flow channel geometry from the
+    FTABLE, including width, depth, slope, Manning's roughness, and
+    hydraulic radius.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by OPNID with columns ``LEN``, ``DEPTH``, ``WIDTH``,
+        ``WETTED_PERIMETER``, ``LEN_FT``, ``SLOPE``, ``HYDR_RADIUS``,
+        ``DELTH``, ``KS``.
+    """
     dfs = []
     parm2 = uci.table('RCHRES', 'HYDR-PARM2')
     for table_name in uci.table_names('FTABLES'):
@@ -46,7 +67,18 @@ def get_reach_hydraulics(uci,hbn):
     return pd.concat(dfs)
     
 def _is_invalid(v):
-    """Return True if v is None, NaN, or non-positive."""
+    """Return ``True`` if *v* is ``None``, NaN, or non-positive.
+
+    Parameters
+    ----------
+    v : scalar
+        Value to check.
+
+    Returns
+    -------
+    bool
+        ``True`` when the value cannot be used in hydraulic calculations.
+    """
     if v is None:
         return True
     try:
@@ -128,14 +160,21 @@ def travel_time_summary(uci, hbn,outlet_reach_id):
 # =============================================================================
 
 def _infer_timestep_hours(series):
-    """Infer the timestep size in hours from a pd.Series or pd.DataFrame index.
+    """Infer the timestep size in hours from a timeseries index.
 
-    Returns 1.0 for hourly data, 24.0 for daily data.  Falls back to the
-    median difference between consecutive index timestamps if pd.infer_freq()
-    cannot determine the frequency.
+    Uses :func:`pandas.infer_freq` when possible, parsing optional
+    leading multipliers (e.g. ``'2H'`` → 2 hours).  Falls back to the
+    median difference between consecutive index timestamps.
 
-    Multipliers on frequency strings (e.g. '2H' for 2-hourly) are parsed and
-    applied so that irregular sub-daily frequencies are handled correctly.
+    Parameters
+    ----------
+    series : pd.Series or pd.DataFrame
+        Timeseries with a DatetimeIndex.
+
+    Returns
+    -------
+    float
+        Timestep size in hours (e.g. 1.0 for hourly, 24.0 for daily).
     """
     try:
         freq = pd.infer_freq(series.index)
@@ -931,4 +970,873 @@ def dynamic_travel_time_exceedance(reach_volumes, reach_outflows, routing_paths,
             records[source_id] = {
                 t: float((series > t).sum()) / n for t in thresholds_hours
             }
+    return pd.DataFrame(records).T.rename_axis('source_reach_id')
+
+
+# =============================================================================
+# Section 5: Water Age Distribution at a Target Reach
+# =============================================================================
+
+def _weighted_percentile(values, weights, p):
+    """Compute weighted percentile by interpolation on the cumulative weight curve."""
+    order = np.argsort(values)
+    v_sorted = values[order]
+    w_sorted = weights[order]
+    cum_w = np.cumsum(w_sorted)
+    cum_w_norm = cum_w / cum_w[-1]
+    return float(np.interp(p / 100.0, cum_w_norm, v_sorted))
+
+
+def water_age_distribution(uci, hbn, target_reach_id, t_code=5, bins=48):
+    """Compute the contribution-weighted water age distribution at a target reach.
+
+    Combines dynamic travel times (how long water takes to traverse the
+    network) with volumetric flow contributions (how much each source
+    delivers) to build a PDF of water age at the target.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object (provides network graph).
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where the age distribution is evaluated.
+    t_code : int, optional
+        Time-step code for HBN retrieval (default 5 = monthly).
+    bins : int or array-like, optional
+        Histogram bins for the age PDF (default 48).
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``['age_hours', 'density', 'cumulative']``.
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    # Dynamic travel times (V/Q per reach, summed along paths)
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    # Flow contributions from each source to the target
+    fate = channel_fate('Q', hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading('Q', uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    return _age_histogram(travel_times_df, contributions_df, bins)
+
+
+def water_age_summary(uci, hbn, target_reach_id, t_code=5):
+    """Compute contribution-weighted summary statistics of water age.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where age is evaluated.
+    t_code : int, optional
+        Time-step code (default 5 = monthly).
+
+    Returns
+    -------
+    dict
+        Keys: ``mean_age_hours``, ``median_age_hours``, ``std_age_hours``,
+        ``p10_age_hours``, ``p25_age_hours``, ``p75_age_hours``,
+        ``p90_age_hours``, ``young_water_fraction`` (age < 24 h).
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    fate = channel_fate('Q', hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading('Q', uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    return _age_summary(travel_times_df, contributions_df)
+
+
+def water_age_by_period(uci, hbn, target_reach_id, t_code=5,
+                        group_by='month', bins=48):
+    """Compute age distributions grouped by time period.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where age is evaluated.
+    t_code : int, optional
+        Time-step code (default 5 = monthly).
+    group_by : {'month', 'season', 'year'}
+        Temporal grouping.  ``'season'`` uses DJF/MAM/JJA/SON.
+    bins : int or array-like, optional
+        Histogram bins (default 48).
+
+    Returns
+    -------
+    dict
+        ``{period_label: pd.DataFrame}`` -- each DataFrame has columns
+        ``['age_hours', 'density', 'cumulative']``.
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    fate = channel_fate('Q', hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading('Q', uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    return _age_histogram_by_period(travel_times_df, contributions_df,
+                                    group_by=group_by, bins=bins)
+
+
+def water_age_source_table(uci, hbn, target_reach_id, t_code=5):
+    """Per-source summary: mean travel time, mean contribution, and percent of total.
+
+    Useful for identifying which sub-basins deliver the most water and
+    how quickly -- the primary input for BMP targeting.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where age is evaluated.
+    t_code : int, optional
+        Time-step code (default 5 = monthly).
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by source_reach_id with columns:
+        ``['mean_travel_time_hours', 'mean_contribution',
+        'contribution_pct', 'catchment_area_acres']``.
+        Sorted descending by ``contribution_pct``.
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    G = uci.network.G
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    fate = channel_fate('Q', hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading('Q', uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    common = travel_times_df.columns.intersection(contributions_df.columns)
+    mean_tt = travel_times_df[common].mean()
+    mean_contrib = contributions_df[common].mean()
+    total_contrib = mean_contrib.sum()
+
+    df = pd.DataFrame({
+        'mean_travel_time_hours': mean_tt,
+        'mean_contribution': mean_contrib,
+        'contribution_pct': np.where(total_contrib > 0, mean_contrib / total_contrib * 100, 0),
+    })
+
+    # Add catchment area where available
+    areas = {}
+    for rid in common:
+        areas[rid] = graph.catchment_area(G, rid)
+    df['catchment_area_acres'] = pd.Series(areas)
+
+    return df.sort_values('contribution_pct', ascending=False).rename_axis('source_reach_id')
+
+
+def lagged_contributions(uci, hbn, target_reach_id, constituent='Q', t_code=5,
+                         source_reach_ids=None, start=None, end=None):
+    """Compute time-lagged source contributions arriving at a target reach.
+
+    Each source's instantaneous contribution (local load × path fate factor)
+    is shifted forward in time by the dynamic travel time from that source to
+    the target reach.  The result represents *what is arriving* at the target
+    at each timestep rather than what was emitted.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object (provides network graph).
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where contributions are evaluated.
+    constituent : str, optional
+        Constituent to analyse (default ``'Q'``).  Any key from
+        ``ALLOCATION_SELECTOR`` in ``contributions.py`` is accepted
+        (e.g. ``'TP'``, ``'TSS'``).
+    t_code : int, optional
+        Time-step code for HBN retrieval (default 5 = monthly).
+    source_reach_ids : list of int, optional
+        When provided, only return columns for these source reaches.
+        A :class:`ValueError` is raised if any requested ID is not found in
+        the computed routing paths.  When ``None`` (default), all upstream
+        sources are returned.
+    start : str or datetime-like, optional
+        Start of the output time window.  Applied after lag computation so
+        that contributions emitted before *start* but arriving within the
+        window are captured.  Uses :meth:`pandas.DataFrame.loc` slicing.
+    end : str or datetime-like, optional
+        End of the output time window (inclusive).
+
+    Returns
+    -------
+    pd.DataFrame
+        Index = DatetimeIndex, columns = source_reach_ids,
+        values = lagged contribution arriving at the target each timestep.
+
+    Raises
+    ------
+    ValueError
+        If any element of *source_reach_ids* is not present in the upstream
+        routing paths.
+    """
+    from hspf.reports.contributions import (
+        channel_fate, local_loading,
+        _compute_path_fate_factors, _compute_contributions,
+    )
+
+    p = uci.network.paths(target_reach_id)
+    p[target_reach_id] = [target_reach_id]
+    reach_ids = list(p.keys())
+
+    volumes = hbn.get_multiple_timeseries('RCHRES', t_code, 'VOL', opnids=reach_ids)
+    outflows = hbn.get_multiple_timeseries('RCHRES', t_code, 'ROVOL', opnids=reach_ids)/CF2CFS[t_code]*ACFT_TO_FT3
+    travel_times_df = dynamic_travel_times(volumes, outflows, p)
+
+    fate = channel_fate(constituent, hbn, t_code, reach_ids)
+    fate_factors = _compute_path_fate_factors(fate, p)
+    loads = local_loading(constituent, uci, hbn, t_code, reach_ids)
+    contributions_df = _compute_contributions(loads, fate_factors)
+
+    if source_reach_ids is not None:
+        available = set(contributions_df.columns)
+        missing = set(source_reach_ids) - available
+        if missing:
+            raise ValueError(
+                f"source_reach_ids not found in computed paths: {sorted(missing)}"
+            )
+
+    dt_hours = _infer_timestep_hours(contributions_df)
+    lagged = _apply_lag(contributions_df, travel_times_df, dt_hours)
+
+    if source_reach_ids is not None:
+        lagged = lagged[source_reach_ids]
+
+    if start is not None or end is not None:
+        lagged = lagged.loc[start:end]
+
+    return lagged
+
+
+def lagged_contribution_summary(uci, hbn, target_reach_id, constituent='Q',
+                                t_code=5, source_reach_ids=None,
+                                start=None, end=None):
+    """Summarise time-lagged source contributions at a target reach.
+
+    Calls :func:`lagged_contributions` with the same arguments and returns
+    a per-source summary table.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN output data.
+    target_reach_id : int
+        Reach ID where contributions are evaluated.
+    constituent : str, optional
+        Constituent (default ``'Q'``).
+    t_code : int, optional
+        HBN time-step code (default 5 = monthly).
+    source_reach_ids : list of int, optional
+        Restrict output to these source reaches (see
+        :func:`lagged_contributions`).
+    start : str or datetime-like, optional
+        Start of the time window.
+    end : str or datetime-like, optional
+        End of the time window (inclusive).
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by *source_reach_id* with columns:
+
+        ``mean_lagged_contribution``
+            Temporal mean of arriving contribution per timestep.
+        ``total_lagged_contribution``
+            Sum of arriving contribution over the full (filtered) period.
+        ``pct_of_total``
+            Each source's share of the grand total arriving contribution
+            (0–100 scale).
+    """
+    lagged = lagged_contributions(
+        uci, hbn, target_reach_id,
+        constituent=constituent, t_code=t_code,
+        source_reach_ids=source_reach_ids,
+        start=start, end=end,
+    )
+
+    mean_contrib = lagged.mean()
+    total_contrib = lagged.sum()
+    grand_total = total_contrib.sum()
+    pct_of_total = np.where(grand_total > 0,
+                            total_contrib / grand_total * 100,
+                            0.0)
+
+    return pd.DataFrame({
+        'mean_lagged_contribution': mean_contrib,
+        'total_lagged_contribution': total_contrib,
+        'pct_of_total': pct_of_total,
+    }, index=lagged.columns).rename_axis('source_reach_id')
+
+
+# =============================================================================
+# Section 5 helpers (private)
+# =============================================================================
+
+def _apply_lag(contributions_df, travel_times_df, dt_hours):
+    """Shift each source's contribution timeseries forward by its travel time.
+
+    For each source column *j* and each timestep *t*, computes
+    ``lag_steps = travel_time[t, j] / dt_hours``, then distributes the
+    contribution between the floor and ceil arrival bins using linear
+    interpolation::
+
+        arrived[t + floor(lag_steps), j] += contribution[t, j] * (1 - frac)
+        arrived[t + ceil(lag_steps),  j] += contribution[t, j] * frac
+
+    where ``frac = lag_steps - floor(lag_steps)``.
+
+    Contributions whose arrival index falls beyond the end of the timeseries
+    are silently dropped.
+
+    Parameters
+    ----------
+    contributions_df : pd.DataFrame
+        Instantaneous contributions.  Index = DatetimeIndex,
+        columns = source_reach_ids.
+    travel_times_df : pd.DataFrame
+        Travel times in hours.  Must share at least some columns with
+        *contributions_df*.
+    dt_hours : float
+        Timestep size in hours (> 0).
+
+    Returns
+    -------
+    pd.DataFrame
+        Lagged contributions with the same shape, index, and columns as
+        the intersection of *contributions_df* and *travel_times_df*.
+    """
+    common = contributions_df.columns.intersection(travel_times_df.columns)
+    contrib = contributions_df[common].values.astype(float)
+    tt = travel_times_df[common].values.astype(float)
+
+    n_times, n_sources = contrib.shape
+    out = np.zeros((n_times, n_sources), dtype=float)
+
+    for j in range(n_sources):
+        for t in range(n_times):
+            c = contrib[t, j]
+            if not np.isfinite(c) or c <= 0:
+                continue
+            lag_h = tt[t, j]
+            if not np.isfinite(lag_h) or lag_h < 0:
+                continue
+            lag_steps = lag_h / dt_hours
+            arr_lo = t + int(np.floor(lag_steps))
+            arr_hi = arr_lo + 1
+            frac = lag_steps - np.floor(lag_steps)
+            if arr_lo < n_times:
+                out[arr_lo, j] += c * (1.0 - frac)
+            if arr_hi < n_times:
+                out[arr_hi, j] += c * frac
+
+    return pd.DataFrame(out, index=contributions_df.index, columns=common)
+
+
+def _age_histogram(travel_times_df, contributions_df, bins=48):
+    """Build a contribution-weighted age histogram.
+
+    Parameters
+    ----------
+    travel_times_df : pd.DataFrame
+        Travel times in hours.  Columns are source reach IDs.
+    contributions_df : pd.DataFrame
+        Contribution weights.  Must share columns with *travel_times_df*.
+    bins : int or array-like, optional
+        Number of histogram bins (default 48).
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``age_hours``, ``density``, ``cumulative``.
+    """
+    common = travel_times_df.columns.intersection(contributions_df.columns)
+    tt_vals = travel_times_df[common].values.ravel()
+    wt_vals = contributions_df[common].values.ravel()
+
+    valid = np.isfinite(tt_vals) & np.isfinite(wt_vals) & (wt_vals > 0) & (tt_vals > 0)
+    tt_vals = tt_vals[valid]
+    wt_vals = wt_vals[valid]
+
+    if len(tt_vals) == 0:
+        return pd.DataFrame(columns=['age_hours', 'density', 'cumulative'])
+
+    counts, edges = np.histogram(tt_vals, bins=bins, weights=wt_vals)
+    total = counts.sum()
+    density = counts / total if total > 0 else counts
+    bin_centers = 0.5 * (edges[:-1] + edges[1:])
+
+    return pd.DataFrame({
+        'age_hours': bin_centers,
+        'density': density,
+        'cumulative': np.cumsum(density),
+    })
+
+
+def _age_summary(travel_times_df, contributions_df):
+    """Compute contribution-weighted age summary statistics.
+
+    Parameters
+    ----------
+    travel_times_df : pd.DataFrame
+        Travel times in hours.  Columns are source reach IDs.
+    contributions_df : pd.DataFrame
+        Contribution weights.  Must share columns with *travel_times_df*.
+
+    Returns
+    -------
+    dict
+        Keys: ``mean_age_hours``, ``median_age_hours``, ``std_age_hours``,
+        ``p10_age_hours``, ``p25_age_hours``, ``p75_age_hours``,
+        ``p90_age_hours``, ``young_water_fraction``.
+    """
+    common = travel_times_df.columns.intersection(contributions_df.columns)
+    tt_vals = travel_times_df[common].values.ravel()
+    wt_vals = contributions_df[common].values.ravel()
+
+    valid = np.isfinite(tt_vals) & np.isfinite(wt_vals) & (wt_vals > 0) & (tt_vals > 0)
+    tt_vals = tt_vals[valid]
+    wt_vals = wt_vals[valid]
+
+    keys = ['mean_age_hours', 'median_age_hours', 'std_age_hours',
+            'p10_age_hours', 'p25_age_hours', 'p75_age_hours',
+            'p90_age_hours', 'young_water_fraction']
+    if len(tt_vals) == 0:
+        return {k: np.nan for k in keys}
+
+    total_wt = wt_vals.sum()
+    mean_age = float(np.sum(tt_vals * wt_vals) / total_wt)
+    variance = float(np.sum(wt_vals * (tt_vals - mean_age) ** 2) / total_wt)
+    young_fraction = float(wt_vals[tt_vals < 24.0].sum() / total_wt)
+
+    return {
+        'mean_age_hours': mean_age,
+        'median_age_hours': _weighted_percentile(tt_vals, wt_vals, 50),
+        'std_age_hours': np.sqrt(variance),
+        'p10_age_hours': _weighted_percentile(tt_vals, wt_vals, 10),
+        'p25_age_hours': _weighted_percentile(tt_vals, wt_vals, 25),
+        'p75_age_hours': _weighted_percentile(tt_vals, wt_vals, 75),
+        'p90_age_hours': _weighted_percentile(tt_vals, wt_vals, 90),
+        'young_water_fraction': young_fraction,
+    }
+
+
+def _age_histogram_by_period(travel_times_df, contributions_df,
+                              group_by='month', bins=48):
+    """Compute age histograms grouped by temporal period.
+
+    Parameters
+    ----------
+    travel_times_df : pd.DataFrame
+        Travel times with DatetimeIndex.
+    contributions_df : pd.DataFrame
+        Contribution weights with DatetimeIndex.
+    group_by : str, optional
+        Temporal grouping: ``'month'``, ``'season'``, or ``'year'``
+        (default ``'month'``).
+    bins : int or array-like, optional
+        Number of histogram bins (default 48).
+
+    Returns
+    -------
+    dict
+        Mapping of ``{period_label: pd.DataFrame}`` where each DataFrame
+        has columns ``age_hours``, ``density``, ``cumulative``.
+
+    Raises
+    ------
+    ValueError
+        If *group_by* is not recognised.
+    """
+    if group_by == 'month':
+        labels = travel_times_df.index.month
+    elif group_by == 'season':
+        month_to_season = {12: 'DJF', 1: 'DJF', 2: 'DJF',
+                           3: 'MAM', 4: 'MAM', 5: 'MAM',
+                           6: 'JJA', 7: 'JJA', 8: 'JJA',
+                           9: 'SON', 10: 'SON', 11: 'SON'}
+        labels = travel_times_df.index.month.map(month_to_season)
+    elif group_by == 'year':
+        labels = travel_times_df.index.year
+    else:
+        raise ValueError(
+            f"group_by must be 'month', 'season', or 'year', got '{group_by}'"
+        )
+
+    results = {}
+    for label in sorted(set(labels)):
+        mask = labels == label
+        results[label] = _age_histogram(
+            travel_times_df.loc[mask], contributions_df.loc[mask], bins=bins,
+        )
+    return results
+
+
+# =============================================================================
+# Section 6: Lagrangian Travel Time (Time-Lagged Packet Tracing)
+# =============================================================================
+
+def _interpolate_tau(tau_df, reach_id, arrival_hours, t0_epoch_hours, dt_hours):
+    """Linearly interpolate the pre-computed τ DataFrame at an arbitrary time.
+
+    Parameters
+    ----------
+    tau_df : pd.DataFrame
+        Residence-time DataFrame from :func:`dynamic_reach_residence_time`.
+        Index = timestamps, columns = reach_ids, values = τ in hours.
+    reach_id : hashable
+        Column label of the reach to look up.
+    arrival_hours : float
+        Hours elapsed since the start of the timeseries when the parcel
+        arrives at this reach.
+    t0_epoch_hours : float
+        Epoch hour of the first timestamp.  Pass ``0.0`` when
+        *arrival_hours* is already expressed relative to the timeseries
+        start.
+    dt_hours : float
+        Timestep size in hours.
+
+    Returns
+    -------
+    float
+        Interpolated τ in hours for *reach_id* at *arrival_hours*.
+        Returns ``NaN`` if the arrival time is out of range or τ is
+        unavailable.
+    """
+    relative_hours = arrival_hours - t0_epoch_hours
+    idx_float = relative_hours / dt_hours
+    idx_lo = int(math.floor(idx_float))
+    idx_hi = idx_lo + 1
+    n = len(tau_df)
+
+    if idx_lo < 0 or idx_lo >= n:
+        return np.nan
+
+    col = tau_df[reach_id]
+    tau_lo = col.iloc[idx_lo]
+    if np.isnan(tau_lo):
+        return np.nan
+
+    frac = idx_float - idx_lo
+    if frac == 0.0:
+        return float(tau_lo)
+    if idx_hi >= n:
+        return np.nan
+
+    tau_hi = col.iloc[idx_hi]
+    if np.isnan(tau_hi):
+        return np.nan
+
+    return float(tau_lo + (tau_hi - tau_lo) * frac)
+
+
+def lagrangian_travel_time(tau_df, path, release_idx, dt_hours):
+    """Trace a single parcel from the first reach in *path* to the last.
+
+    Uses time-lagged Lagrangian tracing: the clock advances by each
+    reach's interpolated residence time before evaluating the *next*
+    reach's conditions.  This is physically more correct than the
+    simultaneous-timestep approach used in Section 4.
+
+    Parameters
+    ----------
+    tau_df : pd.DataFrame
+        Residence-time DataFrame from :func:`dynamic_reach_residence_time`.
+        Index = timestamps, columns = reach_ids, values = τ in hours.
+    path : list
+        Ordered list of reach_ids from upstream to downstream.
+    release_idx : int
+        Integer index into *tau_df* corresponding to the release timestep.
+    dt_hours : float
+        Timestep size in hours.
+
+    Returns
+    -------
+    float
+        Total Lagrangian travel time in hours.  ``NaN`` if the parcel
+        runs off the end of the timeseries or encounters invalid data.
+
+    Notes
+    -----
+    Unlike :func:`dynamic_path_travel_time` (Section 4), which sums
+    ``τ(reach, t₀)`` for all reaches at the *same* release timestep,
+    this function evaluates each downstream reach's τ at the parcel's
+    **arrival time**, properly accounting for changing hydraulic
+    conditions.
+    """
+    elapsed = 0.0
+    for reach_id in path:
+        if reach_id not in tau_df.columns:
+            return np.nan
+        current_hours = release_idx * dt_hours + elapsed
+        tau_here = _interpolate_tau(tau_df, reach_id, current_hours, 0.0, dt_hours)
+        if np.isnan(tau_here):
+            return np.nan
+        elapsed += tau_here
+    return elapsed
+
+
+def lagrangian_travel_times(reach_volumes, reach_outflows, routing_paths):
+    """Compute Lagrangian travel times from every source reach for all timesteps.
+
+    For every source reach and every release timestep, traces a parcel
+    through the routing path using time-lagged Lagrangian tracing and
+    records the total travel time.  This is the bulk counterpart of
+    :func:`lagrangian_travel_time`.
+
+    Parameters
+    ----------
+    reach_volumes : pd.DataFrame
+        Columns = reach_ids, values = volume in acre-ft.
+    reach_outflows : pd.DataFrame
+        Columns = reach_ids, values = outflow in cfs.
+    routing_paths : dict
+        ``{source_reach_id: [reach_id, ...]}`` — same format as
+        ``graph.paths()`` returns.
+
+    Returns
+    -------
+    pd.DataFrame
+        Same index as the input timeseries, columns = source_reach_ids,
+        values = total Lagrangian travel time in hours (``NaN`` where a
+        parcel runs off the end of the available data).
+
+    Notes
+    -----
+    Unlike :func:`dynamic_travel_times` (Section 4), each downstream
+    reach's τ is evaluated at the parcel's **arrival time** rather than
+    at the release timestep, giving a physically correct time-lagged
+    result.
+    """
+    tau_df = dynamic_reach_residence_time(reach_volumes, reach_outflows)
+    dt_hours = _infer_timestep_hours(tau_df)
+    result = {}
+    for source_id, path in routing_paths.items():
+        values = [
+            lagrangian_travel_time(tau_df, path, i, dt_hours)
+            for i in range(len(tau_df))
+        ]
+        result[source_id] = pd.Series(values, index=tau_df.index)
+    return pd.DataFrame(result)
+
+
+def lagrangian_travel_time_summary(reach_volumes, reach_outflows, routing_paths,
+                                   catchment_areas=None):
+    """Summary statistics for each source reach's Lagrangian travel time.
+
+    Parameters
+    ----------
+    reach_volumes : pd.DataFrame
+        Columns = reach_ids, values = volume in acre-ft.
+    reach_outflows : pd.DataFrame
+        Columns = reach_ids, values = outflow in cfs.
+    routing_paths : dict
+        ``{source_reach_id: [reach_id, ...]}``
+    catchment_areas : pd.Series, optional
+        Catchment area in acres indexed by reach_id.
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by source_reach_id with columns
+        ``['mean_travel_time_hours', 'median_travel_time_hours',
+        'std_travel_time_hours', 'min_travel_time_hours',
+        'max_travel_time_hours', 'catchment_area_acres']``.
+
+    Notes
+    -----
+    Uses time-lagged Lagrangian tracing (Section 6) rather than the
+    simultaneous-timestep approach of :func:`dynamic_travel_time_summary`
+    (Section 4).
+    """
+    tt_df = lagrangian_travel_times(reach_volumes, reach_outflows, routing_paths)
+    records = {}
+    for source_id in tt_df.columns:
+        series = tt_df[source_id].dropna()
+        records[source_id] = {
+            'mean_travel_time_hours': series.mean() if not series.empty else np.nan,
+            'median_travel_time_hours': series.median() if not series.empty else np.nan,
+            'std_travel_time_hours': series.std() if not series.empty else np.nan,
+            'min_travel_time_hours': series.min() if not series.empty else np.nan,
+            'max_travel_time_hours': series.max() if not series.empty else np.nan,
+            'catchment_area_acres': (
+                catchment_areas[source_id]
+                if catchment_areas is not None and source_id in catchment_areas.index
+                else np.nan
+            ),
+        }
+    return pd.DataFrame(records).T.rename_axis('source_reach_id')
+
+
+def lagrangian_travel_time_exceedance(reach_volumes, reach_outflows, routing_paths,
+                                      thresholds_hours=None):
+    """Fraction of release times where Lagrangian travel time exceeds thresholds.
+
+    Parameters
+    ----------
+    reach_volumes : pd.DataFrame
+        Columns = reach_ids, values = volume in acre-ft.
+    reach_outflows : pd.DataFrame
+        Columns = reach_ids, values = outflow in cfs.
+    routing_paths : dict
+        ``{source_reach_id: [reach_id, ...]}``
+    thresholds_hours : list of float, optional
+        Threshold values in hours.  Defaults to ``[6, 12, 24, 48, 72, 168]``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Rows = source_reach_ids, columns = threshold values, values =
+        fraction of valid release timesteps where travel time exceeds the
+        threshold.
+
+    Notes
+    -----
+    Uses time-lagged Lagrangian tracing (Section 6) rather than the
+    simultaneous-timestep approach of
+    :func:`dynamic_travel_time_exceedance` (Section 4).
+    """
+    if thresholds_hours is None:
+        thresholds_hours = [6, 12, 24, 48, 72, 168]
+    tt_df = lagrangian_travel_times(reach_volumes, reach_outflows, routing_paths)
+    records = {}
+    for source_id in tt_df.columns:
+        series = tt_df[source_id].dropna()
+        if series.empty:
+            records[source_id] = {t: np.nan for t in thresholds_hours}
+        else:
+            n = len(series)
+            records[source_id] = {
+                t: float((series > t).sum()) / n for t in thresholds_hours
+            }
+    return pd.DataFrame(records).T.rename_axis('source_reach_id')
+
+
+def compare_lagrangian_vs_dynamic(reach_volumes, reach_outflows, routing_paths):
+    """Side-by-side comparison of Lagrangian vs. simultaneous-timestep travel times.
+
+    Computes both the Section 4 simultaneous-timestep travel times and
+    the Section 6 time-lagged Lagrangian travel times, then summarises
+    the mean of each and their difference and ratio.
+
+    Parameters
+    ----------
+    reach_volumes : pd.DataFrame
+        Columns = reach_ids, values = volume in acre-ft.
+    reach_outflows : pd.DataFrame
+        Columns = reach_ids, values = outflow in cfs.
+    routing_paths : dict
+        ``{source_reach_id: [reach_id, ...]}``
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by source_reach_id with columns:
+
+        * ``dynamic_mean_hours`` — mean of the Section 4 travel times.
+        * ``lagrangian_mean_hours`` — mean of the Lagrangian travel times.
+        * ``mean_difference_hours`` — ``lagrangian_mean - dynamic_mean``.
+        * ``mean_ratio`` — ``lagrangian_mean / dynamic_mean``.
+
+    Notes
+    -----
+    The Lagrangian approach (Section 6) evaluates each reach's τ at the
+    parcel's **arrival time**, whereas the dynamic approach (Section 4)
+    evaluates all reaches at the same release timestep.  Under steady
+    (constant) hydraulic conditions the two methods yield identical
+    results; differences grow during rapidly varying flows.
+    """
+    dynamic_tt = dynamic_travel_times(reach_volumes, reach_outflows, routing_paths)
+    lagrangian_tt = lagrangian_travel_times(reach_volumes, reach_outflows, routing_paths)
+    all_ids = sorted(set(dynamic_tt.columns) | set(lagrangian_tt.columns))
+    records = {}
+    for source_id in all_ids:
+        dyn_mean = (
+            dynamic_tt[source_id].dropna().mean()
+            if source_id in dynamic_tt.columns
+            else np.nan
+        )
+        lag_mean = (
+            lagrangian_tt[source_id].dropna().mean()
+            if source_id in lagrangian_tt.columns
+            else np.nan
+        )
+        if np.isnan(dyn_mean) or np.isnan(lag_mean):
+            diff = np.nan
+            ratio = np.nan
+        else:
+            diff = lag_mean - dyn_mean
+            ratio = lag_mean / dyn_mean if dyn_mean != 0.0 else np.nan
+        records[source_id] = {
+            'dynamic_mean_hours': dyn_mean,
+            'lagrangian_mean_hours': lag_mean,
+            'mean_difference_hours': diff,
+            'mean_ratio': ratio,
+        }
     return pd.DataFrame(records).T.rename_axis('source_reach_id')

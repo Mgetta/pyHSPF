@@ -1,0 +1,40 @@
+pyHSPF Documentation
+====================
+
+**pyHSPF** is a Python package for downloading, configuring, and running HSPF
+(Hydrological Simulation Program – Fortran) models.  It provides a high-level
+API for reading and writing UCI control files, post-processing binary output
+files, and building calibration workflows.
+
+
+
+User's Guide
+------------
+
+.. toctree::
+   :maxdepth: 3
+   :caption: User's Guide
+
+   user-guide/index
+
+
+API Reference
+-------------
+
+.. toctree::
+   :maxdepth: 3
+   :caption: API Reference
+
+   uci_class
+   uci
+   hbn_class
+   hbn
+   reports
+
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`

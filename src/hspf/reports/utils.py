@@ -23,6 +23,55 @@ SIMULATION_PERIOD_TO_TIME_STEP = {
 #: 'simulation' is a special sentinel meaning "the entire simulation span".
 PERIOD_ORDER = ['hourly', 'daily', 'monthly', 'seasonal', 'yearly', 'simulation']
 
+def filter_opnids(df,operation,opnids,drop=True):
+    """Filter a DataFrame by operation type and OPNID values.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with ``OPERATION`` and ``OPNID`` columns.
+    operation : str
+        Operation type to match (e.g. ``'PERLND'``).
+    opnids : list
+        OPNID values to match.
+    drop : bool, optional
+        If ``True`` (default), *remove* matching rows.  If ``False``,
+        *keep* only matching rows.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered DataFrame.
+    """
+    indexes = (df['OPERATION'] == operation) & df['OPNID'].isin(opnids)
+    if drop:
+        return df[~indexes]
+    return df[indexes]
+
+def filter_catchments(df, tvolnos, drop=True):
+    """Filter a DataFrame by TVOLNO (catchment / reach ID) values.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with a ``TVOLNO`` column.
+    tvolnos : list
+        TVOLNO values to match.
+    drop : bool, optional
+        If ``True`` (default), *remove* matching rows.  If ``False``,
+        *keep* only matching rows.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered DataFrame.
+    """
+    indexes = df['TVOLNO'].isin(tvolnos)
+    if drop:
+        return df[~indexes]
+    return df[indexes]
+
+
 
 def simulation_period_to_time_step(simulation_period):
     """Convert a *simulation_period* string to the integer HBN time-step code.
@@ -143,9 +192,30 @@ def weighted_describe(df, value_col, weight_col):
 
 
 def weighted_parameter(uci,operation, table_name, table_id, parameter, opnids = None):
-    
+    """Compute area-weighted statistics for a UCI table parameter by catchment.
 
-    values = uci.table(operation,table_name,table_id)[['parameter']]
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    operation : str
+        Operation type (``'PERLND'``, ``'IMPLND'``, or ``'RCHRES'``).
+    table_name : str
+        UCI table name containing the parameter.
+    table_id : int or str
+        Table identifier within the block.
+    parameter : str
+        Column name of the parameter to analyse.
+    opnids : list of int, optional
+        Operation IDs to include.  If ``None``, all IDs are used.
+
+    Returns
+    -------
+    pd.DataFrame
+        Weighted statistics grouped by catchment (``TVOLNO``).
+    """
+
+    values = uci.table(operation,table_name,table_id)[[parameter]].copy()
     if opnids is not None:
         values = values.loc[opnids].reset_index()
 
@@ -154,7 +224,7 @@ def weighted_parameter(uci,operation, table_name, table_id, parameter, opnids = 
         # Merge with network data
     df = pd.merge(
         uci.network.subwatersheds().reset_index(),
-        df,
+        values,
         left_on=['SVOLNO', 'SVOL'],
         right_on=['OPNID', 'OPERATION'],
         how='inner'
@@ -325,6 +395,23 @@ def _apply_time_aggregation(df, freq, group_col, agg_funcs=None):
 
 
 def weighted_mean(df,value_col,weight_col):
+    """Compute a single weighted mean from a DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame.
+    value_col : str
+        Column containing values to average.
+    weight_col : str
+        Column containing weights.
+
+    Returns
+    -------
+    pd.DataFrame
+        Single-row DataFrame with ``AFACTR`` (total weight) and the
+        weighted mean of *value_col*.
+    """
     total = df[weight_col].sum()
     if total == 0:
         df = pd.DataFrame({
@@ -338,6 +425,33 @@ def weighted_mean(df,value_col,weight_col):
     return df
                             
 def annual_weighted_output(uci,hbn,ts_name,operation = 'PERLND',t_code = 5,opnids = None,group_by = None,start_year = 1996,end_year = 2100):
+    """Compute area-weighted mean annual output for a timeseries.
+
+    Parameters
+    ----------
+    uci : UCI
+        Parsed UCI model object.
+    hbn : hbnInterface
+        HBN binary output interface.
+    ts_name : str
+        Timeseries name (e.g. ``'PERO'``, ``'SOSED'``).
+    operation : str, optional
+        Operation type (default ``'PERLND'``).
+    t_code : int, optional
+        HBN time-step code (default 5 = yearly).
+    opnids : list of int or None, optional
+        Operation IDs to filter.  ``None`` includes all.
+    group_by : str or None, optional
+        Grouping method: ``None`` (watershed total), ``'landcover'``,
+        or ``'opnid'``.
+    start_year, end_year : int, optional
+        Year range filter (inclusive, defaults 1996–2100).
+
+    Returns
+    -------
+    pd.DataFrame
+        Weighted output indexed by group and ``AFACTR``.
+    """
     assert (group_by in [None,'landcover','opnid'])
     df = hbn.get_multiple_timeseries(operation,t_code,ts_name,opnids = opnids)
     df = df.loc[(df.index.year >= start_year) & (df.index.year <= end_year)]   
@@ -362,6 +476,24 @@ def annual_weighted_output(uci,hbn,ts_name,operation = 'PERLND',t_code = 5,opnid
 
 
 def add_temporal_groups(df,time_step):
+    """Add temporal grouping columns to a DataFrame based on time-step resolution.
+
+    Adds ``year``, ``month``, ``season``, ``day``, and/or ``hour`` columns
+    depending on the granularity implied by *time_step*.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with a ``datetime`` column.
+    time_step : int
+        HBN time-step code (2 = hourly, 3 = daily, 4 = monthly,
+        5 = yearly).
+
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with additional temporal columns.
+    """
     assert 'datetime' in df.columns, "DataFrame must have a 'datetime' column"
     if time_step <= 5:
         df['year'] = df['datetime'].dt.year

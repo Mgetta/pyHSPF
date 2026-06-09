@@ -341,7 +341,7 @@ def build_catchment_loading_table(model_name, uci, hbn, run_id='base'):
     """
     end_year = int(uci.table('GLOBAL')['end_date'].str[0:4].values[0])
     dfs = []
-    for constituent in ['Q', 'TSS', 'N', 'OP', 'TP', 'TKN']:
+    for constituent in ['Q', 'TSS', 'TN', 'OP', 'TP', 'TKN']:
         df = reports.catchment_loading_summary(uci, hbn, constituent)
         df['constituent'] = constituent
         df['model_name'] = model_name

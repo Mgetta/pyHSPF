@@ -29,11 +29,14 @@ LOSS_MAP : dict
 TCODES2FREQ : dict
     HSPF numeric time-codes (1–5) mapped to pandas frequency aliases.
 """
+import mmap
+
 from hspf import helpers
 import pandas as pd
 import math
 from struct import unpack
 from numpy import fromfile
+import numpy as np
 from pandas import DataFrame
 from datetime import datetime, timedelta #, timezone
 from collections import defaultdict
@@ -702,6 +705,12 @@ class hbnClass:
                        1:'minutely',2:'hourly',3:'daily',4:'monthly',5:'yearly',
                        'min':1,'h':2,'D':3,'M':4,'Y':5,'H':2,'ME':4,'YE':5}
         self.pandas_tcodes = {1:'min',2:'h',3:'D',4:'ME',5:'YE'}
+
+    def __del__(self):
+        # Release the mapping when the object is garbage collected
+        if hasattr(self, '_mmap'):
+            self._mmap.close()
+
     def data(self,file_name,Map = False):
         """Load raw bytes from an HBN file and optionally map its contents.
 
@@ -714,7 +723,10 @@ class hbnClass:
             (default ``False``).
         """
         self.file_name = file_name
-        self.data = fromfile(self.file_name, 'B')
+        with open(file_name, 'rb') as fh:
+            # Map entire file. ACCESS_READ = read-only, won't be modified.
+            self._mmap = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
+        self.data = np.frombuffer(self._mmap, dtype='B')
         if self.data[0] != 0xFD:
             print('BAD HBN FILE - must start with magic number 0xFD')
             return
@@ -775,10 +787,17 @@ class hbnClass:
                     slen += 4 + ln
             else:
                 print('UNKNOW RECTYPE', rectype)
-            if reclen < 36:
-                index += reclen + 29  # found by trial and error
+
+            cpos = reclen + 28  # 28 = 4-byte length prefix + 24-byte leader
+            # HSPF 12.5 binary fortran writer has 3 levels of block-position encoding depending on record length;
+            if cpos < 64:
+                bp_width = 1
+            elif cpos < 16384: 
+                bp_width = 2
             else:
-                index += reclen + 30
+                bp_width = 3
+
+            index += reclen + 28 + bp_width
         self.mapn = dict(mapn)
         self.mapd = dict(mapd)
 

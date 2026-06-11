@@ -5,7 +5,6 @@ Reports package for HSPF model output analysis.
 This package provides a suite of functions for generating various reports and analyses
 """
 
-import pandas as pd
 
 # --- loading ---
 from hspf.reports.loading import (

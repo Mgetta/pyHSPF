@@ -355,7 +355,7 @@ def make_watershed(G,reach_ids,upstream_reach_ids = None):
 
     # Initialize an empty set to store all unique ancestors
     
-    # Iterate through the target nodes and find ancestors for each
+    # 1. Initialize and collect all upstream reaches
     all_upstream_reaches = set()
     for node_id in node_ids:
         ancestors_of_node = [node['id'] for node in ancestors(G, node_id,'RCHRES')]
@@ -366,7 +366,7 @@ def make_watershed(G,reach_ids,upstream_reach_ids = None):
         upstream_node_ids = set(get_node_id(G,'RCHRES',reach_id) for reach_id in upstream_reach_ids)
         for node_id in upstream_node_ids:
             ancestors_of_node = [node['id'] for node in ancestors(G, node_id,'RCHRES')]
-            all_upstream_reaches = all_upstream_reaches - set(ancestors_of_node)
+            all_upstream_reaches = all_upstream_reaches - set(ancestors_of_node) - {node_id}
     else:
         upstream_node_ids = set()
 

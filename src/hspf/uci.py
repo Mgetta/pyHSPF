@@ -1093,6 +1093,16 @@ def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None
             for constituent in constituents:
                 uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = CONSTITUENT_MAP[constituent],opnids = reach_ids,operator = 'set')
 
+def _masslinks(uci):
+    dfs = []
+    for table_name in uci.table_names('MASS-LINK'):
+        mlno = table_name.split('MASS-LINK')[1]
+        masslink = uci.table('MASS-LINK', table_name)
+        masslink.insert(0, 'MLNO', mlno)
+        dfs.append(masslink)
+    masslinks = pd.concat(dfs, ignore_index=True)
+    return masslinks
+
 def setup_qualid(uci):
     """Standardise QUAL-ID names in QUAL-PROPS tables.
 
@@ -1105,19 +1115,39 @@ def setup_qualid(uci):
     uci : UCI
         The UCI object whose QUAL-PROPS tables will be modified in-place.
     """
-    # Perlands
-    uci.update_table('NH3+NH4','PERLND','QUAL-PROPS',0,columns = 'QUALID',operator = 'set')
-    uci.update_table('NO3','PERLND','QUAL-PROPS',1,columns = 'QUALID',operator = 'set')
-    uci.update_table('ORTHO P','PERLND','QUAL-PROPS',2,columns = 'QUALID',operator = 'set')
-    uci.update_table('BOD','PERLND','QUAL-PROPS',3,columns = 'QUALID',operator = 'set')
-    
-    # Implands
-    uci.update_table('NH3+NH4','IMPLND','QUAL-PROPS',0,columns = 'QUALID',operator = 'set')
-    uci.update_table('NO3','IMPLND','QUAL-PROPS',1,columns = 'QUALID',operator = 'set')
-    uci.update_table('ORTHO P','IMPLND','QUAL-PROPS',2,columns = 'QUALID',operator = 'set')
-    uci.update_table('BOD','IMPLND','QUAL-PROPS',3,columns = 'QUALID',operator = 'set')
+    QUALID_MAP = {
+        "NH3+NH4": "NH3+NH4",
+        "NO2+NO3": "NO3",
+        "TAM": "NH3+NH4",
+        "FLUORIDE": "FLOURIDE",
+        "ORG": "BOD",
+        "F.COLIFORM": "F.COLIFORM",
+        "F.Coliform": "F.COLIFORM",
+        "NH3": "NH3+NH4",
+        "OrgM": "BOD",
+        "Total Ph": "TP",
+        "PO4": "ORTHO P",
+        "NO2 NO3": "NO3",
+        "NO3+NO2": "NO3",
+        "BOD": "BOD",
+        "Nitrate": "NO3",
+        "ORTHO P": "ORTHO P",
+        "NO3": "NO3",
+        "Total Phos": "TP",
+        "Total Ammo": "NH3+NH4",
+    }
 
+    for key in uci.uci.keys():
+        if key[1] == 'QUAL-PROPS' and key[0] in ['PERLND','IMPLND']:
+            table = uci.table(key[0], key[1], key[2])
+            # Important safeguards to ensure subsequent functions and modules work correctly
+            # Perhaps future improvements for downstream methods could be based on qualid name instead of assuming a specific name?
+            assert len(table['QUALID'].unique()) == 1, f"Multiple QUALIDs found in {uci.name}: {table['QUALID'].unique()}"
+            assert(set(table['QUALID'].unique()).issubset(set(QUALID_MAP.keys()))), f"Unknown QUALID found in {uci.name}: {set(table['QUALID'].unique()) - set(QUALID_MAP.keys())}"
+            qualid = table['QUALID'].iloc[0]
+            uci.update_table(QUALID_MAP[qualid],key[0],'QUAL-PROPS',key[2],columns = 'QUALID',operator = 'set')
 
+            
 
 
 def chuck(adjustment,table):

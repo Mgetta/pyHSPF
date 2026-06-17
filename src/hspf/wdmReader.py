@@ -147,10 +147,11 @@ def readWDM(wdmfile, hdffile, compress_output=False):
                 series.index.freq = None
 
             dsname = f'TIMESERIES/TS{dsn:03d}'
+
             if compress_output:
-                series.to_hdf(store, dsname, complib='blosc', complevel=9)  
+                series.to_hdf(store, key=dsname, complib='blosc', complevel=9)  
             else:
-                series.to_hdf(store, dsname, format='t', data_columns=True)
+                series.to_hdf(store, key=dsname, format='t', data_columns=True)
 
             data = [
                 str(series.index[0]), str(stop_datetime), str(tstep) + freq[tcode],

@@ -42,6 +42,8 @@ from datetime import datetime, timedelta #, timezone
 from collections import defaultdict
 from collections.abc import MutableMapping
 #from pathlib import Path
+from contextlib import contextmanager
+
 
 
 #TIMSERIES_CATALOG = Path('C:/Users/mfratki/Documents/GitHub/hspf_tools/parser/Timeseries Catalog')
@@ -700,12 +702,38 @@ class hbnClass:
     """
 
     def __init__(self,file_name,Map = True):
-        self.data(file_name,Map)
-        self.tcodes = {'minutely':1,'hourly':2,'daily':3,'monthly':4,'yearly':5, 
+        self.file_name = str(file_name)
+        self.tcodes = {'minutely':1,'hourly':2,'daily':3,'monthly':4,'yearly':5,
                        1:'minutely',2:'hourly',3:'daily',4:'monthly',5:'yearly',
                        'min':1,'h':2,'D':3,'M':4,'Y':5,'H':2,'ME':4,'YE':5}
         self.pandas_tcodes = {1:'min',2:'h',3:'D',4:'ME',5:'YE'}
+        
+        # The two indexes — pure Python dicts, no file references.
+        self.mapn = {}
+        self.mapd = {}
+        
+        self._clear_cache()
+        
+        if Map:
+            self.map_hbn()
 
+
+    @contextmanager
+    def _open(self):
+        """Open the file briefly with mmap, yield it, close it on exit.
+        
+        Used both during indexing and during data reads.  Because the
+        mmap is closed immediately after the `with` block ends, no
+        long-lived OS resource is held.
+        """
+        with open(self.file_name, 'rb') as fh:
+            mm = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
+            try:
+                yield mm
+            finally:
+                mm.close()
+
+                            
     def __del__(self):
         # Release the mapping when the object is garbage collected
         if hasattr(self, '_mmap'):
@@ -736,73 +764,57 @@ class hbnClass:
             self._clear_cache()
     
     def map_hbn(self):
-        """Parse the full HBN file and build name/data position maps.
-
-        Iterates through every binary record in :attr:`data`, populating
-        :attr:`mapn` (constituent names per operation/segment/activity)
-        and :attr:`mapd` (byte offsets of data records).  Also
-        initialises the summary and cache structures.
-
-        Returns
-        -------
-        None
-        """
-        
-        self.simulation_duration_count = 0
-        self.data_frames = {}
-        self.summary = []
-        self.summarycols = ['Operation', 'Activity', 'segment', 'Frequency', 'Shape', 'Start', 'Stop']
-        self.summaryindx = []
-        self.output_dictionary = {}
-        
-        data = self.data
-
-        # Build layout maps of the file's contents
+        """Scan the file once, build mapn and mapd, then close the file."""
+        self._clear_cache()
         mapn = defaultdict(list)
         mapd = defaultdict(list)
-        index = 1  # already used first byte (magic number)
-        while index < len(data):
-            rc1, rc2, rc3, rc, rectype, operation, id, activity = unpack('4BI8sI8s', data[index:index + 28])
-            rc1 = int(rc1 >> 2)
-            rc2 = int(rc2) * 64 + rc1  # 2**6
-            rc3 = int(rc3) * 16384 + rc2  # 2**14
-            reclen = int(rc) * 4194304 + rc3 - 24  # 2**22
-
-            operation = operation.decode('ascii').strip()  # Python3 converts to bytearray not string
-            activity = activity.decode('ascii').strip()
-
-            if operation not in {'PERLND', 'IMPLND', 'RCHRES'}:
-                print('ALIGNMENT ERROR', operation)
-
-            if rectype == 1:  # data record
-                tcode = unpack('I', data[index + 32: index + 36])[0]
-                mapd[operation, id, activity, tcode].append((index, reclen))
-            elif rectype == 0:  # data names record
-                i = index + 28
-                slen = 0
-                while slen < reclen:
-                    ln = unpack('I', data[i + slen: i + slen + 4])[0]
-                    n = unpack(f'{ln}s', data[i + slen + 4: i + slen + 4 + ln])[0].decode('ascii').strip()
-                    mapn[operation, id, activity].append(n.replace('-', ''))
-                    slen += 4 + ln
-            else:
-                print('UNKNOW RECTYPE', rectype)
-
-            cpos = reclen + 28  # 28 = 4-byte length prefix + 24-byte leader
-            # HSPF 12.5 binary fortran writer has 3 levels of block-position encoding depending on record length;
-            if cpos < 64:
-                bp_width = 1
-            elif cpos < 16384: 
-                bp_width = 2
-            else:
-                bp_width = 3
-
-            index += reclen + 28 + bp_width
+        
+        with self._open() as mm:
+            if mm[0] != 0xFD:
+                print('BAD HBN FILE - must start with magic number 0xFD')
+                return
+            
+            offset = 1
+            size = mm.size()
+            while offset < size:
+                header = mm[offset:offset + 28]
+                rc1, rc2, rc3, rc, rectype, op, id_, activity = unpack(
+                    '4BI8sI8s', header)
+                rc1 = int(rc1 >> 2)
+                rc2 = int(rc2) * 64 + rc1
+                rc3 = int(rc3) * 16384 + rc2
+                reclen = int(rc) * 4194304 + rc3 - 24
+                
+                op = op.decode('ascii').strip()
+                activity = activity.decode('ascii').strip()
+                
+                if op not in {'PERLND', 'IMPLND', 'RCHRES'}:
+                    print('ALIGNMENT ERROR', op)
+                
+                if rectype == 1:
+                    tcode = unpack('I', mm[offset + 32:offset + 36])[0]
+                    mapd[op, id_, activity, tcode].append((offset, reclen))
+                elif rectype == 0:
+                    body = mm[offset + 28:offset + 28 + reclen]
+                    slen = 0
+                    while slen < reclen:
+                        ln = unpack('I', body[slen:slen + 4])[0]
+                        n = unpack(f'{ln}s', body[slen + 4:slen + 4 + ln])[0]\
+                            .decode('ascii').strip()
+                        mapn[op, id_, activity].append(n.replace('-', ''))
+                        slen += 4 + ln
+                
+                cpos = reclen + 28
+                if cpos < 64:       bp_width = 1
+                elif cpos < 16384:  bp_width = 2
+                else:               bp_width = 3
+                offset += reclen + 28 + bp_width
+        # ← mmap and file handle are closed here, deterministically
+        
         self.mapn = dict(mapn)
         self.mapd = dict(mapd)
-
     
-    def read_data(self,operation,id,activity,tcode):
+    def read_data(self,operation,id_,activity,tcode):
         """Read and cache a single time-series DataFrame from the binary data.
 
         Unpacks the raw bytes at the offsets stored in :attr:`mapd` and
@@ -814,7 +826,7 @@ class hbnClass:
         ----------
         operation : str
             ``'PERLND'``, ``'IMPLND'``, or ``'RCHRES'``.
-        id : int
+        id_ : int
             Operation segment ID.
         activity : str
             HSPF activity name (e.g. ``'HYDR'``).
@@ -826,30 +838,29 @@ class hbnClass:
         pandas.DataFrame or None
             The resampled DataFrame, or ``None`` if no rows were found.
         """
+        nvals = len(self.mapn[operation, id_, activity])
         rows = []
         times = []
-        nvals = len(self.mapn[operation, id, activity]) # number constituent timeseries
-        #utc_offset = timezone(timedelta(hours=-6)) #UTC is 6hours ahead of CST
-        for (index, reclen) in self.mapd[operation, id, activity, tcode]:
-            yr, mo, dy, hr, mn = unpack('5I', self.data[index + 36: index + 56])
-            hr = hr-1
-            #dt = datetime(yr, mo, dy, 0, mn ,tzinfo=utc_offset) + timedelta(hours=hr)
-            dt = datetime(yr, mo, dy, 0, mn ) + timedelta(hours=hr)
+        record_offsets = self.mapd[operation, id_, activity, tcode]
+        
+        # Open once for ALL the records of this query.
+        with self._open() as mm:
+            for (offset, reclen) in record_offsets:
+                yr, mo, dy, hr, mn = unpack('5I', mm[offset + 36:offset + 56])
+                row = unpack(f'{nvals}f',
+                             mm[offset + 56:offset + 56 + 4 * nvals])
+                times.append(datetime(yr, mo, dy, 0, mn) + timedelta(hours=hr - 1))
+                rows.append(row)
 
-            times.append(dt)
-
-            index += 56
-            row = unpack(f'{nvals}f', self.data[index:index + (4 * nvals)])
-            rows.append(row)
-        dfname = f'{operation}_{activity}_{id:03d}_{tcode}'
+        dfname = f'{operation}_{activity}_{id_:03d}_{tcode}'
         if self.simulation_duration_count == 0:
             self.simulation_duration_count = len(times)
-        df = DataFrame(rows, index=times, columns=self.mapn[operation, id, activity]).sort_index(level = 'index')
+        df = DataFrame(rows, index=times, columns=self.mapn[operation, id_, activity]).sort_index(level = 'index')
         if len(df) > 0:
             #if tcode in ['daily',3]:
             self.summaryindx.append(dfname)
-            self.summary.append((operation, activity, str(id), self.tcodes[tcode], str(df.shape), df.index[0], df.index[-1]))
-            self.output_dictionary[dfname] = self.mapn[operation, id, activity]
+            self.summary.append((operation, activity, str(id_), self.tcodes[tcode], str(df.shape), df.index[0], df.index[-1]))
+            self.output_dictionary[dfname] = self.mapn[operation, id_, activity]
             self.data_frames[dfname] = df.resample(self.pandas_tcodes[tcode]).mean() # sets the hours to 00 for non hourly time steps # an expensive operation probably
             return self.data_frames[dfname]
         else:
@@ -857,6 +868,8 @@ class hbnClass:
     
     def _clear_cache(self):
         """Reset all cached DataFrames and summary structures."""
+        self.simulation_duration_count = 0
+
         self.data_frames = {}
         self.summary = []
         self.summarycols = ['Operation', 'Activity', 'segment', 'Frequency', 'Shape', 'Start', 'Stop']

@@ -43,14 +43,16 @@ def get_tcons(nutrient_name,operation,units = 'mg/l'):
                   'N' :['NO2CONCDIS','NO3CONCDIS'], # N
                   'TN': ['NTOTCONCDIS'], # Total Nitrogen
                   'OP' :['PO4CONCDIS'], # Ortho
-                  'TP' :['PTOTCONC']},# BOD is the difference of ptot and ortho
+                  'TP' :['PTOTCONC'],# BOD is the difference of ptot and ortho
+                  'DO' :['DOXCONC']}, # Dissolved oxygen concentration
          'lb': {'TSS' :['ROSEDTOT'], # TSS
                   'TKN' :['TAMOUTTOT','NTOTORGOUT'], # TKN
                   'N' :['NO3OUTTOT','NO2OUTTOT'], # N
                   'TN': ['NTOTOUT'], # Total Nitrogen
                   'OP' :['PO4OUTDIS'], # Ortho
                   'TP' :['PTOTOUT'],
-                  'BOD' :['BODOUTTOT'],},
+                  'BOD' :['BODOUTTOT'],
+                  'DO' :['DOXOUTTOT']}, # Dissolved oxygen total outflow load
         'cfs': {'Q': ['ROVOL']},
         'acrft' : {'Q': ['ROVOL']},
         'degf' : {'WT': ['TW']}}

@@ -106,6 +106,7 @@ UNIT_DEFAULTS = {'Q': 'cfs',
                  'OP' : 'mg/l',
                  'TKN': 'mg/l',
                  'N'  : 'mg/l',
+                 'DO' : 'mg/l',
                  'WT' : 'degF',
                  'WL' : 'ft'}
 
@@ -328,8 +329,13 @@ def get_simulated_reach_constituent(hbn,constituent,time_step,reach_ids,unit = N
         unit = UNIT_DEFAULTS[constituent]
     else:
         assert(unit in ['mg/l','lb'])
-        
-    t_cons = helpers.get_tcons(constituent,'RCHRES','lb')
+    
+    # Dissolved oxygen concentration is stored directly in the HBN; use it
+    # rather than computing it from the load time-series.
+    if constituent == 'DO' and unit == 'mg/l':
+        t_cons = helpers.get_tcons(constituent,'RCHRES','mg/l')
+    else:
+        t_cons = helpers.get_tcons(constituent,'RCHRES','lb')
     
     # Correct instances when a reach output needs to be subtracted (rare)
     df = pd.concat([hbn.get_multiple_timeseries('RCHRES',time_step,t_con,[abs(reach_id) for reach_id in reach_ids])*sign for t_con in t_cons],axis=1).sum(axis=1)
@@ -338,7 +344,7 @@ def get_simulated_reach_constituent(hbn,constituent,time_step,reach_ids,unit = N
         df = df*2000
     
     
-    if unit == 'mg/l':
+    if unit == 'mg/l' and constituent != 'DO':
         #if time_step not in ['h','hourly']:
         flow = get_simulated_flow(hbn,time_step,reach_ids,'acrft')*1233481.8375475 #(acrft to Liters)
         df = df*453592.37 # lbs to mg/l

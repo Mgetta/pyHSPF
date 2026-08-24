@@ -12,8 +12,9 @@ parameter templates, and running the model executable.
 Module-level helper functions cover file I/O (``reader``, ``get_blocks``,
 ``build_uci``), table post-processing (``format_opnids``,
 ``expand_extsources``, ``insert_rows``, ``keep_valid_opnids``), model
-execution (``run_model``), and UCI initialisation workflows (``setup_files``,
-``setup_geninfo``, ``setup_binaryinfo``, ``setup_qualid``).
+execution (``run_model``), UCI initialisation workflows (``setup_files``,
+``setup_geninfo``, ``setup_binaryinfo``, ``setup_qualid``), and pre-run
+validation (``check_output_activation``).
 """
 
 
@@ -1055,13 +1056,16 @@ def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None
         Constituent keys used to look up the BINARY-INFO columns that
         should be set to hourly output for *reach_ids*.  Supported keys:
         ``'Q'``, ``'TSS'``, ``'WT'``, ``'N'``, ``'TKN'``, ``'OP'``,
-        ``'BOD'``, ``'TP'``.  When ``None`` and *reach_ids* is provided,
-        all relevant columns are set to hourly.
+        ``'BOD'``, ``'TP'``, ``'DO'``.  When ``None`` and *reach_ids* is
+        provided, all relevant columns are set to hourly.
 
     Notes
     -----
     The mapping from constituent key to BINARY-INFO column name(s) is
-    defined internally via ``CONSTITUENT_MAP``.
+    defined internally via ``CONSTITUENT_MAP``.  Note that ``'DO'`` only
+    forces ``OXRXPR`` to hourly -- unlike ``'N'``/``'TKN'``/``'OP'``/``'TP'``,
+    calibrating DO does not require ``NUTRPR``/``PLNKPR`` at hourly
+    resolution (see :func:`check_output_activation`).
     """
     CONSTITUENT_MAP = {'Q': ['HYDRPR'],
                         'TSS': ['SEDPR'],
@@ -1070,7 +1074,8 @@ def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None
                         'TKN': ['OXRXPR','NUTRPR','PLNKPR'],
                         'OP': ['OXRXPR','NUTRPR','PLNKPR'],
                         'BOD': ['OXRXPR','NUTRPR','PLNKPR'],
-                        'TP': ['OXRXPR','NUTRPR','PLNKPR']}
+                        'TP': ['OXRXPR','NUTRPR','PLNKPR'],
+                        'DO': ['OXRXPR']}
     
     # Initialize Binary-Info
     uci.update_table(default_output,'PERLND','BINARY-INFO',0,
@@ -1092,6 +1097,118 @@ def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None
         else:
             for constituent in constituents:
                 uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = CONSTITUENT_MAP[constituent],opnids = reach_ids,operator = 'set')
+
+# Minimum RCHRES ACTIVITY flags and BINARY-INFO time-codes required before
+# a given high-level constituent can be reliably calibrated.
+#
+# ``activity`` lists RCHRES ACTIVITY table columns that must equal ``1``
+# (module turned on).  ``binary_info`` maps BINARY-INFO columns to the
+# coarsest acceptable numeric time-code (HSPF time-codes: ``1`` = minutely,
+# ``2`` = hourly, ``3`` = daily, ``4`` = monthly, ``5`` = yearly -- smaller
+# numbers are finer resolution, so a value is "good enough" if it is less
+# than or equal to the required code).
+#
+# Note ``'DO'`` only requires ``OXFG`` active and ``OXRXPR`` hourly.  It does
+# *not* require ``NUTFG``/``PLKFG``/``NUTRPR``/``PLNKPR``, unlike the
+# nutrient constituents (``'N'``, ``'TKN'``, ``'OP'``, ``'TP'``) which depend
+# on the NUTRX/PLANK modules.
+#
+# ``binary_info`` requirements are kept here for every constituent for
+# future extensibility, but are only enforced (i.e. can fail the ``ready``
+# check) for constituents listed in ``STRICT_TIME_CODE_CONSTITUENTS`` below.
+# Q/WT/TSS/N/TKN/OP/TP/BOD output resolution is configured once when a
+# model is first set up for calibration and isn't expected to change, so
+# flagging those as "not ready" whenever they aren't hourly would just be
+# noise. DO calibration is done occasionally per-watershed and specifically
+# requires OXRXPR to be bumped to hourly at the reach(es) of interest, so it
+# is currently the only constituent whose time-code is actually enforced.
+ACTIVATION_REQUIREMENTS = {
+    'Q':   {'activity': ['HYDRFG'],                          'binary_info': {'HYDRPR': 2}},
+    'WT':  {'activity': ['HYDRFG', 'HTFG'],                   'binary_info': {'HEATPR': 2}},
+    'TSS': {'activity': ['HYDRFG', 'SEDFG'],                  'binary_info': {'SEDPR': 2}},
+    'BOD': {'activity': ['HYDRFG', 'OXFG'],                   'binary_info': {'OXRXPR': 2}},
+    'DO':  {'activity': ['HYDRFG', 'OXFG'],                   'binary_info': {'OXRXPR': 2}},
+    'N':   {'activity': ['HYDRFG', 'OXFG', 'NUTFG'],          'binary_info': {'NUTRPR': 2}},
+    'TKN': {'activity': ['HYDRFG', 'OXFG', 'NUTFG'],          'binary_info': {'NUTRPR': 2}},
+    'OP':  {'activity': ['HYDRFG', 'OXFG', 'NUTFG'],          'binary_info': {'NUTRPR': 2}},
+    'TP':  {'activity': ['HYDRFG', 'OXFG', 'NUTFG', 'PLKFG'], 'binary_info': {'NUTRPR': 2, 'PLNKPR': 2}},
+}
+
+# Constituents whose ``binary_info`` time-code requirement above actually
+# affects the ``ready`` result of ``check_output_activation``.  Everything
+# else still has its BINARY-INFO columns reported for visibility, but a
+# coarser-than-required time-code will not cause the check to fail.
+STRICT_TIME_CODE_CONSTITUENTS = {'DO'}
+
+
+def check_output_activation(uci, constituent, reach_ids, raise_on_failure=False):
+    """Verify RCHRES module activation and output resolution for a constituent.
+
+    Checks that the RCHRES ``ACTIVITY`` flags required to simulate
+    *constituent* are turned on for every reach in *reach_ids*.  The
+    associated ``BINARY-INFO`` output columns are always reported, but
+    only cause the ``ready`` column to be ``False`` when *constituent* is
+    in :data:`STRICT_TIME_CODE_CONSTITUENTS` (currently just ``'DO'``) --
+    e.g. ``OXRXPR`` must be ``2`` (hourly) at a reach being calibrated for
+    DO. Other constituents (``'Q'``, ``'WT'``, ``'TSS'``, ``'BOD'``,
+    ``'N'``, ``'TKN'``, ``'OP'``, ``'TP'``) are expected to already have
+    their output resolution configured from initial model setup, so a
+    coarser time-code for those does not fail the check.
+
+    Parameters
+    ----------
+    uci : UCI
+        The UCI object to check (typically ``calibrator.uci``).
+    constituent : str
+        Constituent key.  Must be one of the keys in
+        :data:`ACTIVATION_REQUIREMENTS` (``'Q'``, ``'WT'``, ``'TSS'``,
+        ``'BOD'``, ``'DO'``, ``'N'``, ``'TKN'``, ``'OP'``, ``'TP'``).
+    reach_ids : int or list of int
+        RCHRES operation ID(s) to check.
+    raise_on_failure : bool, optional
+        If ``True``, raise an ``AssertionError`` listing the reaches and
+        checks that failed instead of just printing a warning.  Default
+        ``False``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Indexed by reach id, with one boolean column per required
+        ACTIVITY flag and BINARY-INFO column, plus a ``ready`` column
+        that is ``True`` only if every check passed for that reach.
+    """
+    assert constituent in ACTIVATION_REQUIREMENTS, \
+        f"Unknown constituent '{constituent}'. Valid options: {list(ACTIVATION_REQUIREMENTS)}"
+
+    if isinstance(reach_ids, int):
+        reach_ids = [reach_ids]
+
+    requirements = ACTIVATION_REQUIREMENTS[constituent]
+    activity = uci.table('RCHRES', 'ACTIVITY').loc[reach_ids]
+    binary_info = uci.table('RCHRES', 'BINARY-INFO').loc[reach_ids]
+
+    report = pd.DataFrame(index=reach_ids)
+    report.index.name = 'reach_id'
+    for flag in requirements['activity']:
+        report[flag] = activity[flag].astype(int) == 1
+    for column, max_code in requirements['binary_info'].items():
+        report[column] = binary_info[column].astype(int) <= max_code
+
+    if constituent in STRICT_TIME_CODE_CONSTITUENTS:
+        ready_columns = requirements['activity'] + list(requirements['binary_info'])
+    else:
+        ready_columns = requirements['activity']
+    report['ready'] = report[ready_columns].all(axis=1)
+
+    if not report['ready'].all():
+        message = (f"{constituent} output activation check failed for reach(es) "
+                    f"{report.index[~report['ready']].tolist()}:\n{report.loc[~report['ready']]}")
+        if raise_on_failure:
+            raise AssertionError(message)
+        print(message)
+
+    return report
+
 
 def _masslinks(uci):
     dfs = []

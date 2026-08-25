@@ -3,3 +3,4 @@
 *.gz
 __pycache__/
 docs/_build/
+tests/data/models/_scratch/

@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# HSPF fixture data and generated goldens
+*.hbn -text
+*.wdm -text
+*.parquet -text
+*.uci text eol=crlf
+tests/data/models/**/goldens/**/*.csv text eol=lf

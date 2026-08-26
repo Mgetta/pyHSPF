@@ -87,45 +87,114 @@ the yardstick every later phase is measured against. No architectural change.
 2. **Dependency hygiene.** In `pyproject.toml`: add `duckdb`, `xarray`, `pyarrow`;
    remove `pathlib`; add `[project.optional-dependencies] dev = ["pytest"]`. This
    is required by Phases 2+ and makes the baseline installable from scratch.
-3. **Select fixture models.** Choose 2–3 from the 68 covering the semantic surface:
-   (a) a simple PERLND/IMPLND/RCHRES model, (b) one with a NETWORK block and GENER
-   operations, (c) one producing hourly output. Models (UCI+HBN+WDM) stay outside
-   the repo; add `tests/conftest.py` with an `HSPF_FIXTURE_ROOT` env-var fixture
-   and `skipif` guards so CI without model data still passes. `tests/data/Clearwater.uci`
-   remains the in-repo UCI-only fixture.
-4. **Golden snapshot script** (`tests/goldens/make_goldens.py`). For each fixture
-   model, drive the **current** API exactly as users do:
-   - `hspfModel(uci_file)` → `.reports` (`ReportsAccessor`): `catchment_loading`
-     for `['Q','TSS','TP','TN','OP','TKN']`, `watershed_loading(...)`,
-     `loading_summary(...)`, `annual_water_budget('PERLND'|'IMPLND'|'RCHRES')`;
-   - `reports.nutrients.total_phosphorus` / `total_nitrogen` for PERLND and IMPLND
-     at `t_code` 4 and 5 (these become the Phase-3 recipe oracle);
-   - raw pulls via `hbnInterface.get_multiple_timeseries` for a sample of
-     (operation, activity, tcode) combinations (these become the Phase-2 ingest
-     oracle);
-   - write each result to `tests/goldens/<model>/<name>.csv` plus a
-     `goldens_manifest.json` (package version, git hash, model file fingerprints).
+3. **Select and commit fixture models in-repo** under
+   `tests/data/models/<name>/`.
+   Choose 2–3 from the 68 covering the semantic surface: (a) a simple
+   PERLND/IMPLND/RCHRES model, (b) one with a NETWORK block and GENER operations,
+   (c) one producing hourly output. Per model, one flat self-contained folder:
+   `.uci` + the `.wdm` inputs and `.hbn` outputs its FILES block references +
+   a `goldens/` folder. Keep any model notes in a README only if useful.
+   Constraints that make this work:
+   - `hspfModel.validate_uci()` resolves FILES entries relative to the UCI's
+     parent, asserts WDMs exist, and **auto-runs the engine if HBNs are missing**
+     — so FILES paths must be normalized to in-folder relative paths when
+     trimming, and HBNs must be committed complete; `tests/conftest.py` asserts
+     HBN existence with a clear error before constructing `hspfModel`.
+   - Trim the simulation period first (`UCI.set_simulation_period()`): ~3–5 years
+     for monthly models, ~1–2 for the hourly one; re-run the engine once, freeze
+     UCI+WDM+HBN together. Start small; only trim or add LFS when size becomes a
+     practical problem.
+   - `.gitattributes` (currently only `* text=auto`) gains binary-safety rules
+     **before** any binary is committed: `*.hbn -text`, `*.wdm -text`,
+     `*.parquet -text`, `*.uci text eol=crlf`,
+     `tests/data/models/**/goldens/**/*.csv text eol=lf`.
+   - `tests/data/models/README.md` explains the simple layout;
+     `tests/data/Clearwater.uci` remains the lightweight UCI-only fixture for
+     `test_uci.py`/`test_graph.py`.
+4. **Per-model goldens + generator helpers.** Goldens live beside the model that
+   produced them: `tests/data/models/<model>/goldens/{raw,recipes,reports}/`.
+   Use Parquet for the numeric-critical oracles (`raw/`, `recipes/`) and CSV
+   (float format `%.10g`, LF) for report outputs. Filenames are based on the
+   pyHSPF function and context arguments, e.g.
+   `reports.catchment_loading__constituent=tp__time_step=5.csv`. The helper module
+   `tests/helpers/generate_goldens.py` is deliberately functional: separate
+   functions generate report, recipe, and raw-output goldens from a loaded
+   `hspfModel` object. For each fixture model, it drives the **current** API:
+   - `reports/`: `hspfModel(uci_file)` → `.reports` (`ReportsAccessor`):
+     `catchment_loading` for `['Q','TSS','TP','TN','OP','TKN']`,
+     `watershed_loading(...)`, `loading_summary(...)`,
+     `annual_water_budget('PERLND'|'IMPLND'|'RCHRES')` — the Phase-4 mart oracle;
+   - `recipes/`: `reports.nutrients.total_phosphorus` / `total_nitrogen` for
+     PERLND and IMPLND at `t_code` 4 and 5 — the Phase-3 recipe oracle;
+   - `raw/`: `hbnInterface.get_multiple_timeseries` per
+     (operation, activity, tcode) combination present in the HBN — the Phase-2
+     ingest oracle.
 5. **Record known-broken paths — do not fix.** `outputs.py` →
    `reports.average_annual_watershed_loading`/`average_annual_catchment_loading`
    (missing exports); `ReportsAccessor.total_phosphorous` (`NameError`);
    `reports/__init__._operation_metadata` (uses the module `uci` where it needs an
-   instance). List them in the goldens manifest as `known_broken`; they scope the
-   Phase-5 legacy shims and must not silently start "working differently".
+   instance). Keep these in mind when choosing which report goldens to generate;
+   they scope the Phase-5 legacy shims and must not silently start "working
+   differently".
+6. **Test infrastructure.** Keep `tests/conftest.py` simple: provide path
+   fixtures for `tests/data` and `tests/data/models`. `pyproject.toml` gains
+   `[tool.pytest.ini_options]` (`testpaths`, marker registration,
+   `addopts = -m "not requires_engine"`, `norecursedirs = tests/data/models`)
+   and an sdist exclude for `tests/data/models`. Fix `tests/test_uci.py`'s
+   CWD-relative
+   `'./data/Clearwater.uci'` to `Path(__file__).parent` (as `test_graph.py`
+   already does).
+
+### Target testing tree
+
+```
+tests/
+├── conftest.py                     # model discovery, session fixtures, markers
+├── helpers/
+│   ├── __init__.py
+│   ├── golden.py                   # small naming/writing helpers
+│   └── generate_goldens.py         # report/recipe/raw golden generators
+├── data/                           # existing lightweight fixtures (unchanged)
+│   ├── Clearwater.uci
+│   ├── Clearwater.tpl
+│   └── models/
+│       ├── README.md
+│       ├── _template/
+│       └── <model>/
+│           ├── <model>.uci
+│           ├── <inputs>.wdm
+│           ├── <outputs>.hbn
+│           └── goldens/
+│               ├── raw/
+│               ├── recipes/
+│               └── reports/
+└── test_*.py                       # existing suites (locations unchanged)
+```
+
+Golden-subtree → phase mapping: `raw/` gates Phase 2 (`test_lake_ingest.py`
+Parquet read-back equality, modulo the documented timestamp-convention shift);
+`recipes/` is the Phase-3 recipe-compiler go/no-go; `reports/` gates each Phase-4
+port (`test_marts_golden.py`); all three back the Phase-1 "byte-identical
+regeneration" check.
 
 ### File impact
 
 | File | Action |
 |---|---|
 | `tests/test_reports.py` | Modify (repoint/xfail `_analytics` imports) |
+| `tests/test_uci.py` | Modify (CWD-relative fixture path) |
 | `src/hspf/reports/yields.py` | Modify (docstring only) |
-| `pyproject.toml` | Modify (deps) |
-| `tests/conftest.py`, `tests/goldens/make_goldens.py`, `tests/goldens/**` | Create |
+| `pyproject.toml` | Modify (deps, pytest config, sdist excludes) |
+| `.gitattributes` | Modify (binary/eol rules before first binary commit) |
+| `tests/conftest.py`, `tests/helpers/golden.py`, `tests/helpers/generate_goldens.py` | Create |
+| `tests/data/models/README.md`, `tests/data/models/_template/**`, `tests/data/models/<model>/**` | Create |
 
 ### Exit criteria
 
-`pytest` collects and passes everywhere (fixture-dependent tests skip cleanly
-without model data); goldens generated and committed; `pip install -e .` pulls
-every import the package actually makes.
+`pytest` collects and passes everywhere (model-data tests skip cleanly on clones
+without `tests/data/models/` content); fixture models committed, self-contained,
+and loadable without triggering an engine run; goldens generated beside each
+model; `pip install -e .` pulls every import the package actually makes.
 
 ---
 

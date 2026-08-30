@@ -40,6 +40,8 @@ def create_golden_folders(model_dir: Path) -> Path:
 def _save(df: pd.DataFrame, model_dir: Path, group: str, name: str, **context) -> Path:
     """Write one golden DataFrame and return its path."""
     create_golden_folders(model_dir)
+    context = {key: value for key, value in context.items()
+               if not (key == "label" and value is None)}
     path = Path(model_dir) / "goldens" / group / golden_filename(name, "csv", **context)
     return write_golden(df, path)
 
@@ -57,13 +59,13 @@ def generate_catchment_loading(model, model_dir, constituent, time_step=5):
 
 def generate_watershed_loading(model, model_dir, constituent, reach_ids,
                                upstream_reach_ids=None, by_landcover=False,
-                               time_step=5):
+                               time_step=5, label=None):
     """Golden for reports.get_watershed_loading via model.reports."""
     df = model.reports.watershed_loading(
         constituent, reach_ids, upstream_reach_ids, by_landcover, time_step,
     )
     return _save(df, model_dir, "reports", "reports.get_watershed_loading",
-                 constituent=constituent, reach_ids=reach_ids,
+                 label=label, constituent=constituent, reach_ids=reach_ids,
                  upstream_reach_ids=upstream_reach_ids,
                  by_landcover=by_landcover, time_step=time_step)
 
@@ -115,12 +117,12 @@ def generate_subwatersheds(model, model_dir):
 
 
 def generate_get_opnids(model, model_dir, operation, reach_ids,
-                        upstream_reach_ids=None):
+                        upstream_reach_ids=None, label=None):
     """Golden for uci.network.get_opnids(): watershed membership."""
     opnids = model.uci.network.get_opnids(operation, reach_ids, upstream_reach_ids)
     df = pd.DataFrame({"OPNID": sorted(opnids)})
     return _save(df, model_dir, "network", "network.get_opnids",
-                 operation=operation, reach_ids=reach_ids,
+                 label=label, operation=operation, reach_ids=reach_ids,
                  upstream_reach_ids=upstream_reach_ids)
 
 
@@ -132,21 +134,24 @@ def generate_upstream_network(model, model_dir, reach_id):
                  reach_id=reach_id)
 
 
-def generate_watershed_area(model, model_dir, reach_ids, upstream_reach_ids=None):
+def generate_watershed_area(model, model_dir, reach_ids, upstream_reach_ids=None,
+                            label=None):
     """Golden for uci.network.drainage_area(): total watershed area."""
     area = model.uci.network.drainage_area(reach_ids, upstream_reach_ids)
     df = pd.DataFrame({"drainage_area": [area]})
     return _save(df, model_dir, "network", "network.drainage_area",
-                 reach_ids=reach_ids, upstream_reach_ids=upstream_reach_ids)
+                 label=label, reach_ids=reach_ids,
+                 upstream_reach_ids=upstream_reach_ids)
 
 
 def generate_drainage_area_landcover(model, model_dir, reach_ids,
-                                     upstream_reach_ids=None):
+                                     upstream_reach_ids=None, label=None):
     """Golden for uci.network.drainage_area_landcover(): area grouped by landcover."""
     areas = model.uci.network.drainage_area_landcover(reach_ids, upstream_reach_ids)
     df = areas.reset_index()
     return _save(df, model_dir, "network", "network.drainage_area_landcover",
-                 reach_ids=reach_ids, upstream_reach_ids=upstream_reach_ids)
+                 label=label, reach_ids=reach_ids,
+                 upstream_reach_ids=upstream_reach_ids)
 
 
 def generate_calibration_order(model, model_dir, reach_ids):

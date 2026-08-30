@@ -28,6 +28,14 @@ Use `_template/` as a copy/paste starting point.
 
 ## Regenerating goldens manually
 
+To regenerate the common starter set for one model, edit the configuration near
+the top of `tests/helpers/generate_all_goldens.py` (especially
+`TARGET_REACH_IDS`, `WATERSHEDS`, and `RAW_TIMESERIES`) and run:
+
+```powershell
+python tests\helpers\generate_all_goldens.py simple_monthly
+```
+
 Each golden has its own `generate_*` function in
 `tests/helpers/generate_goldens.py`. Run the ones you care about from a Python
 session or small scratch script:

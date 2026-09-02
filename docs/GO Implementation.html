@@ -1,0 +1,3181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HSPF Binary Reader: Go Implementation Plan & Python Quick Wins</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<style>
+  :root {
+    --c-bg: #fafafa;
+    --c-paper: #ffffff;
+    --c-text: #1f2937;
+    --c-muted: #6b7280;
+    --c-border: #e5e7eb;
+    --c-go: #00ADD8;
+    --c-python: #4584b6;
+    --c-fortran: #734f96;
+    --c-primary: #2563eb;
+    --c-success: #059669;
+    --c-warning: #d97706;
+    --c-danger: #dc2626;
+    --c-info: #0891b2;
+    --c-code-bg: #2d2d2d;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.05);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+    line-height: 1.65;
+    color: var(--c-text);
+    background: var(--c-bg);
+    margin: 0;
+    padding: 0;
+    font-size: 16px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    max-width: 1600px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+  nav.sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--c-paper);
+    border-right: 1px solid var(--c-border);
+    padding: 24px 20px;
+    font-size: 14px;
+  }
+  nav.sidebar h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--c-muted);
+    margin: 24px 0 8px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--c-border);
+  }
+  nav.sidebar h2:first-child { margin-top: 0; }
+  nav.sidebar ul { list-style: none; padding: 0; margin: 0; }
+  nav.sidebar li { margin: 4px 0; }
+  nav.sidebar a {
+    color: var(--c-text);
+    text-decoration: none;
+    display: block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+  nav.sidebar a:hover { background: #f3f4f6; color: var(--c-primary); }
+  nav.sidebar .toc-title {
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--c-primary);
+    margin-bottom: 16px;
+  }
+  main {
+    padding: 48px 64px;
+    max-width: 1100px;
+  }
+  h1 {
+    font-size: 36px;
+    font-weight: 800;
+    line-height: 1.2;
+    margin: 0 0 12px 0;
+    color: #0f172a;
+  }
+  h2 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 56px 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--c-border);
+    color: #0f172a;
+    scroll-margin-top: 16px;
+  }
+  h3 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 36px 0 12px 0;
+    color: #1f2937;
+    scroll-margin-top: 16px;
+  }
+  h4 {
+    font-size: 17px;
+    font-weight: 700;
+    margin: 24px 0 8px 0;
+    color: #374151;
+  }
+  p { margin: 12px 0; }
+  code {
+    font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.92em;
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #be185d;
+  }
+  pre {
+    margin: 16px 0;
+    border-radius: 6px;
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+  pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  pre[class*="language-"] {
+    background: #2d2d2d;
+    padding: 16px 20px;
+  }
+  .subtitle {
+    font-size: 18px;
+    color: var(--c-muted);
+    margin-bottom: 8px;
+  }
+  .meta-row {
+    display: flex;
+    gap: 16px;
+    margin: 16px 0 32px 0;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+    border-left: 4px solid var(--c-primary);
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .meta-row strong { color: var(--c-primary); }
+
+  .callout {
+    margin: 20px 0;
+    padding: 16px 20px;
+    border-radius: 6px;
+    border-left: 4px solid;
+    background: #f9fafb;
+  }
+  .callout-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .callout-info { background: #ecfeff; border-left-color: var(--c-info); }
+  .callout-info .callout-title { color: var(--c-info); }
+  .callout-success { background: #ecfdf5; border-left-color: var(--c-success); }
+  .callout-success .callout-title { color: var(--c-success); }
+  .callout-warning { background: #fffbeb; border-left-color: var(--c-warning); }
+  .callout-warning .callout-title { color: var(--c-warning); }
+  .callout-danger { background: #fef2f2; border-left-color: var(--c-danger); }
+  .callout-danger .callout-title { color: var(--c-danger); }
+  .callout-fortran { background: #f5f3ff; border-left-color: var(--c-fortran); }
+  .callout-fortran .callout-title { color: var(--c-fortran); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 14px;
+    box-shadow: var(--shadow);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  th {
+    background: #1e293b;
+    color: white;
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 600;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--c-border);
+    background: white;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+  td code { font-size: 12px; }
+
+  .diagram {
+    margin: 24px 0;
+    padding: 24px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    overflow-x: auto;
+  }
+  .diagram svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+  .diagram-caption {
+    font-size: 13px;
+    color: var(--c-muted);
+    text-align: center;
+    margin-top: 12px;
+    font-style: italic;
+  }
+
+  .phase-card {
+    margin: 24px 0;
+    padding: 20px 24px;
+    background: white;
+    border-radius: 8px;
+    border-left: 5px solid var(--c-go);
+    box-shadow: var(--shadow);
+  }
+  .phase-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .phase-num {
+    background: var(--c-go);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .phase-card h3 { margin: 0; font-size: 20px; }
+  .phase-meta {
+    display: flex;
+    gap: 16px;
+    margin: 8px 0 12px 0;
+    font-size: 13px;
+    color: var(--c-muted);
+    flex-wrap: wrap;
+  }
+  .phase-meta span strong { color: #374151; }
+
+  ul, ol { padding-left: 24px; }
+  ul li, ol li { margin: 6px 0; }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .compare > div {
+    padding: 16px 20px;
+    border-radius: 6px;
+    background: white;
+    box-shadow: var(--shadow);
+  }
+  .compare .bad { border-top: 3px solid var(--c-danger); }
+  .compare .good { border-top: 3px solid var(--c-success); }
+  .compare h4 { margin-top: 0; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin: 0 2px;
+    text-transform: uppercase;
+  }
+  .badge-go { background: #cffafe; color: #155e75; }
+  .badge-python { background: #dbeafe; color: #1e3a8a; }
+  .badge-fortran { background: #ede9fe; color: #5b21b6; }
+  .badge-effort-low { background: #d1fae5; color: #065f46; }
+  .badge-effort-med { background: #fed7aa; color: #9a3412; }
+  .badge-effort-high { background: #fecaca; color: #991b1b; }
+
+  .hero {
+    margin-bottom: 32px;
+    padding: 32px 36px;
+    background: linear-gradient(135deg, #1e3a8a 0%, #5b21b6 100%);
+    color: white;
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+  }
+  .hero h1 { color: white; margin-bottom: 8px; }
+  .hero .subtitle { color: #cbd5e1; font-size: 18px; }
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-top: 24px;
+  }
+  .stat {
+    background: rgba(255,255,255,0.1);
+    padding: 12px 16px;
+    border-radius: 6px;
+    backdrop-filter: blur(10px);
+  }
+  .stat .num {
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .stat .label {
+    font-size: 12px;
+    color: #cbd5e1;
+    margin-top: 4px;
+  }
+
+  .section-num {
+    display: inline-block;
+    background: var(--c-primary);
+    color: white;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    text-align: center;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+    margin-right: 12px;
+    vertical-align: 2px;
+  }
+
+  kbd {
+    background: #e5e7eb;
+    border-radius: 3px;
+    border: 1px solid #d1d5db;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+    padding: 1px 6px;
+    font-family: monospace;
+    font-size: 12px;
+  }
+
+  blockquote {
+    margin: 16px 0;
+    padding: 12px 20px;
+    border-left: 4px solid var(--c-muted);
+    background: #f9fafb;
+    color: #4b5563;
+    font-style: italic;
+  }
+
+  .anchor-link {
+    opacity: 0;
+    margin-left: 8px;
+    text-decoration: none;
+    color: var(--c-muted);
+    font-weight: 400;
+  }
+  h2:hover .anchor-link, h3:hover .anchor-link { opacity: 0.8; }
+
+  .quick-win-card {
+    margin: 20px 0;
+    background: white;
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .quick-win-header {
+    padding: 14px 20px;
+    background: linear-gradient(90deg, #1e3a8a, #2563eb);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .quick-win-header h4 { margin: 0; color: white; }
+  .quick-win-header .qw-stats {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .quick-win-header .qw-stat {
+    background: rgba(255,255,255,0.2);
+    padding: 3px 10px;
+    border-radius: 12px;
+  }
+  .quick-win-body { padding: 20px; }
+
+  @media (max-width: 1024px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.sidebar { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--c-border); }
+    main { padding: 32px 24px; }
+    .hero-stats { grid-template-columns: repeat(2, 1fr); }
+    .compare { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="toc-title">📘 Implementation Plan</div>
+
+    <h2>Foundation</h2>
+    <ul>
+      <li><a href="#intro">1. Introduction</a></li>
+      <li><a href="#fortran">2. The Fortran Foundation</a></li>
+      <li><a href="#findings">3. Critical Findings</a></li>
+    </ul>
+
+    <h2>Python Quick Wins</h2>
+    <ul>
+      <li><a href="#py-overview">4. Overview & Impact</a></li>
+      <li><a href="#py-mmap">4.1 mmap Replacement</a></li>
+      <li><a href="#py-paklen">4.2 Back-Pointer Fix</a></li>
+      <li><a href="#py-lookup">4.3 Activity Lookup</a></li>
+      <li><a href="#py-cache">4.4 read_data Cache</a></li>
+      <li><a href="#py-threads">4.5 ThreadPoolExecutor</a></li>
+    </ul>
+
+    <h2>Go Implementation</h2>
+    <ul>
+      <li><a href="#go-arch">5. Architecture</a></li>
+      <li><a href="#go-concepts">6. Go Concepts Primer</a></li>
+      <li><a href="#go-structure">7. Project Structure</a></li>
+      <li><a href="#phase1">Phase 1: Types</a></li>
+      <li><a href="#phase2">Phase 2: Mapper</a></li>
+      <li><a href="#phase3">Phase 3: Server</a></li>
+      <li><a href="#phase4">Phase 4: Reader</a></li>
+      <li><a href="#phase5">Phase 5: Query</a></li>
+      <li><a href="#phase6">Phase 6: Protocol</a></li>
+      <li><a href="#phase7">Phase 7: Daemon</a></li>
+      <li><a href="#phase8">Phase 8: Python Wrapper</a></li>
+    </ul>
+
+    <h2>Reference</h2>
+    <ul>
+      <li><a href="#testing">9. Testing Strategy</a></li>
+      <li><a href="#roadmap">10. Roadmap</a></li>
+      <li><a href="#refs">Appendix: References</a></li>
+    </ul>
+  </nav>
+
+  <main>
+
+  <!-- ============= HERO ============= -->
+  <div class="hero">
+    <div class="subtitle">A complete reference document</div>
+    <h1>HSPF Binary Reader</h1>
+    <h1 style="font-size: 26px; font-weight: 600; opacity: 0.9;">Go Implementation Plan + Python Quick Wins</h1>
+    <p style="margin-top: 16px; max-width: 700px;">
+      A high-performance daemon for parsing HSPF <code style="background: rgba(255,255,255,0.15); color: #fde047;">.hbn</code> binary files,
+      with concrete near-term improvements to the existing Python parser. Grounded in the actual Fortran writer source.
+    </p>
+    <div class="hero-stats">
+      <div class="stat"><div class="num">8</div><div class="label">Implementation Phases</div></div>
+      <div class="stat"><div class="num">5</div><div class="label">Python Quick Wins</div></div>
+      <div class="stat"><div class="num">~10×</div><div class="label">Expected Speedup</div></div>
+      <div class="stat"><div class="num">11</div><div class="label">Days to Ship Go Daemon</div></div>
+    </div>
+  </div>
+
+  <!-- ============= INTRO ============= -->
+  <section id="intro">
+    <h2><span class="section-num">1</span>Introduction <a href="#intro" class="anchor-link">¶</a></h2>
+
+    <div class="meta-row">
+      <span><strong>Goal:</strong> Replace per-record Python decoding with a parallel Go daemon that mmaps files, builds an index, and answers queries via a binary stdio protocol — while preserving the existing Python API.</span>
+    </div>
+
+    <h3>The Problem</h3>
+    <p>
+      The existing pyHSPF reader (<code>hbn.py</code>) loads each <code>.hbn</code> file into a numpy byte array via
+      <code>np.fromfile</code>, then sequentially walks records, decoding floats with Python-level loops. For typical HSPF
+      output spanning multiple files and many reaches, three bottlenecks dominate:
+    </p>
+    <ol>
+      <li><strong>Whole-file load:</strong> 500 MB allocated upfront even if you only query 3 reaches.</li>
+      <li><strong>Sequential file walk:</strong> Files are processed one at a time, no parallelism.</li>
+      <li><strong>Per-record Python overhead:</strong> Each record triggers a Python-level <code>struct.unpack</code> + a slice + a copy.</li>
+    </ol>
+
+    <h3>The Solution: Two Tracks</h3>
+    <div class="compare">
+      <div class="good">
+        <h4>Track A — Python Quick Wins</h4>
+        <p style="margin-top: 8px;">Five surgical changes to <code>hbn.py</code>. Total effort: ~1 day. Expected speedup: <strong>5–15×</strong> on real workloads.</p>
+        <p>No subprocess complexity, no new language, ship today.</p>
+      </div>
+      <div class="good">
+        <h4>Track B — Go Daemon</h4>
+        <p style="margin-top: 8px;">Persistent subprocess, parallel mmap+goroutines. Total effort: ~11 days. Expected speedup: <strong>20–50×</strong>.</p>
+        <p>Drop-in API, but requires a compiled binary alongside the Python package.</p>
+      </div>
+    </div>
+    <p>
+      <strong>Recommended path: do both, in order.</strong> Land the Python wins first (they correct a real bug
+      in the back-pointer skip logic), then build the Go daemon from a known-correct baseline.
+    </p>
+
+    <h3>Why Grounding in Fortran Matters</h3>
+    <p>
+      The HSPF binary format is not formally documented. Every byte-level decision in the parser must match what
+      the Fortran writer actually does, on a specific compiler, with specific compiler-extension semantics. The
+      attached source files — <code>HBINUX.FOR</code>, <code>HBINLH.FOR</code>, <code>HFILES.FOR</code>, and the
+      module callers — are the ground truth. This document derives every parser rule from a specific line of
+      Fortran, with citations.
+    </p>
+  </section>
+
+  <!-- ============= FORTRAN FOUNDATION ============= -->
+  <section id="fortran">
+    <h2><span class="section-num">2</span>The Fortran Foundation <a href="#fortran" class="anchor-link">¶</a></h2>
+
+    <h3>2.1 How the File Gets Opened</h3>
+    <p>
+      Before we can parse a single byte, we need to know what kind of file we're dealing with. The opening logic in
+      <code>HFILES.FOR</code> is decisive:
+    </p>
+
+<pre><code class="language-fortran">! HFILES.FOR — binary output file open path (FILBLK)
+IF (FTYPE(I) .EQ. 'BINO ') THEN
+  ...
+  ACC=  'SEQUENTIAL'
+  FRM=  BINFRM           ! "FORMATTED" (from HBINUX.FOR's BINIT)
+  RCL = 0
+  STAT= 'UNKNOWN'
+  CALL FILOPN (ACC, FRM, RCL, STAT, FUNIT(I), FILNAM, RET)
+  IF (RET.EQ.0) THEN
+    ENDFILE (FUNIT(I))   ! truncate any existing content
+    CLOSE (FUNIT(I))
+    CALL FILOPN (ACC, FRM, RCL, STAT, FUNIT(I), FILNAM, RET)
+  END IF
+END IF</code></pre>
+
+    <p>
+      The file is opened <code>SEQUENTIAL / FORMATTED</code>. <em>Counterintuitively</em>, this does not mean the file
+      contains text. It means the writer uses Fortran formatted I/O semantics. The trick is in the format string used
+      for every <code>WRITE</code> call:
+    </p>
+
+<pre><code class="language-fortran">! HBINUX.FOR — every record is written this way
+WRITE (RECFMT,*) "(",CPOS,"A1,$)"
+WRITE (BINU,RECFMT) (BINBUF(I),I=1,CPOS)</code></pre>
+
+    <div class="callout callout-fortran">
+      <div class="callout-title">🔍 The <code>$</code> Edit Descriptor</div>
+      <p>
+        The <code>$</code> at the end of the format is a non-standard but widely-honored extension (Lahey, Watcom,
+        Salford, gfortran) that <strong>suppresses the trailing newline</strong>. Combined with <code>A1</code> single-character
+        output, this means the runtime writes <em>exactly</em> <code>CPOS</code> bytes from <code>BINBUF</code> with
+        zero record terminators inserted.
+      </p>
+    </div>
+
+    <div class="callout callout-success">
+      <div class="callout-title">✅ Implication for our parser</div>
+      <p>
+        Every byte in the file came from <code>BINBUF</code>. There are no compiler-inserted CR/LF, no record markers,
+        no padding. The file is a flat byte stream we can mmap and address directly. <strong>The Python parser's
+        flat-byte-stream assumption is correct.</strong>
+      </p>
+    </div>
+
+    <h3>2.2 Anatomy of a Record</h3>
+    <p>
+      Every record — names or data — has the same outer envelope, built byte-by-byte in <code>BINBUF</code> and then
+      written verbatim:
+    </p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="lenGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#fbbf24"/>
+            <stop offset="100%" stop-color="#f59e0b"/>
+          </linearGradient>
+          <linearGradient id="leaderGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#60a5fa"/>
+            <stop offset="100%" stop-color="#3b82f6"/>
+          </linearGradient>
+          <linearGradient id="payloadGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#34d399"/>
+            <stop offset="100%" stop-color="#10b981"/>
+          </linearGradient>
+          <linearGradient id="bpGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#f87171"/>
+            <stop offset="100%" stop-color="#ef4444"/>
+          </linearGradient>
+        </defs>
+
+        <rect x="20" y="40" width="60" height="60" fill="#1f2937" rx="4"/>
+        <text x="50" y="75" text-anchor="middle" fill="white" font-family="monospace" font-size="14" font-weight="bold">0xFD</text>
+        <text x="50" y="120" text-anchor="middle" fill="#6b7280" font-size="11">magic</text>
+        <text x="50" y="135" text-anchor="middle" fill="#6b7280" font-size="11">(byte 0)</text>
+
+        <rect x="100" y="40" width="80" height="60" fill="url(#lenGrad)" rx="4"/>
+        <text x="140" y="65" text-anchor="middle" fill="white" font-size="11" font-weight="bold">RECLEN</text>
+        <text x="140" y="82" text-anchor="middle" fill="white" font-family="monospace" font-size="11">4 bytes</text>
+        <text x="140" y="120" text-anchor="middle" fill="#6b7280" font-size="11">packed length</text>
+
+        <rect x="180" y="40" width="220" height="60" fill="url(#leaderGrad)" rx="4"/>
+        <text x="290" y="65" text-anchor="middle" fill="white" font-size="11" font-weight="bold">LEADER (24 bytes)</text>
+        <text x="290" y="80" text-anchor="middle" fill="white" font-family="monospace" font-size="10">type/optyp/opno/sect</text>
+        <text x="290" y="92" text-anchor="middle" fill="white" font-family="monospace" font-size="10">(+unitfg/lev/date if data)</text>
+        <text x="290" y="120" text-anchor="middle" fill="#6b7280" font-size="11">fixed-format header</text>
+
+        <rect x="400" y="40" width="280" height="60" fill="url(#payloadGrad)" rx="4"/>
+        <text x="540" y="65" text-anchor="middle" fill="white" font-size="11" font-weight="bold">PAYLOAD (variable)</text>
+        <text x="540" y="80" text-anchor="middle" fill="white" font-family="monospace" font-size="10">names: [len][name][len][name]…</text>
+        <text x="540" y="92" text-anchor="middle" fill="white" font-family="monospace" font-size="10">data: float32 × VCOUNT</text>
+        <text x="540" y="120" text-anchor="middle" fill="#6b7280" font-size="11">record body</text>
+
+        <rect x="680" y="40" width="100" height="60" fill="url(#bpGrad)" rx="4"/>
+        <text x="730" y="65" text-anchor="middle" fill="white" font-size="11" font-weight="bold">BACK-PTR</text>
+        <text x="730" y="82" text-anchor="middle" fill="white" font-family="monospace" font-size="11">1, 2, or 3 bytes</text>
+        <text x="730" y="120" text-anchor="middle" fill="#6b7280" font-size="11">width depends on size</text>
+
+        <rect x="780" y="40" width="100" height="60" fill="#9ca3af" rx="4" stroke-dasharray="4,4"/>
+        <text x="830" y="75" text-anchor="middle" fill="white" font-family="monospace" font-size="11">next →</text>
+
+        <line x1="100" y1="140" x2="780" y2="140" stroke="#374151" stroke-width="2"/>
+        <line x1="100" y1="135" x2="100" y2="145" stroke="#374151" stroke-width="2"/>
+        <line x1="780" y1="135" x2="780" y2="145" stroke="#374151" stroke-width="2"/>
+        <text x="440" y="160" text-anchor="middle" font-size="13" font-weight="bold" fill="#374151">One complete record</text>
+
+        <line x1="180" y1="180" x2="680" y2="180" stroke="#10b981" stroke-width="2" stroke-dasharray="3,3"/>
+        <line x1="180" y1="175" x2="180" y2="185" stroke="#10b981" stroke-width="2"/>
+        <line x1="680" y1="175" x2="680" y2="185" stroke="#10b981" stroke-width="2"/>
+        <text x="430" y="200" text-anchor="middle" font-size="12" fill="#059669">RECLEN = bytes from leader-start to payload-end</text>
+
+        <text x="290" y="225" text-anchor="middle" font-size="11" fill="#3b82f6" font-style="italic">Names header: rectype=0, no unitfg/lev/date</text>
+        <text x="290" y="240" text-anchor="middle" font-size="11" fill="#3b82f6" font-style="italic">Data header:  rectype=1, +12 bytes (unitfg, lev, 5×date)</text>
+
+        <text x="540" y="265" text-anchor="middle" font-size="11" fill="#059669" font-style="italic">Float values written with no padding, in row order</text>
+      </svg>
+      <div class="diagram-caption">Figure 1: HSPF binary record structure. The same envelope wraps both names (rectype 0) and data (rectype 1) records.</div>
+    </div>
+
+    <h3>2.3 The Length Field & Bit Arithmetic</h3>
+    <p>
+      The 4-byte <code>RECLEN</code> at the start of each record uses a packed encoding from <code>PAKLEN</code>:
+    </p>
+
+<pre><code class="language-fortran">! HBINUX.FOR — PAKLEN
+! first multiply by 4 to shift left by 2 bits
+! then add 3 to specify 3 more bytes
+FIELD = LEN * 4 + 3
+PI(1) = MOD(FIELD, 256)
+PI(2) = INT(FIELD / 256.0)
+PI(3) = INT(FIELD / 256.0**2.0)
+PI(4) = INT(FIELD / 256.0**3.0)
+BINBUF(1) = PC(1)   ! byte 0
+BINBUF(2) = PC(5)   ! byte 1
+BINBUF(3) = PC(9)   ! byte 2
+BINBUF(4) = PC(13)  ! byte 3</code></pre>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 240" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="25" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">RECLEN encoding: 32 bits, little-endian</text>
+
+        <g transform="translate(50, 50)">
+          <rect x="0" y="0" width="640" height="40" fill="#e5e7eb" stroke="#9ca3af"/>
+          <line x1="40" y1="0" x2="40" y2="40" stroke="#9ca3af"/>
+          <line x1="80" y1="0" x2="80" y2="40" stroke="#9ca3af"/>
+
+          <rect x="0" y="0" width="40" height="40" fill="#fde047"/>
+          <rect x="40" y="0" width="40" height="40" fill="#fde047"/>
+          <rect x="80" y="0" width="560" height="40" fill="#86efac"/>
+
+          <text x="20" y="25" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold">1</text>
+          <text x="60" y="25" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold">1</text>
+
+          <text x="40" y="60" text-anchor="middle" font-size="11" fill="#7c2d12">low 2 bits</text>
+          <text x="40" y="73" text-anchor="middle" font-size="11" fill="#7c2d12">always = 11 (i.e., +3)</text>
+
+          <text x="360" y="60" text-anchor="middle" font-size="11" fill="#166534">upper 30 bits = LEN</text>
+          <text x="360" y="73" text-anchor="middle" font-size="11" fill="#166534">payload length encoded</text>
+
+          <text x="320" y="105" text-anchor="middle" font-size="13" fill="#1f2937">stored as bytes 0..3 in file (little-endian)</text>
+        </g>
+
+        <g transform="translate(50, 160)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#1f2937">Decode in Python:</text>
+          <text x="0" y="22" font-family="monospace" font-size="12" fill="#1f2937">field = data[i:i+4].view('I')[0]</text>
+          <text x="0" y="40" font-family="monospace" font-size="12" fill="#1f2937">reclen = field >> 2          # drop the low 2 bits</text>
+          <text x="0" y="58" font-family="monospace" font-size="12" fill="#6b7280"># or equivalently: reclen = (field - 3) // 4</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 2: The packed length field. Multiply-by-4 + add-3 = shift-left-2 + set-low-2-bits.</div>
+    </div>
+
+    <h3>2.4 Names vs Data Records</h3>
+    <div class="compare">
+      <div>
+        <h4 style="color: var(--c-info);">Names record (rectype = 0)</h4>
+        <p style="font-size: 14px;">Written by <code>BINHED</code>. Written <strong>once per (op, id, activity)</strong> at the start of the file.</p>
+<pre><code class="language-fortran">IBUF(2) = 0           ! rectype
+IBUF(3..4) = OPTYP    ! 8 bytes
+IBUF(5)   = OPNO      ! 4 bytes
+IBUF(6..7) = SECT     ! 8 bytes
+! payload: [4-byte len][N bytes name]…</code></pre>
+        <p style="font-size: 13px; margin-top: 8px;">Leader = <strong>20 bytes</strong> (no unit/lev/date).</p>
+      </div>
+      <div>
+        <h4 style="color: var(--c-success);">Data record (rectype = 1)</h4>
+        <p style="font-size: 14px;">Written by <code>BINREC</code>. Repeated for every printout interval.</p>
+<pre><code class="language-fortran">IBUF(2) = 1           ! rectype
+IBUF(3..4) = OPTYP
+IBUF(5)   = OPNO
+IBUF(6..7) = SECT
+IBUF(8)   = UNITFG
+IBUF(9)   = LEV
+IBUF(10..14) = DATE   ! year,mo,dy,hr,mn
+! payload: float32 × VCOUNT</code></pre>
+        <p style="font-size: 13px; margin-top: 8px;">Leader = <strong>32 bytes</strong>. Note <code>RPOS=14</code> ints × 4 = 56 bytes before floats.</p>
+      </div>
+    </div>
+
+    <h3>2.5 The Back-Pointer Width Rule</h3>
+    <p>
+      The back-pointer at the <em>end</em> of each record is the trickiest part. <code>PAKLEN</code> writes
+      one, two, or three bytes depending on the total record size:
+    </p>
+
+<pre><code class="language-fortran">! HBINUX.FOR — PAKLEN, after writing payload
+FIELD = CPOS * 4 + 1                  ! CPOS = RECLEN + 4 (incl. length prefix)
+IF (FIELD .GE. 256**2.0) THEN
+  ! three-byte back-pointer
+  CPOS = CPOS + 3
+ELSE IF (FIELD .GE. 256) THEN
+  ! two-byte back-pointer
+  CPOS = CPOS + 2
+ELSE
+  ! one-byte back-pointer
+  CPOS = CPOS + 1
+END IF</code></pre>
+
+    <p>Translating into the variable convention used in <code>hbn.py</code> (where <code>reclen</code> is what comes out of bit-shifting the length prefix and represents the leader+payload only):</p>
+
+    <table>
+      <thead>
+        <tr><th>Buffer total (CPOS)</th><th>FIELD = CPOS·4 + 1</th><th>Back-pointer width</th><th>Skip after data (Python <code>reclen</code>)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>&lt; 64</td><td>&lt; 257</td><td>1 byte</td><td><code>reclen + 28 + 1</code></td></tr>
+        <tr><td>64 – 16383</td><td>257 – 65535</td><td>2 bytes</td><td><code>reclen + 28 + 2</code></td></tr>
+        <tr><td>≥ 16384</td><td>≥ 65537</td><td>3 bytes</td><td><code>reclen + 28 + 3</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout callout-danger">
+      <div class="callout-title">🐞 Existing Python Bug</div>
+      <p>
+        <code>hbn.py</code> currently uses the heuristic <code>if reclen &lt; 36: +29 else: +30</code>. This catches
+        the 1-byte and 2-byte cases but <strong>silently breaks on 3-byte back-pointers</strong>. With <code>MXBBUF=10000</code>
+        bounding records to ≤ 40,000 payload bytes, this case absolutely occurs in real files for wide RCHRES sections
+        (NUTRX, PLANK with many constituents). The mis-skip cascades — every subsequent record is read from the wrong offset.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============= CRITICAL FINDINGS ============= -->
+  <section id="findings">
+    <h2><span class="section-num">3</span>Critical Findings from Source Review <a href="#findings" class="anchor-link">¶</a></h2>
+
+    <h3>3.1 The Complete OPTYP × Activity Surface</h3>
+    <p>
+      Reviewing every <code>BINHED</code> caller across <code>HSPF125/</code> reveals the full set of valid
+      (operation, activity) pairs. This is finite and small — it can be modeled as a typed enum in Go:
+    </p>
+
+    <div class="compare">
+      <div>
+        <h4 style="color: #166534;">PERLND</h4>
+        <ul style="font-size: 14px;">
+          <li>ATEMP, SNOW, PWATER, SEDMNT</li>
+          <li>PSTEMP, PWTGAS, PQUAL</li>
+          <li>MSTLAY, PEST, NITR</li>
+          <li>PHOS, TRACER</li>
+        </ul>
+      </div>
+      <div>
+        <h4 style="color: #1e40af;">IMPLND</h4>
+        <ul style="font-size: 14px;">
+          <li>ATEMP, SNOW</li>
+          <li>IWATER, SOLIDS</li>
+          <li>IWTGAS, IQUAL</li>
+        </ul>
+      </div>
+    </div>
+    <div style="background: white; padding: 16px 20px; border-radius: 6px; box-shadow: var(--shadow); border-top: 3px solid var(--c-success);">
+      <h4 style="color: var(--c-success); margin-top: 0;">RCHRES</h4>
+      <ul style="font-size: 14px;">
+        <li>HYDR, CONS, HTRCH, SEDTRN, GQUAL, OXRX, NUTRX, PLANK, PHCARB, ACIDPH</li>
+        <li><strong>Note:</strong> ADCALC has no printout fluxes (per <code>HRCH.FOR</code>) — never appears in files.</li>
+      </ul>
+    </div>
+
+    <h3>3.2 The Hyphenated Constituent Name Issue</h3>
+    <p>For multi-exit reaches, <code>HRCHOXR.FOR</code> shows how distinguishing names are constructed:</p>
+
+<pre><code class="language-fortran">! HRCHOXR.FOR — multi-exit constituent naming
+IF (NEXITS .GT. 1) THEN
+  DO 60 I= 1, NEXITS
+    CALL INTCHR (I, I2, I1, JLEN, CSTR)
+    ACNT = ACNT + 1
+    CHEAD(ACNT) = 'BODOUT-EXIT'
+    DO 50 IX= 1, JLEN
+      CHEAD(ACNT) = TRIM(CHEAD(ACNT)) // CSTR(IX)
+50  CONTINUE
+    CLEN(ACNT) = LEN_TRIM(CHEAD(ACNT))   ! ← name is already trimmed
+60 CONTINUE
+END IF</code></pre>
+
+    <p>This produces real names like <code>BODOUT-EXIT1</code>, <code>BODOUT-EXIT2</code>. The current Python parser does:</p>
+<pre><code class="language-python">names.append(name.replace('-', ''))  # → "BODOUTEXIT1", "BODOUTEXIT2"</code></pre>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Information loss</div>
+      <p>
+        The dash-stripping is <em>information-destroying</em>. It works as long as everything downstream is
+        consistent, but hides legitimate distinctions and could hypothetically collide names from different HSPF
+        versions. <strong>Recommendation:</strong> keep both the raw (with dash) and normalized (without)
+        forms — store raw as the public column name, match queries against normalized.
+      </p>
+    </div>
+
+    <h3>3.3 Names Are Already Trimmed</h3>
+    <p>
+      <code>CLEN(ACNT) = LEN_TRIM(CHEAD(ACNT))</code> means the writer stores only meaningful bytes — no trailing
+      spaces. <strong>The Python parser's <code>.strip()</code> on names is redundant.</strong> In Go, we skip it entirely.
+    </p>
+
+    <h3>3.4 Names Have Zero Padding</h3>
+    <p>
+      <code>HBINUX.FOR</code> shows the names are written by <code>CVARAR(CLEN(I), CHEAD(I), CLEN(I), …)</code> —
+      the third argument equals the first, so no padding/truncation logic engages. Names in the file are exactly
+      <code>CLEN</code> bytes, byte-aligned, no zero-termination, no length-rounding. The parser must use the exact
+      byte count, never round up.
+    </p>
+
+    <h3>3.5 Float Offset Within Data Records</h3>
+    <p>
+      In <code>BINREC</code>, <code>RPOS = 14</code> in integer indices, so <code>14 × 4 = 56</code> bytes precede
+      the float values: 4 bytes length-prefix + 4 rectype + 8 optyp + 4 opno + 8 sect + 4 unitfg + 4 lev + 20 date
+      = 56 bytes. <strong>Float data starts at <code>recordStart + 56</code>.</strong>
+    </p>
+
+    <h3>3.6 Every File Starts with 0xFD</h3>
+    <p>
+      First call to <code>BINHED</code> writes the magic byte:
+    </p>
+<pre><code class="language-fortran">IF (FDFLAG(BINU) .EQ. 0) THEN
+  IBUF(1) = 253           ! 0xFD
+  WRITE (BINU,"(A1,$)") BINBUF(1)
+  FDFLAG(BINU) = 1
+END IF</code></pre>
+    <p>The parser must skip byte 0 before walking records.</p>
+  </section>
+
+  <!-- ============= PYTHON QUICK WINS OVERVIEW ============= -->
+  <section id="py-overview">
+    <h2><span class="section-num">4</span>Python Quick Wins <a href="#py-overview" class="anchor-link">¶</a></h2>
+    <p>
+      Five surgical changes to <code>hbn.py</code> that together yield 5–15× speedup on real workloads. All are
+      compatible with each other and can be applied incrementally. The total touched code is under 100 lines.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>#</th><th>Change</th><th>Effort</th><th>Impact</th><th>Risk</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>4.1</td><td>mmap replaces <code>np.fromfile</code></td>
+          <td><span class="badge badge-effort-low">~5 lines</span></td>
+          <td>~30% startup</td><td>Low</td>
+        </tr>
+        <tr>
+          <td>4.2</td><td>Fix back-pointer skip arithmetic</td>
+          <td><span class="badge badge-effort-low">~5 lines</span></td>
+          <td>Correctness</td><td>None — bug fix</td>
+        </tr>
+        <tr>
+          <td>4.3</td><td>Pre-build constituent → activity table</td>
+          <td><span class="badge badge-effort-low">~10 lines</span></td>
+          <td>~10× on infer_activity</td><td>Low</td>
+        </tr>
+        <tr>
+          <td>4.4</td><td>Cache <code>read_data</code> results</td>
+          <td><span class="badge badge-effort-low">~20 lines</span></td>
+          <td>5–50× on repeat queries</td><td>Low</td>
+        </tr>
+        <tr>
+          <td>4.5</td><td>ThreadPoolExecutor for multi-reach queries</td>
+          <td><span class="badge badge-effort-med">~30 lines</span></td>
+          <td>3–5× on multi-reach</td><td>Medium</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============= PY 4.1 mmap ============= -->
+  <section id="py-mmap">
+    <h3>4.1 mmap Replaces <code>np.fromfile</code></h3>
+
+    <div class="quick-win-card">
+      <div class="quick-win-header">
+        <h4>📦 Quick Win #1: Memory Mapping</h4>
+        <div class="qw-stats">
+          <span class="qw-stat">~5 lines</span>
+          <span class="qw-stat">~30% faster startup</span>
+          <span class="qw-stat">Low risk</span>
+        </div>
+      </div>
+      <div class="quick-win-body">
+
+    <h4>The problem</h4>
+<pre><code class="language-python"># Current code in hbn.py __init__:
+self.data = np.fromfile(file, 'B')</code></pre>
+
+    <p>
+      For a 500MB <code>.hbn</code> file, this allocates ~500 MB of RAM and reads every byte from disk
+      — even if your query touches three reaches in one corner of the file.
+    </p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">RAM usage: np.fromfile vs mmap</text>
+
+        <g transform="translate(40, 50)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#dc2626">np.fromfile (current)</text>
+          <rect x="0" y="10" width="380" height="50" fill="#ef4444" rx="3"/>
+          <text x="190" y="42" text-anchor="middle" fill="white" font-size="14" font-weight="bold">All 500 MB loaded into RAM</text>
+          <text x="0" y="80" font-size="12" fill="#6b7280">Wall-clock: 1–2 seconds upfront</text>
+          <text x="0" y="98" font-size="12" fill="#6b7280">Even if you only need 3 reaches</text>
+        </g>
+
+        <g transform="translate(480, 50)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#059669">mmap + np.frombuffer (proposed)</text>
+          <rect x="0" y="10" width="380" height="50" fill="#e5e7eb" stroke="#9ca3af" rx="3"/>
+          <rect x="20" y="10" width="40" height="50" fill="#10b981"/>
+          <rect x="180" y="10" width="40" height="50" fill="#10b981"/>
+          <rect x="320" y="10" width="20" height="50" fill="#10b981"/>
+          <text x="190" y="42" text-anchor="middle" fill="#1f2937" font-size="13" font-weight="bold">Only touched pages load</text>
+          <text x="0" y="80" font-size="12" fill="#6b7280">Wall-clock: instant (mapping is free)</text>
+          <text x="0" y="98" font-size="12" fill="#6b7280">RAM grows as you query, plateaus at active set</text>
+        </g>
+
+        <g transform="translate(40, 170)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#1f2937">Key insight</text>
+          <text x="0" y="20" font-size="13" fill="#1f2937">The OS maps the file into your address space without copying.</text>
+          <text x="0" y="38" font-size="13" fill="#1f2937">Pages (typically 4KB) load on first access via page-fault — completely transparent.</text>
+          <text x="0" y="56" font-size="13" fill="#1f2937">A numpy array views the mapping directly: zero allocation, zero copy.</text>
+          <text x="0" y="80" font-size="12" fill="#6b7280" font-style="italic">All your existing self.data[i:i+4].view('I')[0] code works unchanged.</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 3: mmap dramatically reduces RAM and startup time when only part of the file is queried.</div>
+    </div>
+
+    <h4>The fix</h4>
+<pre><code class="language-python">import mmap
+
+class hbnClass:
+    def __init__(self, file):
+        self.file = file
+        with open(file, 'rb') as fh:
+            # Map entire file. ACCESS_READ = read-only, won't be modified.
+            self._mmap = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
+        # numpy "views" the mmap region — no allocation, no copy
+        self.data = np.frombuffer(self._mmap, dtype='B')
+        # ... rest of __init__ unchanged ...
+        self.map_hbn()
+
+    def __del__(self):
+        # Release the mapping when the object is garbage collected
+        if hasattr(self, '_mmap'):
+            self._mmap.close()</code></pre>
+
+    <h4>Why it works</h4>
+    <ul>
+      <li><code>np.frombuffer</code> creates a numpy array that <em>views</em> the bytes in the mmap region. No allocation, no copy.</li>
+      <li>All existing code patterns (<code>self.data[i:i+4].view('I')[0]</code>, slicing, etc.) work without modification.</li>
+      <li>The OS pages in only the bytes you actually touch — typical 4KB granularity.</li>
+      <li>Startup goes from "read 500MB from disk" to "open a file descriptor and create a mapping" — essentially instant.</li>
+    </ul>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= PY 4.2 BACK-POINTER FIX ============= -->
+  <section id="py-paklen">
+    <h3>4.2 Back-Pointer Skip Fix</h3>
+
+    <div class="quick-win-card">
+      <div class="quick-win-header">
+        <h4>🐞 Quick Win #2: Back-Pointer Bug Fix</h4>
+        <div class="qw-stats">
+          <span class="qw-stat">~5 lines</span>
+          <span class="qw-stat">Correctness</span>
+          <span class="qw-stat">No risk — bug fix</span>
+        </div>
+      </div>
+      <div class="quick-win-body">
+
+    <h4>The problem</h4>
+<pre><code class="language-python"># Current code in map_hbn:
+if reclen < 36:
+    index += reclen + 29
+else:
+    index += reclen + 30</code></pre>
+
+    <p>
+      This handles the 1-byte and 2-byte back-pointer cases but completely misses the 3-byte case. When the writer
+      emits a wide record (CPOS·4 + 1 ≥ 65,537, i.e., CPOS ≥ 16,384, which means a record with payload around 16 KB
+      or larger — common for RCHRES sections with many constituents), the parser silently mis-skips by 1 byte and
+      corrupts every subsequent record's offset.
+    </p>
+
+    <h4>The fix</h4>
+<pre><code class="language-python"># In map_hbn, replace the skip logic with:
+cpos = reclen + 28  # 28 = 4-byte length prefix + 24-byte leader
+
+if cpos < 64:
+    bp_width = 1
+elif cpos < 16384:
+    bp_width = 2
+else:
+    bp_width = 3
+
+index += reclen + 28 + bp_width</code></pre>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 240" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Back-pointer width by record size (PAKLEN logic)</text>
+
+        <g transform="translate(50, 50)">
+          <rect x="0" y="20" width="240" height="50" fill="#dbeafe" stroke="#3b82f6"/>
+          <text x="120" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="#1e40af">1-byte BP</text>
+          <text x="120" y="58" text-anchor="middle" font-size="11" fill="#1e3a8a">CPOS &lt; 64</text>
+          <text x="120" y="88" text-anchor="middle" font-size="11" fill="#374151">tiny records (rare)</text>
+          <text x="120" y="103" text-anchor="middle" font-size="10" fill="#6b7280">e.g., names with 1 short name</text>
+
+          <rect x="280" y="20" width="240" height="50" fill="#fef3c7" stroke="#f59e0b"/>
+          <text x="400" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="#92400e">2-byte BP</text>
+          <text x="400" y="58" text-anchor="middle" font-size="11" fill="#78350f">64 ≤ CPOS &lt; 16384</text>
+          <text x="400" y="88" text-anchor="middle" font-size="11" fill="#374151">most records</text>
+          <text x="400" y="103" text-anchor="middle" font-size="10" fill="#6b7280">data records, normal headers</text>
+
+          <rect x="540" y="20" width="240" height="50" fill="#fee2e2" stroke="#dc2626"/>
+          <text x="660" y="40" text-anchor="middle" font-size="12" font-weight="bold" fill="#991b1b">3-byte BP</text>
+          <text x="660" y="58" text-anchor="middle" font-size="11" fill="#7f1d1d">CPOS ≥ 16384</text>
+          <text x="660" y="88" text-anchor="middle" font-size="11" fill="#374151">wide headers/data</text>
+          <text x="660" y="103" text-anchor="middle" font-size="10" fill="#6b7280">RCHRES NUTRX/PLANK</text>
+        </g>
+
+        <g transform="translate(50, 175)">
+          <rect x="0" y="0" width="800" height="50" fill="#fef2f2" stroke="#dc2626" stroke-width="2" rx="6"/>
+          <text x="400" y="20" text-anchor="middle" font-size="12" fill="#991b1b" font-weight="bold">Bug: current code silently breaks here →</text>
+          <text x="400" y="38" text-anchor="middle" font-size="12" fill="#991b1b">Adds 30 instead of 31, parser desyncs from this record onward.</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 4: Back-pointer width zones. The 3-byte zone is real and untested by the existing parser.</div>
+    </div>
+
+    <h4>Verifying the fix in practice</h4>
+    <p>Add this to a test fixture: write an HBN file with a single RCHRES NUTRX names record containing 30+ constituents. The total names record will exceed 16 KB. Parse it with both the old and new logic; the old code will produce a wrong offset for record #2.</p>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= PY 4.3 ACTIVITY LOOKUP ============= -->
+  <section id="py-lookup">
+    <h3>4.3 Pre-Built Activity Lookup Table</h3>
+
+    <div class="quick-win-card">
+      <div class="quick-win-header">
+        <h4>⚡ Quick Win #3: O(1) Activity Inference</h4>
+        <div class="qw-stats">
+          <span class="qw-stat">~10 lines</span>
+          <span class="qw-stat">~10× on infer_activity</span>
+          <span class="qw-stat">Low risk</span>
+        </div>
+      </div>
+      <div class="quick-win-body">
+
+    <h4>The problem</h4>
+    <p>
+      <code>infer_activity()</code> currently does a linear scan of <code>self.mapn</code> on every call. For a 50-reach
+      query, that's 50 scans of an O(headers × constituents) structure.
+    </p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Linear scan vs. dict lookup</text>
+
+        <g transform="translate(40, 45)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#dc2626">Current: linear scan per call</text>
+          <rect x="0" y="10" width="380" height="80" fill="#fef2f2" stroke="#fca5a5"/>
+          <g font-family="monospace" font-size="11" fill="#7f1d1d">
+            <text x="10" y="30">for key, names in mapn.items():     # O(N)</text>
+            <text x="10" y="48">  if op == key.op and con in names:  # O(M)</text>
+            <text x="10" y="66">    return key.activity</text>
+            <text x="10" y="84">                                Total: O(N·M) per call</text>
+          </g>
+        </g>
+
+        <g transform="translate(480, 45)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#059669">Proposed: pre-built dict</text>
+          <rect x="0" y="10" width="380" height="80" fill="#ecfdf5" stroke="#86efac"/>
+          <g font-family="monospace" font-size="11" fill="#065f46">
+            <text x="10" y="30">return self._cons_to_act.get((op, con))</text>
+            <text x="10" y="56">                                  O(1)</text>
+            <text x="10" y="78">Build cost is paid once at __init__ time.</text>
+          </g>
+        </g>
+
+        <g transform="translate(40, 155)">
+          <text x="0" y="0" font-size="12" fill="#6b7280" font-style="italic">For 50 reaches × 10 calls each = 500 lookups, this turns ~50,000 comparisons into 500 hash lookups.</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 5: Algorithmic improvement from O(N·M) per call to O(1) per call.</div>
+    </div>
+
+    <h4>The fix</h4>
+<pre><code class="language-python">def map_hbn(self):
+    # ... existing scanning code ...
+
+    # NEW: at the end, build the lookup table once.
+    # Store both raw and dash-stripped variants so users can
+    # query with or without dashes (preserves backward compat).
+    self._cons_to_activity = {}
+    for (op, oid, activity, tcode), names in self.mapn.items():
+        for name in names:
+            self._cons_to_activity[(op, name)] = activity
+            stripped = name.replace('-', '')
+            if stripped != name:
+                self._cons_to_activity[(op, stripped)] = activity
+
+def infer_activity(self, op, constituent):
+    return self._cons_to_activity.get((op, constituent))</code></pre>
+
+    <h4>Bonus: preserves the dash-name fix</h4>
+    <p>
+      By indexing by both <code>"BODOUT-EXIT1"</code> and <code>"BODOUTEXIT1"</code>, you can now expose the raw
+      hyphenated names as DataFrame columns without breaking any existing caller that's been passing the stripped form.
+    </p>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= PY 4.4 CACHE ============= -->
+  <section id="py-cache">
+    <h3>4.4 Cache <code>read_data</code> Results</h3>
+
+    <div class="quick-win-card">
+      <div class="quick-win-header">
+        <h4>💾 Quick Win #4: Result Cache</h4>
+        <div class="qw-stats">
+          <span class="qw-stat">~20 lines</span>
+          <span class="qw-stat">5–50× on repeat queries</span>
+          <span class="qw-stat">Low risk</span>
+        </div>
+      </div>
+      <div class="quick-win-body">
+
+    <h4>The problem</h4>
+    <p>
+      Calibration loops, sensitivity analyses, and interactive notebook workflows all routinely re-request the same
+      time series. <code>read_data</code> currently re-reads from disk and rebuilds the DataFrame every time.
+    </p>
+
+    <h4>The fix</h4>
+<pre><code class="language-python">class hbnClass:
+    def __init__(self, file):
+        # ... existing code ...
+        self._cache = {}  # (op, id, activity, tcode) → DataFrame
+
+    def read_data(self, op, oid, activity, tcode):
+        key = (op, oid, activity, tcode)
+        if key in self._cache:
+            return self._cache[key]
+
+        # ... existing read_data body produces df ...
+
+        self._cache[key] = df
+        return df
+
+    def clear_cache(self):
+        """Drop cached frames to free memory."""
+        self._cache.clear()</code></pre>
+
+    <div class="callout callout-info">
+      <div class="callout-title">💡 Memory hint</div>
+      <p>
+        The cache grows monotonically. For long-running notebook sessions querying many distinct keys, expose
+        <code>clear_cache()</code> so users can manage memory. For typical batch workflows the cache fits comfortably
+        in RAM (each time series is N × num_constituents × 4 bytes).
+      </p>
+    </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= PY 4.5 THREADS ============= -->
+  <section id="py-threads">
+    <h3>4.5 ThreadPoolExecutor for Multi-Reach Queries</h3>
+
+    <div class="quick-win-card">
+      <div class="quick-win-header">
+        <h4>🧵 Quick Win #5: Concurrent Multi-Reach Reads</h4>
+        <div class="qw-stats">
+          <span class="qw-stat">~30 lines</span>
+          <span class="qw-stat">3–5× on multi-reach</span>
+          <span class="qw-stat">Medium risk</span>
+        </div>
+      </div>
+      <div class="quick-win-body">
+
+    <h4>The problem</h4>
+    <p>
+      <code>get_multiple_timeseries</code> walks <code>opnids</code> sequentially. Each iteration involves
+      file I/O (mmap page-faults, after Quick Win #1) and numpy slicing — both of which release the GIL.
+      Threading them yields linear speedup up to ~core-count.
+    </p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Sequential vs. Threaded reach reads</text>
+
+        <g transform="translate(40, 50)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#dc2626">Sequential (current)</text>
+          <line x1="0" y1="20" x2="380" y2="20" stroke="#9ca3af" stroke-width="1"/>
+          <rect x="0" y="30" width="60" height="20" fill="#3b82f6"/><text x="30" y="44" text-anchor="middle" fill="white" font-size="10">reach 1</text>
+          <rect x="60" y="30" width="60" height="20" fill="#3b82f6"/><text x="90" y="44" text-anchor="middle" fill="white" font-size="10">reach 2</text>
+          <rect x="120" y="30" width="60" height="20" fill="#3b82f6"/><text x="150" y="44" text-anchor="middle" fill="white" font-size="10">reach 3</text>
+          <rect x="180" y="30" width="60" height="20" fill="#3b82f6"/><text x="210" y="44" text-anchor="middle" fill="white" font-size="10">reach 4</text>
+          <rect x="240" y="30" width="60" height="20" fill="#3b82f6"/><text x="270" y="44" text-anchor="middle" fill="white" font-size="10">reach 5</text>
+          <text x="180" y="70" text-anchor="middle" font-size="11" fill="#6b7280">total time = sum of all</text>
+          <text x="0" y="95" font-size="12" fill="#374151">5 reaches × 100ms = 500ms</text>
+        </g>
+
+        <g transform="translate(480, 50)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#059669">Threaded (proposed)</text>
+          <line x1="0" y1="20" x2="380" y2="20" stroke="#9ca3af" stroke-width="1"/>
+          <rect x="0" y="30" width="60" height="14" fill="#10b981"/><text x="30" y="40" text-anchor="middle" fill="white" font-size="9">reach 1</text>
+          <rect x="0" y="46" width="60" height="14" fill="#10b981"/><text x="30" y="56" text-anchor="middle" fill="white" font-size="9">reach 2</text>
+          <rect x="0" y="62" width="60" height="14" fill="#10b981"/><text x="30" y="72" text-anchor="middle" fill="white" font-size="9">reach 3</text>
+          <rect x="0" y="78" width="60" height="14" fill="#10b981"/><text x="30" y="88" text-anchor="middle" fill="white" font-size="9">reach 4</text>
+          <rect x="0" y="94" width="60" height="14" fill="#10b981"/><text x="30" y="104" text-anchor="middle" fill="white" font-size="9">reach 5</text>
+          <text x="180" y="70" text-anchor="middle" font-size="11" fill="#6b7280">total time ≈ longest one</text>
+          <text x="0" y="135" font-size="12" fill="#374151">~110ms wall clock (4–5× faster)</text>
+        </g>
+
+        <g transform="translate(40, 200)">
+          <text x="0" y="0" font-size="12" fill="#1f2937" font-weight="bold">Why does threading help in Python?</text>
+          <text x="0" y="20" font-size="12" fill="#374151">• mmap page-faults release the GIL during disk I/O</text>
+          <text x="0" y="38" font-size="12" fill="#374151">• numpy slicing/copying releases the GIL for any non-trivial operation</text>
+          <text x="0" y="56" font-size="12" fill="#374151">• pandas resample on numpy arrays runs in C — releases the GIL</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 6: Concurrent reach reads. Speedup is ~core-count up to disk-I/O saturation.</div>
+    </div>
+
+    <h4>The fix</h4>
+<pre><code class="language-python">from concurrent.futures import ThreadPoolExecutor
+
+def get_multiple_timeseries(self, t_opn, t_code, t_con, opnids=None):
+    if isinstance(t_code, str):
+        t_code = self.tcodes[t_code]
+    if opnids is None:
+        opnids = self.infer_opnids(t_opn, t_con)
+
+    activity = self.infer_activity(t_opn, t_con)  # O(1) after Quick Win #3
+
+    def fetch_one(oid):
+        for hbn in self.hbns:
+            key = (t_opn, oid, activity, t_code)
+            if key in hbn.mapd:
+                return oid, hbn.read_data(t_opn, oid, activity, t_code)[t_con]
+        return oid, None
+
+    # Threshold: avoid pool overhead for tiny queries
+    if len(opnids) < 8:
+        results = dict(fetch_one(oid) for oid in opnids)
+    else:
+        max_workers = min(8, len(opnids))
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            results = dict(ex.map(fetch_one, opnids))
+
+    return pd.DataFrame({oid: s for oid, s in results.items() if s is not None})</code></pre>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Cache contention</div>
+      <p>
+        If you've already added Quick Win #4 (caching), wrap reads/writes to <code>self._cache</code> in a
+        <code>threading.Lock</code>, or use <code>threading.RLock</code> for safety. Otherwise concurrent inserts can
+        corrupt the dict.
+      </p>
+    </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= GO ARCHITECTURE ============= -->
+  <section id="go-arch">
+    <h2><span class="section-num">5</span>Go Daemon Architecture <a href="#go-arch" class="anchor-link">¶</a></h2>
+
+    <h3>The Big Picture</h3>
+    <p>
+      The Go implementation is a <strong>persistent daemon</strong> — Python launches it once at the start of a
+      session and exchanges binary messages with it over stdin/stdout. The daemon owns all file handles, the index,
+      and the cache.
+    </p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">End-to-end architecture</text>
+
+        <!-- Python side -->
+        <g transform="translate(20, 50)">
+          <rect x="0" y="0" width="280" height="380" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" rx="8"/>
+          <text x="140" y="22" text-anchor="middle" font-size="13" font-weight="bold" fill="#1e3a8a">Python Process</text>
+
+          <rect x="20" y="40" width="240" height="60" fill="white" stroke="#60a5fa" rx="4"/>
+          <text x="140" y="60" text-anchor="middle" font-size="12" font-weight="bold">User calibration code</text>
+          <text x="140" y="78" text-anchor="middle" font-size="11" fill="#374151">df = hbn.get_multiple_timeseries(...)</text>
+
+          <line x1="140" y1="100" x2="140" y2="120" stroke="#3b82f6" stroke-width="2"/>
+          <polygon points="140,120 135,112 145,112" fill="#3b82f6"/>
+
+          <rect x="20" y="125" width="240" height="60" fill="white" stroke="#60a5fa" rx="4"/>
+          <text x="140" y="145" text-anchor="middle" font-size="12" font-weight="bold">GoHBNInterface</text>
+          <text x="140" y="163" text-anchor="middle" font-size="11" fill="#374151">writes "multi RCHRES 3 ROVOL …\n"</text>
+          <text x="140" y="178" text-anchor="middle" font-size="11" fill="#374151">to subprocess stdin</text>
+
+          <line x1="140" y1="185" x2="140" y2="205" stroke="#3b82f6" stroke-width="2"/>
+          <polygon points="140,205 135,197 145,197" fill="#3b82f6"/>
+
+          <rect x="20" y="210" width="240" height="60" fill="white" stroke="#60a5fa" rx="4"/>
+          <text x="140" y="230" text-anchor="middle" font-size="12" font-weight="bold">_read_binary_response()</text>
+          <text x="140" y="248" text-anchor="middle" font-size="11" fill="#374151">np.frombuffer(pipe.read(N*4))</text>
+          <text x="140" y="263" text-anchor="middle" font-size="11" fill="#374151">→ pandas DataFrame</text>
+
+          <line x1="140" y1="270" x2="140" y2="290" stroke="#3b82f6" stroke-width="2"/>
+          <polygon points="140,290 135,282 145,282" fill="#3b82f6"/>
+
+          <rect x="20" y="295" width="240" height="60" fill="white" stroke="#60a5fa" rx="4"/>
+          <text x="140" y="315" text-anchor="middle" font-size="12" font-weight="bold">User receives DataFrame</text>
+          <text x="140" y="333" text-anchor="middle" font-size="11" fill="#374151">indistinguishable from old API</text>
+        </g>
+
+        <!-- Pipes -->
+        <g transform="translate(310, 215)">
+          <line x1="0" y1="0" x2="60" y2="0" stroke="#374151" stroke-width="2"/>
+          <polygon points="60,0 50,-5 50,5" fill="#374151"/>
+          <text x="30" y="-8" text-anchor="middle" font-size="11" fill="#374151">stdin (text)</text>
+
+          <line x1="60" y1="20" x2="0" y2="20" stroke="#374151" stroke-width="2"/>
+          <polygon points="0,20 10,15 10,25" fill="#374151"/>
+          <text x="30" y="35" text-anchor="middle" font-size="11" fill="#374151">stdout (binary)</text>
+        </g>
+
+        <!-- Go side -->
+        <g transform="translate(380, 50)">
+          <rect x="0" y="0" width="500" height="380" fill="#cffafe" stroke="#06b6d4" stroke-width="2" rx="8"/>
+          <text x="250" y="22" text-anchor="middle" font-size="13" font-weight="bold" fill="#0e7490">Go Daemon (subprocess)</text>
+
+          <rect x="20" y="40" width="220" height="65" fill="white" stroke="#22d3ee" rx="4"/>
+          <text x="130" y="60" text-anchor="middle" font-size="12" font-weight="bold">main.go</text>
+          <text x="130" y="78" text-anchor="middle" font-size="11" fill="#374151">command loop</text>
+          <text x="130" y="93" text-anchor="middle" font-size="11" fill="#374151">read line → dispatch → respond</text>
+
+          <rect x="260" y="40" width="220" height="65" fill="white" stroke="#22d3ee" rx="4"/>
+          <text x="370" y="60" text-anchor="middle" font-size="12" font-weight="bold">protocol.go</text>
+          <text x="370" y="78" text-anchor="middle" font-size="11" fill="#374151">binary encode</text>
+          <text x="370" y="93" text-anchor="middle" font-size="11" fill="#374151">[hdr][names][ts][values]</text>
+
+          <rect x="20" y="115" width="220" height="65" fill="white" stroke="#22d3ee" rx="4"/>
+          <text x="130" y="135" text-anchor="middle" font-size="12" font-weight="bold">query.go</text>
+          <text x="130" y="153" text-anchor="middle" font-size="11" fill="#374151">multi-opnid orchestration</text>
+          <text x="130" y="168" text-anchor="middle" font-size="11" fill="#374151">goroutine fan-out</text>
+
+          <rect x="260" y="115" width="220" height="65" fill="white" stroke="#22d3ee" rx="4"/>
+          <text x="370" y="135" text-anchor="middle" font-size="12" font-weight="bold">reader.go</text>
+          <text x="370" y="153" text-anchor="middle" font-size="11" fill="#374151">on-demand float reads</text>
+          <text x="370" y="168" text-anchor="middle" font-size="11" fill="#374151">parallel per-file goroutines</text>
+
+          <rect x="20" y="190" width="220" height="65" fill="white" stroke="#22d3ee" rx="4"/>
+          <text x="130" y="210" text-anchor="middle" font-size="12" font-weight="bold">server.go</text>
+          <text x="130" y="228" text-anchor="middle" font-size="11" fill="#374151">global index, cache, mmap</text>
+          <text x="130" y="243" text-anchor="middle" font-size="11" fill="#374151">parallel index build</text>
+
+          <rect x="260" y="190" width="220" height="65" fill="white" stroke="#22d3ee" rx="4"/>
+          <text x="370" y="210" text-anchor="middle" font-size="12" font-weight="bold">mapper.go</text>
+          <text x="370" y="228" text-anchor="middle" font-size="11" fill="#374151">per-file header scanner</text>
+          <text x="370" y="243" text-anchor="middle" font-size="11" fill="#374151">builds LocalFileIndex</text>
+
+          <rect x="20" y="265" width="460" height="65" fill="white" stroke="#22d3ee" rx="4"/>
+          <text x="250" y="285" text-anchor="middle" font-size="12" font-weight="bold">types.go</text>
+          <text x="250" y="303" text-anchor="middle" font-size="11" fill="#374151">RecordKey, GlobalIndex, TimeSeriesRecord</text>
+
+          <g transform="translate(40, 345)">
+            <rect x="0" y="0" width="50" height="20" fill="#fde047"/>
+            <text x="60" y="14" font-size="11" fill="#1f2937">file 0 (mmap)</text>
+            <rect x="130" y="0" width="50" height="20" fill="#fde047"/>
+            <text x="190" y="14" font-size="11" fill="#1f2937">file 1 (mmap)</text>
+            <rect x="260" y="0" width="50" height="20" fill="#fde047"/>
+            <text x="320" y="14" font-size="11" fill="#1f2937">file N (mmap)</text>
+          </g>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 7: Component layout. Python sees a normal <code>hbnInterface</code>; behind the scenes everything is delegated to a Go subprocess.</div>
+    </div>
+
+    <h3>Why a Persistent Daemon (Not Per-Query Subprocess)</h3>
+
+    <div class="compare">
+      <div class="bad">
+        <h4>❌ Per-query subprocess</h4>
+        <ul style="font-size: 13px;">
+          <li>Each query: spawn process (~50ms)</li>
+          <li>Each query: re-index every file (~seconds for large files)</li>
+          <li>Cache discarded after every query</li>
+          <li>50 queries × 50ms startup = 2.5s pure overhead</li>
+        </ul>
+      </div>
+      <div class="good">
+        <h4>✅ Persistent daemon</h4>
+        <ul style="font-size: 13px;">
+          <li>Spawned once at session start</li>
+          <li>Index built once, reused for all queries</li>
+          <li>Cache lives across queries</li>
+          <li>50 queries × &lt;1ms each</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= GO CONCEPTS PRIMER ============= -->
+  <section id="go-concepts">
+    <h2><span class="section-num">6</span>Go Concepts Primer <a href="#go-concepts" class="anchor-link">¶</a></h2>
+    <p>If you're coming from Python, four concepts underpin everything in this plan.</p>
+
+    <h3>6.1 Goroutines</h3>
+    <p>A goroutine is a lightweight concurrent task — think of it as a thread without the OS overhead. Unlike Python threads, goroutines run truly in parallel because Go has no GIL.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Sequential Python vs. Parallel Goroutines</text>
+
+        <g transform="translate(40, 50)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#dc2626">Python (sequential, GIL-bound)</text>
+          <rect x="0" y="20" width="50" height="20" fill="#3b82f6"/><text x="60" y="34" font-size="11">file 1</text>
+          <rect x="0" y="45" width="50" height="20" fill="#94a3b8"/><text x="60" y="59" font-size="11">wait...</text>
+          <rect x="0" y="70" width="50" height="20" fill="#3b82f6"/><text x="60" y="84" font-size="11">file 2</text>
+          <rect x="0" y="95" width="50" height="20" fill="#94a3b8"/><text x="60" y="109" font-size="11">wait...</text>
+          <rect x="0" y="120" width="50" height="20" fill="#3b82f6"/><text x="60" y="134" font-size="11">file 3</text>
+        </g>
+
+        <g transform="translate(480, 50)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#059669">Go (parallel goroutines)</text>
+          <rect x="0" y="20" width="50" height="20" fill="#10b981"/><text x="60" y="34" font-size="11">go file 1</text>
+          <rect x="0" y="45" width="50" height="20" fill="#10b981"/><text x="60" y="59" font-size="11">go file 2</text>
+          <rect x="0" y="70" width="50" height="20" fill="#10b981"/><text x="60" y="84" font-size="11">go file 3</text>
+          <rect x="0" y="95" width="50" height="20" fill="#10b981"/><text x="60" y="109" font-size="11">go file 4</text>
+          <rect x="0" y="120" width="50" height="20" fill="#10b981"/><text x="60" y="134" font-size="11">go file 5</text>
+          <text x="180" y="80" font-size="11" fill="#374151" font-style="italic">all execute simultaneously</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 8: Goroutines run truly in parallel. The <code>go</code> keyword launches one.</div>
+    </div>
+
+<pre><code class="language-go">// Sequential
+for _, file := range files {
+    processFile(file)  // each blocks the next
+}
+
+// Parallel
+for _, file := range files {
+    go processFile(file)  // each runs independently
+}</code></pre>
+
+    <h3>6.2 Channels</h3>
+    <p>A channel is a typed pipe between goroutines. One sends, the other receives. This is how parallel goroutines safely return results to a caller.</p>
+
+<pre><code class="language-go">results := make(chan Result, len(files))
+
+for _, file := range files {
+    go func(f string) {
+        results &lt;- processFile(f)  // send result into channel
+    }(file)
+}
+
+// Collect all results
+for i := 0; i &lt; len(files); i++ {
+    r := &lt;-results  // receive (blocks until one arrives)
+    fmt.Println(r)
+}</code></pre>
+
+    <h3>6.3 Memory Mapping (mmap)</h3>
+    <p>Tell the OS "map this file into my address space" — pages load on first access via page-fault. Same idea as Python Quick Win #1, but with sub-millisecond access.</p>
+
+    <h3>6.4 The Buffer Pool (<code>sync.Pool</code>)</h3>
+    <p>Reading binary data needs byte buffers. Allocating one per record creates millions of short-lived allocations that pressure the garbage collector. A pool keeps a small set of reusable buffers.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Buffer pool reuses memory</text>
+
+        <g transform="translate(40, 50)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#dc2626">Without pool</text>
+          <rect x="0" y="15" width="380" height="100" fill="#fef2f2" stroke="#fca5a5" rx="4"/>
+          <g font-family="monospace" font-size="11" fill="#7f1d1d">
+            <text x="10" y="38">read 1: allocate 512 B → use → discard → GC</text>
+            <text x="10" y="55">read 2: allocate 512 B → use → discard → GC</text>
+            <text x="10" y="72">read 3: allocate 512 B → use → discard → GC</text>
+            <text x="10" y="92">  → millions of allocations, heavy GC pressure</text>
+          </g>
+        </g>
+
+        <g transform="translate(480, 50)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#059669">With sync.Pool</text>
+          <rect x="0" y="15" width="380" height="100" fill="#ecfdf5" stroke="#86efac" rx="4"/>
+          <g font-family="monospace" font-size="11" fill="#065f46">
+            <text x="10" y="38">read 1: borrow buf A → use → return to pool</text>
+            <text x="10" y="55">read 2: borrow buf A → use → return to pool</text>
+            <text x="10" y="72">read 3: borrow buf B → use → return to pool</text>
+            <text x="10" y="92">  → ~10 buffers reused forever, zero GC pressure</text>
+          </g>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 9: <code>sync.Pool</code> eliminates allocation pressure on the hot path.</div>
+    </div>
+  </section>
+
+  <!-- ============= GO STRUCTURE ============= -->
+  <section id="go-structure">
+    <h2><span class="section-num">7</span>Project Structure <a href="#go-structure" class="anchor-link">¶</a></h2>
+
+<pre><code class="language-bash">hbn-daemon/
+│
+├── go.mod                    # Go module definition (like requirements.txt)
+│
+├── cmd/
+│   └── main.go               # Daemon entry point, command loop
+│
+├── hbn/
+│   ├── types.go              # Data structures (Phase 1)
+│   ├── mapper.go             # Single-file header scanner (Phase 2)
+│   ├── server.go             # Multi-file parallel build, cache (Phase 3)
+│   ├── reader.go             # On-demand data reads (Phase 4)
+│   ├── query.go              # Multi-opnid orchestration (Phase 5)
+│   └── protocol.go           # Binary wire protocol (Phase 6)
+│
+└── tests/
+    ├── mapper_test.go
+    ├── reader_test.go
+    └── parity_test.go        # Go vs Python equality test</code></pre>
+
+    <table>
+      <thead><tr><th>File</th><th>Responsibility</th><th>Phase</th></tr></thead>
+      <tbody>
+        <tr><td><code>types.go</code></td><td>Shared data definitions</td><td>1</td></tr>
+        <tr><td><code>mapper.go</code></td><td>Scan one file, build local index</td><td>2</td></tr>
+        <tr><td><code>server.go</code></td><td>Coordinate files, merge, cache</td><td>3</td></tr>
+        <tr><td><code>reader.go</code></td><td>Read floats by offset, in parallel</td><td>4</td></tr>
+        <tr><td><code>query.go</code></td><td>Multi-opnid fan-out</td><td>5</td></tr>
+        <tr><td><code>protocol.go</code></td><td>Binary encode for wire</td><td>6</td></tr>
+        <tr><td><code>main.go</code></td><td>Daemon loop</td><td>7</td></tr>
+        <tr><td><code>hbn_go.py</code></td><td>Python wrapper</td><td>8</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============= PHASE 1 ============= -->
+  <section id="phase1">
+    <div class="phase-card">
+      <div class="phase-header">
+        <h3>Types & Definitions</h3>
+        <span class="phase-num">PHASE 1</span>
+      </div>
+      <div class="phase-meta">
+        <span><strong>File:</strong> <code>hbn/types.go</code></span>
+        <span><strong>Effort:</strong> 0.5 day</span>
+        <span><strong>Dependencies:</strong> None</span>
+      </div>
+
+      <h4>Goal</h4>
+      <p>Define every shared data type used across the codebase. No logic — just definitions.</p>
+
+      <h4>Why It Comes First</h4>
+      <p>Every other module depends on agreement about what a "record key" is. Defining them first prevents painful refactors later.</p>
+
+      <h4>Core Types</h4>
+
+<pre><code class="language-go">package hbn
+
+// RecordKey uniquely identifies any time series in any HBN file.
+// This is the Go equivalent of the Python tuple (op, id, activity, tcode).
+type RecordKey struct {
+    Operation Operation  // typed enum: PERLND / IMPLND / RCHRES
+    ID        int32      // segment number
+    Activity  Activity   // typed enum: HYDR, PWATER, SEDMNT, ...
+    TCode     int8       // 1=min, 2=hourly, 3=daily, 4=monthly, 5=annual
+}
+
+// Constituent stores both raw and normalized forms of a name.
+// Raw preserves "BODOUT-EXIT1" for display; Normalized is the lookup key.
+type Constituent struct {
+    Raw        string
+    Normalized string  // raw with hyphens stripped, uppercase
+}
+
+// LocalRecordRef is a (offset, length) pair within ONE file.
+type LocalRecordRef struct {
+    Offset int64
+    Length int32
+}
+
+// GlobalRecordRef adds a file index for cross-file scatter patterns.
+type GlobalRecordRef struct {
+    FileIndex int8
+    Offset    int64
+    Length    int32
+}
+
+// LocalFileIndex is what a single goroutine produces while scanning one file.
+type LocalFileIndex struct {
+    MapN map[RecordKey][]Constituent       // names records
+    MapD map[RecordKey][]LocalRecordRef    // data record offsets
+}
+
+// GlobalIndex is the merged result across all files.
+type GlobalIndex struct {
+    MapN map[RecordKey][]Constituent
+    MapD map[RecordKey][]GlobalRecordRef
+}
+
+// TimeSeriesRecord is the final parsed payload returned to Python.
+type TimeSeriesRecord struct {
+    Key        RecordKey
+    Names      []string    // raw names (with hyphens)
+    Timestamps []int64     // unix seconds
+    Values     [][]float32 // [timestep][constituent], row-major
+}</code></pre>
+
+      <h4>Typed Enums for Operation & Activity</h4>
+      <p>Per Section 3.1, the surface area is finite. Enums turn misspellings into compile errors:</p>
+
+<pre><code class="language-go">type Operation int8
+
+const (
+    OpUnknown Operation = iota
+    OpPERLND
+    OpIMPLND
+    OpRCHRES
+)
+
+func ParseOperation(s string) (Operation, error) {
+    switch strings.TrimSpace(s) {
+    case "PERLND": return OpPERLND, nil
+    case "IMPLND": return OpIMPLND, nil
+    case "RCHRES": return OpRCHRES, nil
+    default: return OpUnknown, fmt.Errorf("unknown operation %q", s)
+    }
+}
+
+type Activity int8
+
+const (
+    ActUnknown Activity = iota
+    // PERLND
+    ActATEMP; ActSNOW; ActPWATER; ActSEDMNT
+    ActPSTEMP; ActPWTGAS; ActPQUAL
+    ActMSTLAY; ActPEST; ActNITR; ActPHOS; ActTRACER
+    // IMPLND
+    ActIWATER; ActSOLIDS; ActIWTGAS; ActIQUAL
+    // RCHRES
+    ActHYDR; ActCONS; ActHTRCH; ActSEDTRN
+    ActGQUAL; ActOXRX; ActNUTRX; ActPLANK
+    ActPHCARB; ActACIDPH
+)</code></pre>
+    </div>
+  </section>
+
+  <!-- ============= PHASE 2 ============= -->
+  <section id="phase2">
+    <div class="phase-card">
+      <div class="phase-header">
+        <h3>Single-File Index Builder</h3>
+        <span class="phase-num">PHASE 2</span>
+      </div>
+      <div class="phase-meta">
+        <span><strong>File:</strong> <code>hbn/mapper.go</code></span>
+        <span><strong>Effort:</strong> 2 days</span>
+        <span><strong>Dependencies:</strong> Phase 1</span>
+      </div>
+
+      <h4>Goal</h4>
+      <p>Scan one HBN file's records start-to-finish, reading <em>only the header bytes</em> of each record, and build a <code>LocalFileIndex</code>. Direct translation of <code>map_hbn()</code>.</p>
+
+      <h4>Why It Exists</h4>
+      <p>This is the heart of the lazy strategy. Reading only 28-byte headers during the scan tells us where every record starts — without loading any float data. Floats are read later, on demand, in Phase 4.</p>
+
+      <h4>Algorithm</h4>
+
+      <div class="diagram">
+        <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+          <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Single-file scan flowchart</text>
+
+          <rect x="350" y="40" width="200" height="40" fill="#dbeafe" stroke="#3b82f6" rx="6"/>
+          <text x="450" y="64" text-anchor="middle" font-size="12" font-weight="bold">offset = 1 (skip 0xFD)</text>
+
+          <line x1="450" y1="80" x2="450" y2="100" stroke="#374151" stroke-width="2"/>
+          <polygon points="450,100 445,92 455,92" fill="#374151"/>
+
+          <polygon points="350,105 550,105 575,130 550,155 350,155 325,130" fill="#fef3c7" stroke="#f59e0b"/>
+          <text x="450" y="135" text-anchor="middle" font-size="12" font-weight="bold">offset &lt; fileSize?</text>
+
+          <text x="285" y="135" font-size="11" fill="#dc2626" font-weight="bold">no</text>
+          <line x1="325" y1="130" x2="220" y2="130" stroke="#dc2626" stroke-width="2"/>
+          <polygon points="220,130 230,125 230,135" fill="#dc2626"/>
+          <rect x="60" y="115" width="160" height="30" fill="#fee2e2" stroke="#dc2626" rx="4"/>
+          <text x="140" y="135" text-anchor="middle" font-size="11">return LocalFileIndex</text>
+
+          <text x="465" y="172" font-size="11" fill="#059669" font-weight="bold">yes</text>
+          <line x1="450" y1="155" x2="450" y2="180" stroke="#059669" stroke-width="2"/>
+          <polygon points="450,180 445,172 455,172" fill="#059669"/>
+
+          <rect x="320" y="180" width="260" height="40" fill="#ecfdf5" stroke="#10b981" rx="4"/>
+          <text x="450" y="204" text-anchor="middle" font-size="12">ReadAt(28-byte header, offset)</text>
+
+          <line x1="450" y1="220" x2="450" y2="240" stroke="#374151" stroke-width="2"/>
+          <polygon points="450,240 445,232 455,232" fill="#374151"/>
+
+          <polygon points="350,245 550,245 575,270 550,295 350,295 325,270" fill="#fef3c7" stroke="#f59e0b"/>
+          <text x="450" y="275" text-anchor="middle" font-size="12" font-weight="bold">rectype?</text>
+
+          <text x="220" y="290" font-size="11" fill="#3b82f6" font-weight="bold">0 (names)</text>
+          <line x1="325" y1="285" x2="220" y2="320" stroke="#3b82f6" stroke-width="2"/>
+          <polygon points="220,320 230,315 230,325" fill="#3b82f6"/>
+          <rect x="50" y="310" width="180" height="50" fill="#dbeafe" stroke="#3b82f6" rx="4"/>
+          <text x="140" y="328" text-anchor="middle" font-size="11">read full reclen body</text>
+          <text x="140" y="345" text-anchor="middle" font-size="11">parse names → MapN</text>
+
+          <text x="660" y="290" font-size="11" fill="#10b981" font-weight="bold">1 (data)</text>
+          <line x1="575" y1="285" x2="680" y2="320" stroke="#10b981" stroke-width="2"/>
+          <polygon points="680,320 670,315 670,325" fill="#10b981"/>
+          <rect x="690" y="310" width="180" height="50" fill="#ecfdf5" stroke="#10b981" rx="4"/>
+          <text x="780" y="328" text-anchor="middle" font-size="11">read 4 more bytes (tcode)</text>
+          <text x="780" y="345" text-anchor="middle" font-size="11">store offset → MapD</text>
+
+          <line x1="140" y1="360" x2="140" y2="400" stroke="#374151" stroke-width="2"/>
+          <line x1="780" y1="360" x2="780" y2="400" stroke="#374151" stroke-width="2"/>
+          <line x1="140" y1="400" x2="780" y2="400" stroke="#374151" stroke-width="2"/>
+          <line x1="450" y1="400" x2="450" y2="430" stroke="#374151" stroke-width="2"/>
+          <polygon points="450,430 445,422 455,422" fill="#374151"/>
+
+          <rect x="280" y="430" width="340" height="40" fill="#fee2e2" stroke="#dc2626" rx="6"/>
+          <text x="450" y="454" text-anchor="middle" font-size="12" font-weight="bold">advance offset by 28+reclen+bp_width</text>
+
+          <line x1="620" y1="450" x2="700" y2="450" stroke="#374151" stroke-width="2"/>
+          <line x1="700" y1="450" x2="700" y2="130" stroke="#374151" stroke-width="2"/>
+          <line x1="700" y1="130" x2="575" y2="130" stroke="#374151" stroke-width="2"/>
+          <polygon points="575,130 583,125 583,135" fill="#374151"/>
+        </svg>
+        <div class="diagram-caption">Figure 10: Single-file scanner flowchart. Names records read fully (so we can extract constituent names); data records skip the float payload entirely.</div>
+      </div>
+
+<pre><code class="language-go">package hbn
+
+import (
+    "encoding/binary"
+    "io"
+    "strings"
+)
+
+func ScanFileHeaders(r io.ReaderAt, fileSize int64) (*LocalFileIndex, error) {
+    idx := &LocalFileIndex{
+        MapN: make(map[RecordKey][]Constituent),
+        MapD: make(map[RecordKey][]LocalRecordRef),
+    }
+
+    offset := int64(1) // skip 0xFD magic byte
+    headerBuf := make([]byte, 32)
+
+    for offset &lt; fileSize {
+        // Read 28-byte fixed leader (length + rectype + optyp + opno + sect)
+        if _, err := r.ReadAt(headerBuf[:28], offset); err != nil {
+            if err == io.EOF { break }
+            return nil, err
+        }
+
+        // Decode packed length: drop low 2 bits
+        field := binary.LittleEndian.Uint32(headerBuf[0:4])
+        reclen := int32(field >> 2)
+
+        rectype := binary.LittleEndian.Uint32(headerBuf[4:8])
+        optyp   := strings.TrimSpace(string(headerBuf[8:16]))
+        opno    := int32(binary.LittleEndian.Uint32(headerBuf[16:20]))
+        sect    := strings.TrimSpace(string(headerBuf[20:28]))
+
+        op,  _ := ParseOperation(optyp)
+        act, _ := ParseActivity(sect)
+
+        switch rectype {
+        case 0: // names record
+            // Read full payload
+            body := make([]byte, reclen-20)  // 20 = leader bytes counted in reclen
+            r.ReadAt(body, offset+28)
+            names := parseNames(body)
+            key := RecordKey{Operation: op, ID: opno, Activity: act, TCode: 0}
+            idx.MapN[key] = names
+
+        case 1: // data record — only need tcode
+            tcodeBytes := headerBuf[28:32]
+            r.ReadAt(tcodeBytes, offset+28)
+            // Note: writer puts UNITFG at 28..32, LEV at 32..36; tcode is LEV
+            tcode := int8(binary.LittleEndian.Uint32(headerBuf[32:36]))
+            key := RecordKey{Operation: op, ID: opno, Activity: act, TCode: tcode}
+            idx.MapD[key] = append(idx.MapD[key], LocalRecordRef{
+                Offset: offset, Length: reclen,
+            })
+        }
+
+        // Advance: 28 = length+leader, plus bp_width per Phase 2 fix
+        cpos := reclen + 28
+        var bpWidth int32
+        switch {
+        case cpos &lt; 64:    bpWidth = 1
+        case cpos &lt; 16384: bpWidth = 2
+        default:           bpWidth = 3
+        }
+        offset += int64(28 + reclen + bpWidth)
+    }
+
+    return idx, nil
+}
+
+// parseNames decodes the variable-length name list in a names record body.
+func parseNames(body []byte) []Constituent {
+    var names []Constituent
+    pos := 0
+    for pos &lt; len(body) {
+        ln := int(binary.LittleEndian.Uint32(body[pos : pos+4]))
+        pos += 4
+        raw := string(body[pos : pos+ln])
+        // Note: writer already trimmed via LEN_TRIM (HRCHOXR.FOR §3.3),
+        // so no .Trim() needed.
+        names = append(names, Constituent{
+            Raw:        raw,
+            Normalized: strings.ToUpper(strings.ReplaceAll(raw, "-", "")),
+        })
+        pos += ln
+    }
+    return names
+}</code></pre>
+
+      <div class="callout callout-warning">
+        <div class="callout-title">⚠️ Compile-time safety check</div>
+        <p>
+          Add a defensive sniff after mapping the file: scan the first 8 KB for stray <code>'\n'</code> outside name regions.
+          If found, fail fast with "this HBN was written by a non-<code>$</code>-honoring compiler". This is one CPU
+          instruction per file open and saves enormous debugging time.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= PHASE 3 ============= -->
+  <section id="phase3">
+    <div class="phase-card">
+      <div class="phase-header">
+        <h3>Multi-File Parallel Server</h3>
+        <span class="phase-num">PHASE 3</span>
+      </div>
+      <div class="phase-meta">
+        <span><strong>File:</strong> <code>hbn/server.go</code></span>
+        <span><strong>Effort:</strong> 1 day</span>
+        <span><strong>Dependencies:</strong> Phases 1, 2</span>
+      </div>
+
+      <h4>Goal</h4>
+      <p>Launch one goroutine per HBN file, collect results, merge into a <code>GlobalIndex</code>. Owns mmap handles and the cache.</p>
+
+      <h4>The Parallel Build</h4>
+
+      <div class="diagram">
+        <svg viewBox="0 0 900 360" xmlns="http://www.w3.org/2000/svg">
+          <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Parallel index build with channel collection</text>
+
+          <rect x="380" y="50" width="140" height="40" fill="#dbeafe" stroke="#3b82f6" rx="4"/>
+          <text x="450" y="74" text-anchor="middle" font-size="12" font-weight="bold">NewHBNServer(files)</text>
+
+          <line x1="450" y1="90" x2="450" y2="110" stroke="#374151" stroke-width="2"/>
+
+          <rect x="280" y="110" width="340" height="40" fill="#fef3c7" stroke="#f59e0b" rx="4"/>
+          <text x="450" y="134" text-anchor="middle" font-size="12">open mmap readers, make results channel</text>
+
+          <line x1="450" y1="150" x2="450" y2="165" stroke="#374151" stroke-width="2"/>
+
+          <g font-size="11" fill="white">
+            <rect x="50" y="170" width="140" height="60" fill="#10b981" rx="4"/>
+            <text x="120" y="190" text-anchor="middle" font-weight="bold">goroutine 0</text>
+            <text x="120" y="208" text-anchor="middle">scan file 0</text>
+            <text x="120" y="222" text-anchor="middle">→ send result</text>
+
+            <rect x="200" y="170" width="140" height="60" fill="#10b981" rx="4"/>
+            <text x="270" y="190" text-anchor="middle" font-weight="bold">goroutine 1</text>
+            <text x="270" y="208" text-anchor="middle">scan file 1</text>
+            <text x="270" y="222" text-anchor="middle">→ send result</text>
+
+            <rect x="350" y="170" width="140" height="60" fill="#10b981" rx="4"/>
+            <text x="420" y="190" text-anchor="middle" font-weight="bold">goroutine 2</text>
+            <text x="420" y="208" text-anchor="middle">scan file 2</text>
+            <text x="420" y="222" text-anchor="middle">→ send result</text>
+
+            <rect x="500" y="170" width="140" height="60" fill="#10b981" rx="4"/>
+            <text x="570" y="190" text-anchor="middle" font-weight="bold">goroutine 3</text>
+            <text x="570" y="208" text-anchor="middle">scan file 3</text>
+            <text x="570" y="222" text-anchor="middle">→ send result</text>
+
+            <rect x="650" y="170" width="140" height="60" fill="#10b981" rx="4"/>
+            <text x="720" y="190" text-anchor="middle" font-weight="bold">goroutine 4</text>
+            <text x="720" y="208" text-anchor="middle">scan file 4</text>
+            <text x="720" y="222" text-anchor="middle">→ send result</text>
+          </g>
+
+          <line x1="120" y1="230" x2="450" y2="260" stroke="#10b981" stroke-width="1.5"/>
+          <line x1="270" y1="230" x2="450" y2="260" stroke="#10b981" stroke-width="1.5"/>
+          <line x1="420" y1="230" x2="450" y2="260" stroke="#10b981" stroke-width="1.5"/>
+          <line x1="570" y1="230" x2="450" y2="260" stroke="#10b981" stroke-width="1.5"/>
+          <line x1="720" y1="230" x2="450" y2="260" stroke="#10b981" stroke-width="1.5"/>
+
+          <rect x="280" y="260" width="340" height="40" fill="#ecfdf5" stroke="#059669" rx="4"/>
+          <text x="450" y="284" text-anchor="middle" font-size="12" font-weight="bold">main: receive 5 results, merge into GlobalIndex</text>
+
+          <line x1="450" y1="300" x2="450" y2="320" stroke="#374151" stroke-width="2"/>
+          <polygon points="450,320 445,312 455,312" fill="#374151"/>
+
+          <rect x="320" y="320" width="260" height="35" fill="#dbeafe" stroke="#3b82f6" rx="4"/>
+          <text x="450" y="343" text-anchor="middle" font-size="12" font-weight="bold">return ready HBNServer</text>
+        </svg>
+        <div class="diagram-caption">Figure 11: All files indexed concurrently. Total wall-clock ≈ time for the slowest single file.</div>
+      </div>
+
+<pre><code class="language-go">package hbn
+
+import (
+    "os"
+    "sync"
+    "syscall"
+)
+
+type HBNServer struct {
+    readers     []*MmapReader
+    globalIndex *GlobalIndex
+
+    cache    map[RecordKey]*TimeSeriesRecord
+    cacheMu  sync.RWMutex
+
+    bufferPool sync.Pool
+
+    // Pre-built lookup: (operation, normalized constituent) → activity
+    activityLookup map[constituentKey]Activity
+}
+
+type constituentKey struct {
+    Op  Operation
+    Con string
+}
+
+type indexResult struct {
+    fileIndex int8
+    local     *LocalFileIndex
+    err       error
+}
+
+func NewHBNServer(filepaths []string) (*HBNServer, error) {
+    n := len(filepaths)
+    srv := &HBNServer{
+        readers: make([]*MmapReader, n),
+        globalIndex: &GlobalIndex{
+            MapN: make(map[RecordKey][]Constituent),
+            MapD: make(map[RecordKey][]GlobalRecordRef),
+        },
+        cache: make(map[RecordKey]*TimeSeriesRecord),
+        bufferPool: sync.Pool{
+            New: func() interface{} { b := make([]byte, 64*1024); return &b },
+        },
+    }
+
+    // 1. Open all files (sequential — file open is fast)
+    for i, fp := range filepaths {
+        rd, err := OpenMmap(fp)
+        if err != nil { return nil, err }
+        srv.readers[i] = rd
+    }
+
+    // 2. Launch one goroutine per file
+    results := make(chan indexResult, n)
+    for i, rd := range srv.readers {
+        go func(idx int8, r *MmapReader) {
+            local, err := ScanFileHeaders(r, r.Size())
+            results &lt;- indexResult{fileIndex: idx, local: local, err: err}
+        }(int8(i), rd)
+    }
+
+    // 3. Collect and merge
+    var mergeMu sync.Mutex
+    for i := 0; i &lt; n; i++ {
+        res := &lt;-results
+        if res.err != nil { return nil, res.err }
+        mergeMu.Lock()
+        srv.merge(res.fileIndex, res.local)
+        mergeMu.Unlock()
+    }
+
+    // 4. Build the constituent → activity lookup
+    srv.buildActivityLookup()
+    return srv, nil
+}
+
+func (srv *HBNServer) merge(fileIdx int8, local *LocalFileIndex) {
+    for key, names := range local.MapN {
+        if _, ok := srv.globalIndex.MapN[key]; !ok {
+            srv.globalIndex.MapN[key] = names
+        }
+    }
+    for key, refs := range local.MapD {
+        for _, r := range refs {
+            srv.globalIndex.MapD[key] = append(srv.globalIndex.MapD[key],
+                GlobalRecordRef{FileIndex: fileIdx, Offset: r.Offset, Length: r.Length})
+        }
+    }
+}
+
+func (srv *HBNServer) buildActivityLookup() {
+    srv.activityLookup = make(map[constituentKey]Activity)
+    for key, cons := range srv.globalIndex.MapN {
+        for _, c := range cons {
+            srv.activityLookup[constituentKey{key.Operation, c.Normalized}] = key.Activity
+        }
+    }
+}</code></pre>
+    </div>
+  </section>
+
+  <!-- ============= PHASE 4 ============= -->
+  <section id="phase4">
+    <div class="phase-card">
+      <div class="phase-header">
+        <h3>On-Demand Data Reader</h3>
+        <span class="phase-num">PHASE 4</span>
+      </div>
+      <div class="phase-meta">
+        <span><strong>File:</strong> <code>hbn/reader.go</code></span>
+        <span><strong>Effort:</strong> 1.5 days</span>
+        <span><strong>Dependencies:</strong> Phases 1–3</span>
+      </div>
+
+      <h4>Goal</h4>
+      <p>Given a <code>RecordKey</code>, use the offsets in <code>GlobalIndex.MapD</code> to read only the float data for that key, in parallel across files.</p>
+
+      <h4>The Scatter Pattern</h4>
+      <p>In real HSPF runs, one reach's data may be split across multiple files (different runs concatenated, or a single run that spilled). The reader handles this transparently:</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+          <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Scatter pattern: one reach across multiple files</text>
+
+          <rect x="350" y="50" width="200" height="40" fill="#dbeafe" stroke="#3b82f6" rx="6"/>
+          <text x="450" y="74" text-anchor="middle" font-size="12" font-weight="bold">ReadConstituent(key)</text>
+
+          <line x1="450" y1="90" x2="450" y2="110" stroke="#374151" stroke-width="2"/>
+
+          <polygon points="370,110 530,110 545,130 530,150 370,150 355,130" fill="#fef3c7" stroke="#f59e0b"/>
+          <text x="450" y="135" text-anchor="middle" font-size="12" font-weight="bold">cache hit?</text>
+
+          <text x="290" y="135" font-size="11" fill="#10b981" font-weight="bold">yes</text>
+          <line x1="355" y1="130" x2="270" y2="130" stroke="#10b981" stroke-width="2"/>
+          <polygon points="270,130 280,125 280,135" fill="#10b981"/>
+          <rect x="100" y="115" width="160" height="30" fill="#ecfdf5" stroke="#10b981" rx="4"/>
+          <text x="180" y="135" text-anchor="middle" font-size="11">return cached</text>
+
+          <text x="465" y="172" font-size="11" fill="#dc2626" font-weight="bold">no</text>
+          <line x1="450" y1="150" x2="450" y2="180" stroke="#dc2626" stroke-width="2"/>
+          <polygon points="450,180 445,172 455,172" fill="#dc2626"/>
+
+          <rect x="280" y="180" width="340" height="50" fill="#fef2f2" stroke="#fca5a5" rx="4"/>
+          <text x="450" y="200" text-anchor="middle" font-size="12">refs := globalIndex.MapD[key]</text>
+          <text x="450" y="218" text-anchor="middle" font-size="11" fill="#7f1d1d">→ group by FileIndex</text>
+
+          <line x1="450" y1="230" x2="450" y2="245" stroke="#374151" stroke-width="2"/>
+
+          <g font-size="11" fill="white">
+            <rect x="100" y="255" width="180" height="55" fill="#10b981" rx="4"/>
+            <text x="190" y="275" text-anchor="middle" font-weight="bold">goroutine: file 0</text>
+            <text x="190" y="291" text-anchor="middle">borrow buf, ReadAt</text>
+            <text x="190" y="305" text-anchor="middle">parse rows → ch</text>
+
+            <rect x="360" y="255" width="180" height="55" fill="#10b981" rx="4"/>
+            <text x="450" y="275" text-anchor="middle" font-weight="bold">goroutine: file 2</text>
+            <text x="450" y="291" text-anchor="middle">borrow buf, ReadAt</text>
+            <text x="450" y="305" text-anchor="middle">parse rows → ch</text>
+
+            <rect x="620" y="255" width="180" height="55" fill="#10b981" rx="4"/>
+            <text x="710" y="275" text-anchor="middle" font-weight="bold">goroutine: file 4</text>
+            <text x="710" y="291" text-anchor="middle">borrow buf, ReadAt</text>
+            <text x="710" y="305" text-anchor="middle">parse rows → ch</text>
+          </g>
+
+          <line x1="190" y1="310" x2="450" y2="335" stroke="#10b981"/>
+          <line x1="450" y1="310" x2="450" y2="335" stroke="#10b981"/>
+          <line x1="710" y1="310" x2="450" y2="335" stroke="#10b981"/>
+
+          <rect x="320" y="335" width="260" height="35" fill="#dbeafe" stroke="#3b82f6" rx="4"/>
+          <text x="450" y="358" text-anchor="middle" font-size="12" font-weight="bold">collect → sort by ts → cache → return</text>
+        </svg>
+        <div class="diagram-caption">Figure 12: Scatter-pattern read. Per-file goroutines run in parallel; results merge-sorted by timestamp.</div>
+      </div>
+
+<pre><code class="language-go">// ReadConstituent fetches all data for a key, in parallel across files.
+func (srv *HBNServer) ReadConstituent(key RecordKey) (*TimeSeriesRecord, error) {
+    // 1. Cache check
+    srv.cacheMu.RLock()
+    if rec, ok := srv.cache[key]; ok {
+        srv.cacheMu.RUnlock()
+        return rec, nil
+    }
+    srv.cacheMu.RUnlock()
+
+    // 2. Find offsets, group by file
+    refs, ok := srv.globalIndex.MapD[key]
+    if !ok { return nil, fmt.Errorf("key not found: %v", key) }
+
+    byFile := map[int8][]GlobalRecordRef{}
+    for _, r := range refs {
+        byFile[r.FileIndex] = append(byFile[r.FileIndex], r)
+    }
+
+    // 3. Parallel reads
+    type chunk struct {
+        timestamps []int64
+        values     [][]float32
+    }
+    chunks := make(chan chunk, len(byFile))
+
+    for fileIdx, fileRefs := range byFile {
+        go func(idx int8, refs []GlobalRecordRef) {
+            bufPtr := srv.bufferPool.Get().(*[]byte)
+            defer srv.bufferPool.Put(bufPtr)
+
+            ts, vals := readRecords(srv.readers[idx], refs, bufPtr)
+            chunks &lt;- chunk{timestamps: ts, values: vals}
+        }(fileIdx, fileRefs)
+    }
+
+    // 4. Collect & merge-sort
+    var allTs []int64
+    var allVals [][]float32
+    for i := 0; i &lt; len(byFile); i++ {
+        c := &lt;-chunks
+        allTs = append(allTs, c.timestamps...)
+        allVals = append(allVals, c.values...)
+    }
+    sortByTimestamp(allTs, allVals)
+
+    // 5. Build record, cache, return
+    names := make([]string, len(srv.globalIndex.MapN[key]))
+    for i, c := range srv.globalIndex.MapN[key] {
+        names[i] = c.Raw
+    }
+    rec := &TimeSeriesRecord{
+        Key: key, Names: names,
+        Timestamps: allTs, Values: allVals,
+    }
+    srv.cacheMu.Lock()
+    srv.cache[key] = rec
+    srv.cacheMu.Unlock()
+    return rec, nil
+}</code></pre>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📍 Float offset within record</div>
+        <p>
+          Per Section 3.5: float data starts at <code>recordStart + 56</code> (4 bytes length-prefix + 4 rectype + 8 optyp + 4 opno + 8 sect + 4 unitfg + 4 lev + 20 date). The number of floats is <code>(reclen - 32) / 4</code>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= PHASE 5 ============= -->
+  <section id="phase5">
+    <div class="phase-card">
+      <div class="phase-header">
+        <h3>Multi-OPNID Query Handler</h3>
+        <span class="phase-num">PHASE 5</span>
+      </div>
+      <div class="phase-meta">
+        <span><strong>File:</strong> <code>hbn/query.go</code></span>
+        <span><strong>Effort:</strong> 1 day</span>
+        <span><strong>Dependencies:</strong> Phase 4</span>
+      </div>
+
+      <h4>Goal</h4>
+      <p>The most common query: <em>"give me constituent X for all reach IDs [1..50] across all files"</em>. Direct replacement for Python's <code>get_multiple_timeseries</code> loop.</p>
+
+      <h4>Two Layers of Parallelism</h4>
+
+      <div class="diagram">
+        <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+          <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Two-layer fan-out: opnids × files</text>
+
+          <rect x="350" y="50" width="200" height="40" fill="#dbeafe" stroke="#3b82f6" rx="6"/>
+          <text x="450" y="74" text-anchor="middle" font-size="12" font-weight="bold">QueryMultiple(opnids[0..50])</text>
+
+          <line x1="450" y1="90" x2="450" y2="115" stroke="#374151" stroke-width="2"/>
+          <polygon points="450,115 445,107 455,107" fill="#374151"/>
+
+          <text x="450" y="130" text-anchor="middle" font-size="12" fill="#6b7280" font-style="italic">launch 50 goroutines (one per opnid)</text>
+
+          <g font-size="11" fill="white">
+            <rect x="50" y="150" width="180" height="80" fill="#0891b2" rx="4"/>
+            <text x="140" y="170" text-anchor="middle" font-weight="bold">goroutine: opnid 1</text>
+            <text x="140" y="190" text-anchor="middle">ReadConstituent(...)</text>
+            <text x="140" y="210" text-anchor="middle" fill="#fde047">→ spawns sub-goroutines</text>
+            <text x="140" y="222" text-anchor="middle" fill="#fde047">per file (Phase 4)</text>
+
+            <rect x="250" y="150" width="180" height="80" fill="#0891b2" rx="4"/>
+            <text x="340" y="170" text-anchor="middle" font-weight="bold">goroutine: opnid 2</text>
+            <text x="340" y="190" text-anchor="middle">ReadConstituent(...)</text>
+            <text x="340" y="210" text-anchor="middle" fill="#fde047">→ spawns sub-goroutines</text>
+
+            <rect x="450" y="150" width="180" height="80" fill="#0891b2" rx="4"/>
+            <text x="540" y="170" text-anchor="middle" font-weight="bold">goroutine: opnid 3</text>
+            <text x="540" y="190" text-anchor="middle">ReadConstituent(...)</text>
+            <text x="540" y="210" text-anchor="middle" fill="#fde047">→ spawns sub-goroutines</text>
+
+            <rect x="650" y="150" width="180" height="80" fill="#0891b2" rx="4"/>
+            <text x="740" y="170" text-anchor="middle" font-weight="bold">goroutine: opnid 50</text>
+            <text x="740" y="190" text-anchor="middle">ReadConstituent(...)</text>
+            <text x="740" y="210" text-anchor="middle" fill="#fde047">→ spawns sub-goroutines</text>
+          </g>
+
+          <line x1="140" y1="230" x2="450" y2="280" stroke="#0891b2" stroke-width="1.5"/>
+          <line x1="340" y1="230" x2="450" y2="280" stroke="#0891b2" stroke-width="1.5"/>
+          <line x1="540" y1="230" x2="450" y2="280" stroke="#0891b2" stroke-width="1.5"/>
+          <line x1="740" y1="230" x2="450" y2="280" stroke="#0891b2" stroke-width="1.5"/>
+
+          <rect x="280" y="280" width="340" height="50" fill="#ecfdf5" stroke="#059669" rx="4"/>
+          <text x="450" y="300" text-anchor="middle" font-size="12" font-weight="bold">collect 50 records via channel</text>
+          <text x="450" y="318" text-anchor="middle" font-size="11" fill="#065f46">return map[opnid]TimeSeriesRecord</text>
+        </svg>
+        <div class="diagram-caption">Figure 13: Each opnid goroutine internally fans out to per-file goroutines (Phase 4), so the runtime spawns up to opnids × files concurrent reads.</div>
+      </div>
+
+<pre><code class="language-go">func (srv *HBNServer) QueryMultiple(
+    op Operation, tcode int8, constituent string, opnids []int32,
+) (map[int32]*TimeSeriesRecord, error) {
+
+    // O(1) activity inference (Phase 3 lookup)
+    activity := srv.activityLookup[constituentKey{op, normalize(constituent)}]
+    if activity == ActUnknown {
+        return nil, fmt.Errorf("constituent %q not found for %v", constituent, op)
+    }
+
+    type result struct {
+        opnid int32
+        rec   *TimeSeriesRecord
+        err   error
+    }
+
+    results := make(chan result, len(opnids))
+    for _, oid := range opnids {
+        go func(o int32) {
+            key := RecordKey{Operation: op, ID: o, Activity: activity, TCode: tcode}
+            rec, err := srv.ReadConstituent(key)
+            results &lt;- result{opnid: o, rec: rec, err: err}
+        }(oid)
+    }
+
+    out := make(map[int32]*TimeSeriesRecord, len(opnids))
+    for i := 0; i &lt; len(opnids); i++ {
+        r := &lt;-results
+        if r.err == nil { out[r.opnid] = r.rec }
+    }
+    return out, nil
+}</code></pre>
+    </div>
+  </section>
+
+  <!-- ============= PHASE 6 ============= -->
+  <section id="phase6">
+    <div class="phase-card">
+      <div class="phase-header">
+        <h3>Binary Wire Protocol</h3>
+        <span class="phase-num">PHASE 6</span>
+      </div>
+      <div class="phase-meta">
+        <span><strong>File:</strong> <code>hbn/protocol.go</code></span>
+        <span><strong>Effort:</strong> 1 day</span>
+        <span><strong>Dependencies:</strong> Phase 1</span>
+      </div>
+
+      <h4>Goal</h4>
+      <p>Encode <code>TimeSeriesRecord</code> into compact binary that Python decodes with one <code>np.frombuffer</code> call — no parsing loops.</p>
+
+      <h4>Why Binary, Not JSON</h4>
+
+      <div class="compare">
+        <div class="bad">
+          <h4>JSON encoding</h4>
+          <p>For 8,760 hourly floats:</p>
+          <ul style="font-size: 13px;">
+            <li><code>[1.234567, 0.987654, ...]</code></li>
+            <li>~10 chars per float = ~87,600 bytes</li>
+            <li>Python parses each character into a Python float</li>
+            <li>Per-value object allocation</li>
+          </ul>
+        </div>
+        <div class="good">
+          <h4>Binary encoding</h4>
+          <p>For the same 8,760 floats:</p>
+          <ul style="font-size: 13px;">
+            <li>4 bytes per float, exactly</li>
+            <li>35,040 bytes total (2.5× smaller)</li>
+            <li><code>np.frombuffer</code> reads in one call</li>
+            <li>No per-value parsing — ~50× faster decode</li>
+          </ul>
+        </div>
+      </div>
+
+      <h4>Message Layout</h4>
+
+      <div class="diagram">
+        <svg viewBox="0 0 900 240" xmlns="http://www.w3.org/2000/svg">
+          <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Binary response message format</text>
+
+          <g transform="translate(40, 50)">
+            <rect x="0" y="0" width="50" height="50" fill="#fde047" stroke="#ca8a04"/>
+            <text x="25" y="22" text-anchor="middle" font-size="10" font-weight="bold">type</text>
+            <text x="25" y="36" text-anchor="middle" font-size="10">1 B</text>
+            <text x="25" y="65" text-anchor="middle" font-size="10" fill="#6b7280">0x02 ok</text>
+            <text x="25" y="78" text-anchor="middle" font-size="10" fill="#6b7280">0x03 err</text>
+
+            <rect x="50" y="0" width="80" height="50" fill="#93c5fd" stroke="#2563eb"/>
+            <text x="90" y="22" text-anchor="middle" font-size="10" font-weight="bold">N</text>
+            <text x="90" y="36" text-anchor="middle" font-size="10">4 B</text>
+            <text x="90" y="65" text-anchor="middle" font-size="10" fill="#6b7280">num rows</text>
+
+            <rect x="130" y="0" width="80" height="50" fill="#93c5fd" stroke="#2563eb"/>
+            <text x="170" y="22" text-anchor="middle" font-size="10" font-weight="bold">C</text>
+            <text x="170" y="36" text-anchor="middle" font-size="10">4 B</text>
+            <text x="170" y="65" text-anchor="middle" font-size="10" fill="#6b7280">num cols</text>
+
+            <rect x="210" y="0" width="80" height="50" fill="#93c5fd" stroke="#2563eb"/>
+            <text x="250" y="22" text-anchor="middle" font-size="10" font-weight="bold">NB</text>
+            <text x="250" y="36" text-anchor="middle" font-size="10">4 B</text>
+            <text x="250" y="65" text-anchor="middle" font-size="10" fill="#6b7280">name len</text>
+
+            <rect x="290" y="0" width="180" height="50" fill="#fbbf24" stroke="#d97706"/>
+            <text x="380" y="22" text-anchor="middle" font-size="10" font-weight="bold">names</text>
+            <text x="380" y="36" text-anchor="middle" font-size="10">NB B (tab-delimited)</text>
+            <text x="380" y="65" text-anchor="middle" font-size="10" fill="#6b7280">"ROVOL\tIVOL\t..."</text>
+
+            <rect x="470" y="0" width="180" height="50" fill="#86efac" stroke="#059669"/>
+            <text x="560" y="22" text-anchor="middle" font-size="10" font-weight="bold">timestamps</text>
+            <text x="560" y="36" text-anchor="middle" font-size="10">N × 8 B int64</text>
+            <text x="560" y="65" text-anchor="middle" font-size="10" fill="#6b7280">unix seconds</text>
+
+            <rect x="650" y="0" width="180" height="50" fill="#fca5a5" stroke="#dc2626"/>
+            <text x="740" y="22" text-anchor="middle" font-size="10" font-weight="bold">values</text>
+            <text x="740" y="36" text-anchor="middle" font-size="10">N × C × 4 B float32</text>
+            <text x="740" y="65" text-anchor="middle" font-size="10" fill="#6b7280">row-major</text>
+          </g>
+
+          <g transform="translate(40, 150)">
+            <text x="0" y="0" font-size="13" font-weight="bold" fill="#1f2937">Python decode (zero-copy):</text>
+          </g>
+
+          <g transform="translate(40, 170)" font-family="monospace" font-size="12" fill="#1f2937">
+            <text x="0" y="0">type, N, C, NB = unpack(pipe.read(13))</text>
+            <text x="0" y="18">names = pipe.read(NB).decode().split('\t')</text>
+            <text x="0" y="36">ts = np.frombuffer(pipe.read(N*8), dtype=np.int64)</text>
+            <text x="0" y="54">vals = np.frombuffer(pipe.read(N*C*4), dtype=np.float32).reshape(N, C)</text>
+          </g>
+        </svg>
+        <div class="diagram-caption">Figure 14: Binary message layout. Each section reads in a single Python call.</div>
+      </div>
+
+<pre><code class="language-go">// WriteRecord encodes a TimeSeriesRecord and writes it to w.
+func WriteRecord(w *bufio.Writer, rec *TimeSeriesRecord) error {
+    namesJoined := strings.Join(rec.Names, "\t")
+    n := int32(len(rec.Timestamps))
+    c := int32(len(rec.Names))
+    nb := int32(len(namesJoined))
+
+    w.WriteByte(0x02)              // OK
+    binary.Write(w, binary.LittleEndian, n)
+    binary.Write(w, binary.LittleEndian, c)
+    binary.Write(w, binary.LittleEndian, nb)
+    w.WriteString(namesJoined)
+
+    // timestamps as one big int64 block
+    binary.Write(w, binary.LittleEndian, rec.Timestamps)
+
+    // values as one big float32 block, row-major
+    for _, row := range rec.Values {
+        binary.Write(w, binary.LittleEndian, row)
+    }
+    return nil
+}</code></pre>
+    </div>
+  </section>
+
+  <!-- ============= PHASE 7 ============= -->
+  <section id="phase7">
+    <div class="phase-card">
+      <div class="phase-header">
+        <h3>Daemon Entry Point</h3>
+        <span class="phase-num">PHASE 7</span>
+      </div>
+      <div class="phase-meta">
+        <span><strong>File:</strong> <code>cmd/main.go</code></span>
+        <span><strong>Effort:</strong> 1 day</span>
+        <span><strong>Dependencies:</strong> All previous phases</span>
+      </div>
+
+      <h4>Goal</h4>
+      <p>The executable Python launches. Starts the server, signals readiness, then loops forever reading commands and writing responses.</p>
+
+      <h4>Command Protocol</h4>
+      <p>Commands are text on stdin, responses are binary on stdout. Two channels keep things simple:</p>
+
+      <table>
+        <thead><tr><th>Command (stdin)</th><th>Response (stdout)</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><code>ready?</code></td><td>JSON summary</td><td>One-time startup ping</td></tr>
+          <tr><td><code>read RCHRES 1 HYDR 3</code></td><td>Binary record</td><td>Single key fetch</td></tr>
+          <tr><td><code>multi RCHRES 3 HYDR ROVOL 1 2 3 4</code></td><td>Count + records</td><td>Multi-opnid fetch</td></tr>
+          <tr><td><code>opnids RCHRES ROVOL</code></td><td>JSON list</td><td>Discovery</td></tr>
+          <tr><td><code>clearcache</code></td><td><code>{"ok": true}</code></td><td>Memory management</td></tr>
+          <tr><td><code>quit</code></td><td>(exits)</td><td>Graceful shutdown</td></tr>
+        </tbody>
+      </table>
+
+<pre><code class="language-go">package main
+
+import (
+    "bufio"
+    "encoding/json"
+    "os"
+    "strings"
+
+    "hbn-daemon/hbn"
+)
+
+func main() {
+    filepaths := os.Args[1:]
+    srv, err := hbn.NewHBNServer(filepaths)
+    if err != nil {
+        os.Stderr.WriteString("init error: " + err.Error() + "\n")
+        os.Exit(1)
+    }
+
+    // Send ready signal as JSON line
+    summary := map[string]int{
+        "files":    len(filepaths),
+        "headers":  len(srv.GlobalIndex().MapN),
+        "data_recs": len(srv.GlobalIndex().MapD),
+    }
+    json.NewEncoder(os.Stdout).Encode(summary)
+
+    in := bufio.NewReader(os.Stdin)
+    out := bufio.NewWriterSize(os.Stdout, 1024*1024) // 1 MB output buffer
+    defer out.Flush()
+
+    for {
+        line, err := in.ReadString('\n')
+        if err != nil { return }
+        line = strings.TrimSpace(line)
+        parts := strings.Fields(line)
+        if len(parts) == 0 { continue }
+
+        switch parts[0] {
+        case "read":
+            handleRead(srv, out, parts[1:])
+        case "multi":
+            handleMulti(srv, out, parts[1:])
+        case "opnids":
+            handleOpnids(srv, out, parts[1:])
+        case "clearcache":
+            srv.ClearCache()
+            out.WriteString(`{"ok":true}` + "\n")
+        case "quit":
+            return
+        }
+        out.Flush()
+    }
+}</code></pre>
+
+      <div class="callout callout-info">
+        <div class="callout-title">📡 Why stdin/stdout instead of a socket?</div>
+        <p>
+          Pipes are inherited automatically by subprocesses, require no port allocation, and clean up automatically
+          when either side exits. For a single-machine, single-language pairing, they're simpler than any alternative.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= PHASE 8 ============= -->
+  <section id="phase8">
+    <div class="phase-card">
+      <div class="phase-header">
+        <h3>Python Wrapper</h3>
+        <span class="phase-num">PHASE 8</span>
+      </div>
+      <div class="phase-meta">
+        <span><strong>File:</strong> <code>src/hspf/hbn_go.py</code></span>
+        <span><strong>Effort:</strong> 1 day</span>
+        <span><strong>Dependencies:</strong> Compiled daemon binary</span>
+      </div>
+
+      <h4>Goal</h4>
+      <p>Drop-in replacement for <code>hbnInterface</code> with the <em>identical public API</em>. Existing calling code works unchanged.</p>
+
+<pre><code class="language-python">import subprocess
+import struct
+import json
+import numpy as np
+import pandas as pd
+
+class GoHBNInterface:
+    """Drop-in replacement for hbnInterface, backed by Go daemon."""
+
+    def __init__(self, file_paths):
+        self.proc = subprocess.Popen(
+            ['hbn-daemon'] + list(file_paths),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+        )
+        # First line is the JSON ready signal
+        self.summary = json.loads(self.proc.stdout.readline())
+        self.tcodes = {'minute': 1, 'hourly': 2, 'daily': 3, 'monthly': 4, 'annual': 5}
+
+    def _send(self, cmd):
+        self.proc.stdin.write((cmd + '\n').encode())
+        self.proc.stdin.flush()
+
+    def _read_binary_response(self):
+        pipe = self.proc.stdout
+        header = pipe.read(13)
+        msg_type, n, c, nb = struct.unpack('&lt;BIII', header)
+
+        if msg_type == 0x03:  # error
+            raise ValueError(pipe.read(nb).decode())
+
+        names = pipe.read(nb).decode().split('\t')
+        ts_bytes = pipe.read(n * 8)
+        timestamps = np.frombuffer(ts_bytes, dtype=np.int64)
+        val_bytes = pipe.read(n * c * 4)
+        values = np.frombuffer(val_bytes, dtype=np.float32).reshape(n, c)
+        index = pd.to_datetime(timestamps, unit='s')
+        return pd.DataFrame(values, index=index, columns=names)
+
+    def get_multiple_timeseries(self, t_opn, t_code, t_con, opnids=None):
+        if isinstance(t_code, str):
+            t_code = self.tcodes[t_code]
+
+        if opnids is None:
+            self._send(f'opnids {t_opn} {t_con}')
+            opnids = json.loads(self.proc.stdout.readline())
+
+        opnids_str = ' '.join(str(o) for o in opnids)
+        self._send(f'multi {t_opn} {t_code} infer {t_con} {opnids_str}')
+
+        count = struct.unpack('&lt;I', self.proc.stdout.read(4))[0]
+        frames = {}
+        for _ in range(count):
+            opnid = struct.unpack('&lt;I', self.proc.stdout.read(4))[0]
+            df = self._read_binary_response()
+            frames[opnid] = df[t_con]
+        return pd.DataFrame(frames)
+
+    def __del__(self):
+        try:
+            self._send('quit')
+            self.proc.wait(timeout=5)
+        except Exception:
+            self.proc.kill()</code></pre>
+
+      <div class="callout callout-success">
+        <div class="callout-title">✅ Backward compatibility</div>
+        <p>
+          Methods like <code>get_simulated_flow</code>, <code>reach_losses</code>, etc. only call
+          <code>get_multiple_timeseries</code> — they never touch files directly. Inheriting from
+          <code>GoHBNInterface</code> means they Just Work without modification.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= TESTING ============= -->
+  <section id="testing">
+    <h2><span class="section-num">9</span>Testing Strategy <a href="#testing" class="anchor-link">¶</a></h2>
+
+    <h3>Three Test Levels</h3>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 240" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Testing pyramid</text>
+
+        <polygon points="450,40 200,200 700,200" fill="none" stroke="#374151" stroke-width="2"/>
+
+        <line x1="290" y1="160" x2="610" y2="160" stroke="#374151" stroke-dasharray="3,3"/>
+        <line x1="370" y1="120" x2="530" y2="120" stroke="#374151" stroke-dasharray="3,3"/>
+
+        <text x="450" y="80" text-anchor="middle" font-size="12" font-weight="bold" fill="#dc2626">L3: Benchmarks</text>
+        <text x="450" y="95" text-anchor="middle" font-size="11" fill="#7f1d1d">Few. Wall-clock comparison.</text>
+
+        <text x="450" y="140" text-anchor="middle" font-size="12" font-weight="bold" fill="#d97706">L2: Python parity tests</text>
+        <text x="450" y="155" text-anchor="middle" font-size="11" fill="#92400e">Some. Go output ≡ Python output.</text>
+
+        <text x="450" y="185" text-anchor="middle" font-size="12" font-weight="bold" fill="#059669">L1: Go unit tests (no Python)</text>
+        <text x="450" y="200" text-anchor="middle" font-size="11" fill="#065f46">Many. Each Go module in isolation.</text>
+        <text x="450" y="218" text-anchor="middle" font-size="11" fill="#6b7280">mapper, reader, server, protocol</text>
+      </svg>
+      <div class="diagram-caption">Figure 15: Test pyramid. Most coverage at the bottom (cheap, fast); fewer parity tests in the middle; one or two benchmarks at the top.</div>
+    </div>
+    <h4>Level 1 — Go unit tests (continued)</h4>
+<pre><code class="language-go">// mapper_test.go
+func TestScanFileHeaders_KnownFile(t *testing.T) {
+    r, _ := OpenMmap("testdata/small.hbn")
+    defer r.Close()
+
+    idx, err := ScanFileHeaders(r, r.Size())
+    require.NoError(t, err)
+
+    // Assert MapN structure
+    key := RecordKey{Operation: OpRCHRES, ID: 1, Activity: ActHYDR, TCode: 0}
+    names, ok := idx.MapN[key]
+    require.True(t, ok, "expected names record for RCHRES 1 HYDR")
+    assert.Contains(t, names, Constituent{Raw: "ROVOL", Normalized: "ROVOL"})
+    assert.Contains(t, names, Constituent{Raw: "IVOL", Normalized: "IVOL"})
+
+    // Assert MapD has data records
+    dataKey := RecordKey{Operation: OpRCHRES, ID: 1, Activity: ActHYDR, TCode: 3}
+    refs, ok := idx.MapD[dataKey]
+    require.True(t, ok)
+    assert.Greater(t, len(refs), 0)
+    assert.Greater(t, refs[0].Offset, int64(0))
+}
+
+// reader_test.go — tests the actual byte-level decode against known values
+func TestReadConstituent_KnownValues(t *testing.T) {
+    srv, _ := NewHBNServer([]string{"testdata/small.hbn"})
+    key := RecordKey{Operation: OpRCHRES, ID: 1, Activity: ActHYDR, TCode: 3}
+
+    rec, err := srv.ReadConstituent(key)
+    require.NoError(t, err)
+
+    // From a manual hex-dump, we know the first ROVOL value
+    rovolIdx := indexOf(rec.Names, "ROVOL")
+    assert.InDelta(t, 1234.567, rec.Values[0][rovolIdx], 1e-3)
+
+    // Timestamp ordering invariant
+    for i := 1; i < len(rec.Timestamps); i++ {
+        assert.Greater(t, rec.Timestamps[i], rec.Timestamps[i-1])
+    }
+}
+
+// server_test.go — verifies parallel build matches sequential
+func TestParallelBuild_MatchesSequential(t *testing.T) {
+    files := []string{"testdata/a.hbn", "testdata/b.hbn"}
+
+    // Build via NewHBNServer (parallel)
+    parallel, _ := NewHBNServer(files)
+
+    // Build sequentially for comparison
+    sequential := buildSequential(files)
+
+    assert.Equal(t, len(parallel.GlobalIndex().MapN), len(sequential.MapN))
+    assert.Equal(t, len(parallel.GlobalIndex().MapD), len(sequential.MapD))
+}
+
+// paklen_test.go — exercises all three back-pointer widths
+func TestBackPointerWidths(t *testing.T) {
+    // synthesize records of known sizes
+    cases := []struct{ recordSize int; expectedBP int }{
+        {recordSize: 20,   expectedBP: 1},  // CPOS = 48,    BP=1
+        {recordSize: 100,  expectedBP: 2},  // CPOS = 128,   BP=2
+        {recordSize: 20000, expectedBP: 3}, // CPOS = 20028, BP=3
+    }
+    for _, c := range cases {
+        bp := computeBackPointerWidth(c.recordSize + 28)
+        assert.Equal(t, c.expectedBP, bp,
+            "record size %d should yield %d-byte BP", c.recordSize, c.expectedBP)
+    }
+}</code></pre>
+
+    <h4>Level 2 — Python parity tests</h4>
+    <p>The most important tests. They prove that for any real <code>.hbn</code> file, the Go pipeline produces identical results to the existing Python parser:</p>
+
+<pre><code class="language-python"># tests/test_parity.py
+import pytest
+import numpy as np
+from pyhspf.hbn import hbnInterface          # existing
+from pyhspf.hbn_go import GoHBNInterface     # new
+
+@pytest.fixture(params=[
+    "fixtures/small_run.hbn",
+    "fixtures/calibration_run.hbn",
+    "fixtures/wide_nutrx.hbn",      # triggers 3-byte BP
+    "fixtures/scatter_run/*.hbn",   # multi-file scatter
+])
+def file_set(request):
+    paths = sorted(glob.glob(request.param)) if "*" in request.param else [request.param]
+    return paths
+
+def test_parity_full_query(file_set):
+    py_iface = hbnInterface(file_set)
+    go_iface = GoHBNInterface(file_set)
+
+    # Try a representative query
+    py_df = py_iface.get_multiple_timeseries('RCHRES', 'daily', 'ROVOL')
+    go_df = go_iface.get_multiple_timeseries('RCHRES', 'daily', 'ROVOL')
+
+    # Same shape, same index, same columns
+    assert py_df.shape == go_df.shape
+    np.testing.assert_array_equal(py_df.index, go_df.index)
+    assert list(py_df.columns) == list(go_df.columns)
+
+    # Values within float32 tolerance
+    np.testing.assert_allclose(py_df.values, go_df.values, rtol=1e-5, atol=1e-5)
+
+def test_parity_infer_activity(file_set):
+    py_iface = hbnInterface(file_set)
+    go_iface = GoHBNInterface(file_set)
+
+    for op in ['PERLND', 'IMPLND', 'RCHRES']:
+        for con in ['ROVOL', 'TAET', 'SOSED', 'SURO']:
+            assert py_iface.infer_activity(op, con) == go_iface.infer_activity(op, con)</code></pre>
+
+    <div class="callout callout-warning">
+      <div class="callout-title">⚠️ Float-precision tolerance</div>
+      <p>
+        The Python parser stores floats as float64 internally even though the file contains float32. The Go pipeline stays float32 end-to-end. Use <code>rtol=1e-5, atol=1e-5</code> — any tighter and you'll see spurious failures from float32 round-trip.
+      </p>
+    </div>
+
+    <h4>Level 3 — Benchmarks</h4>
+
+<pre><code class="language-python"># bench/benchmark.py
+import time
+from pyhspf.hbn import hbnInterface
+from pyhspf.hbn_go import GoHBNInterface
+
+FILES = ['large/run_2020.hbn', 'large/run_2021.hbn', 'large/run_2022.hbn']
+OPNIDS = list(range(1, 51))  # 50 reaches
+
+def bench(label, iface_class):
+    t0 = time.perf_counter()
+    iface = iface_class(FILES)
+    t_init = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    df = iface.get_multiple_timeseries('RCHRES', 'daily', 'ROVOL', OPNIDS)
+    t_query = time.perf_counter() - t0
+
+    print(f"{label:20s}  init={t_init*1000:6.1f}ms  query={t_query*1000:6.1f}ms  total={(t_init+t_query)*1000:6.1f}ms")
+    return df
+
+py_df = bench("Python current", hbnInterface)
+go_df = bench("Go daemon",      GoHBNInterface)
+
+# Verify they agree
+np.testing.assert_allclose(py_df.values, go_df.values, rtol=1e-5)
+print(f"\nSpeedup: {(time.perf_counter()-t0)/...:.1f}x")</code></pre>
+
+    <p>Targets to validate against in CI:</p>
+    <ul>
+      <li><strong>Python current</strong> (baseline): on a 3-file × 50-reach query, expect ~5–10 seconds.</li>
+      <li><strong>Python with Quick Wins</strong>: ≥5× speedup over baseline.</li>
+      <li><strong>Go daemon</strong>: ≥20× speedup over baseline. Cache hits should return in <1ms.</li>
+    </ul>
+  </section>
+
+  <!-- ============= ROADMAP ============= -->
+  <section id="roadmap">
+    <h2><span class="section-num">10</span>Roadmap & Phase Dependencies <a href="#roadmap" class="anchor-link">¶</a></h2>
+
+    <h3>Recommended Sequence</h3>
+    <p>Do the Python wins first — they correct a real bug (Section 4.2) and establish a known-correct baseline against which Go output can be parity-tested.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">Implementation roadmap (gantt-style)</text>
+
+        <!-- Track A header -->
+        <rect x="20" y="50" width="140" height="30" fill="#1e40af"/>
+        <text x="90" y="70" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Track A: Python</text>
+
+        <!-- Track A bars -->
+        <g font-size="10" fill="white">
+          <rect x="170" y="55" width="80" height="20" fill="#3b82f6" rx="2"/>
+          <text x="210" y="69" text-anchor="middle">4.1 mmap</text>
+
+          <rect x="170" y="80" width="80" height="20" fill="#3b82f6" rx="2"/>
+          <text x="210" y="94" text-anchor="middle">4.2 BP fix</text>
+
+          <rect x="260" y="55" width="80" height="20" fill="#3b82f6" rx="2"/>
+          <text x="300" y="69" text-anchor="middle">4.3 lookup</text>
+
+          <rect x="260" y="80" width="80" height="20" fill="#3b82f6" rx="2"/>
+          <text x="300" y="94" text-anchor="middle">4.4 cache</text>
+
+          <rect x="350" y="55" width="80" height="20" fill="#3b82f6" rx="2"/>
+          <text x="390" y="69" text-anchor="middle">4.5 threads</text>
+
+          <rect x="350" y="80" width="80" height="20" fill="#1e3a8a" rx="2"/>
+          <text x="390" y="94" text-anchor="middle">parity test</text>
+        </g>
+
+        <text x="170" y="118" font-size="11" fill="#1e40af" font-weight="bold">Day 1</text>
+        <text x="430" y="118" font-size="11" fill="#1e40af" font-weight="bold">Ship Track A → 5–15× speedup</text>
+
+        <line x1="20" y1="135" x2="880" y2="135" stroke="#9ca3af" stroke-dasharray="4,4"/>
+
+        <!-- Track B header -->
+        <rect x="20" y="155" width="140" height="30" fill="#0e7490"/>
+        <text x="90" y="175" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Track B: Go</text>
+
+        <!-- Track B bars (gantt) -->
+        <g font-size="10" fill="white">
+          <!-- Phase 1: 0.5d -->
+          <rect x="170" y="160" width="35" height="22" fill="#06b6d4" rx="2"/>
+          <text x="187" y="175" text-anchor="middle">P1</text>
+
+          <!-- Phase 2: 2d -->
+          <rect x="205" y="160" width="140" height="22" fill="#0891b2" rx="2"/>
+          <text x="275" y="175" text-anchor="middle">P2 mapper</text>
+
+          <!-- Phase 3: 1d -->
+          <rect x="345" y="160" width="70" height="22" fill="#06b6d4" rx="2"/>
+          <text x="380" y="175" text-anchor="middle">P3 server</text>
+
+          <!-- Phase 4: 1.5d -->
+          <rect x="415" y="160" width="105" height="22" fill="#0891b2" rx="2"/>
+          <text x="467" y="175" text-anchor="middle">P4 reader</text>
+
+          <!-- Phase 5: 1d -->
+          <rect x="520" y="160" width="70" height="22" fill="#06b6d4" rx="2"/>
+          <text x="555" y="175" text-anchor="middle">P5 query</text>
+
+          <!-- Phase 6: 1d (parallel with P5 actually - depends only on types) -->
+          <rect x="520" y="187" width="70" height="22" fill="#67e8f9" rx="2"/>
+          <text x="555" y="201" text-anchor="middle" fill="#0e7490">P6 protocol</text>
+
+          <!-- Phase 7: 1d -->
+          <rect x="590" y="160" width="70" height="22" fill="#0891b2" rx="2"/>
+          <text x="625" y="175" text-anchor="middle">P7 daemon</text>
+
+          <!-- Phase 8: 1d -->
+          <rect x="660" y="160" width="70" height="22" fill="#06b6d4" rx="2"/>
+          <text x="695" y="175" text-anchor="middle">P8 wrapper</text>
+
+          <!-- Phase 9: 2d -->
+          <rect x="730" y="160" width="140" height="22" fill="#155e75" rx="2"/>
+          <text x="800" y="175" text-anchor="middle">P9 testing</text>
+        </g>
+
+        <text x="170" y="225" font-size="11" fill="#0e7490" font-weight="bold">Day 2</text>
+        <text x="450" y="225" font-size="11" fill="#0e7490" font-weight="bold">Day 6</text>
+        <text x="870" y="225" font-size="11" fill="#0e7490" font-weight="bold">Day 12</text>
+        <text x="450" y="245" font-size="11" fill="#0e7490" font-weight="bold">Ship Track B → 20–50× speedup</text>
+
+        <line x1="20" y1="265" x2="880" y2="265" stroke="#9ca3af" stroke-dasharray="4,4"/>
+
+        <!-- Critical path callout -->
+        <g transform="translate(40, 285)">
+          <rect x="0" y="0" width="820" height="60" fill="#fef3c7" stroke="#f59e0b" rx="6"/>
+          <text x="20" y="22" font-size="12" font-weight="bold" fill="#92400e">Critical path: Phase 1 → 2 → 3 → 4</text>
+          <text x="20" y="42" font-size="11" fill="#78350f">Get the byte-level mapper and reader correct first; everything else (5, 6, 7, 8) is mechanical assembly.</text>
+        </g>
+
+        <!-- Skills callout -->
+        <g transform="translate(40, 360)">
+          <rect x="0" y="0" width="820" height="80" fill="#ecfdf5" stroke="#10b981" rx="6"/>
+          <text x="20" y="22" font-size="12" font-weight="bold" fill="#065f46">Where the Go-specific learning happens</text>
+          <text x="20" y="42" font-size="11" fill="#064e3b">Phase 2: mmap + binary.LittleEndian.Uint32 idioms</text>
+          <text x="20" y="58" font-size="11" fill="#064e3b">Phase 4: goroutines + channels + sync.Pool</text>
+          <text x="20" y="74" font-size="11" fill="#064e3b">Budget extra time for these two; the rest are mostly translation work.</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 16: Recommended schedule. Track A delivers most of the value in 1 day; Track B is an optional follow-up for further speedup.</div>
+    </div>
+
+    <h3>Decision Tree</h3>
+
+    <div class="compare">
+      <div class="good">
+        <h4>✅ Stop after Track A if…</h4>
+        <ul style="font-size: 14px;">
+          <li>5–15× speedup is sufficient for your workflow</li>
+          <li>You don't want a Go binary alongside the Python package</li>
+          <li>Distribution complexity (CGo cross-compile, etc.) is a concern</li>
+          <li>You're a small team with no Go experience</li>
+        </ul>
+      </div>
+      <div class="good">
+        <h4>✅ Continue to Track B if…</h4>
+        <ul style="font-size: 14px;">
+          <li>You're processing dozens of multi-GB files routinely</li>
+          <li>Calibration loops hit the same files thousands of times</li>
+          <li>Sub-second response time matters (interactive dashboards)</li>
+          <li>You're willing to ship a binary alongside the Python wheel</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Risk Mitigation</h3>
+
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Compiler-specific binary format edge cases</td>
+          <td>Run parity tests on every <code>.hbn</code> in your fixture corpus before shipping. The <code>$</code> sniff (Phase 2) catches non-conforming compilers fast.</td>
+        </tr>
+        <tr>
+          <td>Distributing a Go binary across platforms</td>
+          <td>Use <code>goreleaser</code> + GitHub Actions matrix to build linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64. Bundle into the Python wheel via <code>cibuildwheel</code>.</td>
+        </tr>
+        <tr>
+          <td>Subprocess hangs in pathological cases</td>
+          <td>Wrap every <code>self.proc.stdout.read()</code> in a timeout-guarded read. Add a <code>ping</code> command for liveness. Keep stderr captured separately for diagnostic output.</td>
+        </tr>
+        <tr>
+          <td>Different float precision between Python and Go pipelines</td>
+          <td>Document the float32 vs float64 boundary explicitly. Make the parity tolerance an explicit, callable constant (<code>HBN_PARITY_RTOL = 1e-5</code>).</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============= REFERENCES APPENDIX ============= -->
+  <section id="refs">
+    <h2><span class="section-num">A</span>Appendix: References & Glossary <a href="#refs" class="anchor-link">¶</a></h2>
+
+    <h3>A.1 Fortran Source File Citations</h3>
+    <p>Every parser rule in this document derives from a specific line of Fortran. Below is an index for verification.</p>
+
+    <table>
+      <thead><tr><th>Rule</th><th>Source file</th><th>Subroutine</th><th>Section</th></tr></thead>
+      <tbody>
+        <tr><td>File opened SEQUENTIAL/FORMATTED</td><td><code>HFILES.FOR</code></td><td><code>FILBLK</code></td><td>2.1</td></tr>
+        <tr><td><code>$</code> edit-descriptor suppresses newline</td><td><code>HBINUX.FOR</code></td><td><code>BINHED</code>, <code>BINREC</code></td><td>2.1</td></tr>
+        <tr><td>0xFD magic byte at file start</td><td><code>HBINUX.FOR</code></td><td><code>BINHED</code> (FDFLAG)</td><td>3.6</td></tr>
+        <tr><td>RECLEN = LEN×4 + 3 packing</td><td><code>HBINUX.FOR</code></td><td><code>PAKLEN</code></td><td>2.3</td></tr>
+        <tr><td>Back-pointer 1/2/3-byte rule</td><td><code>HBINUX.FOR</code></td><td><code>PAKLEN</code></td><td>2.5</td></tr>
+        <tr><td>Names record leader = 20 bytes</td><td><code>HBINUX.FOR</code></td><td><code>BINHED</code></td><td>2.4</td></tr>
+        <tr><td>Data record leader = 32 bytes</td><td><code>HBINUX.FOR</code></td><td><code>BINREC</code></td><td>2.4</td></tr>
+        <tr><td>Float data starts at offset 56</td><td><code>HBINUX.FOR</code></td><td><code>BINREC</code> (RPOS=14)</td><td>3.5</td></tr>
+        <tr><td>Names already trimmed (LEN_TRIM)</td><td><code>HRCHOXR.FOR</code></td><td>multi-exit BOD naming</td><td>3.3</td></tr>
+        <tr><td>Operation/Activity surface (PERLND)</td><td><code>HPER.FOR</code></td><td><code>PPERLN</code></td><td>3.1</td></tr>
+        <tr><td>Operation/Activity surface (RCHRES)</td><td><code>HRCH.FOR</code></td><td><code>PRCHRE</code></td><td>3.1</td></tr>
+        <tr><td>Operation/Activity surface (IMPLND)</td><td><code>HIMPSLD.FOR</code></td><td><code>SLDPRT</code> (and peers)</td><td>3.1</td></tr>
+      </tbody>
+    </table>
+
+    <h3>A.2 Byte-Level Reference Card</h3>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+        <text x="450" y="22" text-anchor="middle" font-size="14" font-weight="bold" fill="#1f2937">HBN record byte map (cheat sheet)</text>
+
+        <!-- Names record -->
+        <text x="40" y="60" font-size="13" font-weight="bold" fill="#1e40af">Names record (rectype=0)</text>
+
+        <g transform="translate(40, 70)">
+          <rect x="0" y="0" width="60" height="35" fill="#fde047" stroke="#ca8a04"/>
+          <text x="30" y="15" text-anchor="middle" font-size="9">RECLEN</text>
+          <text x="30" y="28" text-anchor="middle" font-size="9">[0..3]</text>
+
+          <rect x="60" y="0" width="60" height="35" fill="#93c5fd" stroke="#2563eb"/>
+          <text x="90" y="15" text-anchor="middle" font-size="9">type=0</text>
+          <text x="90" y="28" text-anchor="middle" font-size="9">[4..7]</text>
+
+          <rect x="120" y="0" width="80" height="35" fill="#93c5fd" stroke="#2563eb"/>
+          <text x="160" y="15" text-anchor="middle" font-size="9">OPTYP</text>
+          <text x="160" y="28" text-anchor="middle" font-size="9">[8..15]</text>
+
+          <rect x="200" y="0" width="60" height="35" fill="#93c5fd" stroke="#2563eb"/>
+          <text x="230" y="15" text-anchor="middle" font-size="9">OPNO</text>
+          <text x="230" y="28" text-anchor="middle" font-size="9">[16..19]</text>
+
+          <rect x="260" y="0" width="80" height="35" fill="#93c5fd" stroke="#2563eb"/>
+          <text x="300" y="15" text-anchor="middle" font-size="9">SECT</text>
+          <text x="300" y="28" text-anchor="middle" font-size="9">[20..27]</text>
+
+          <rect x="340" y="0" width="380" height="35" fill="#fbbf24" stroke="#d97706"/>
+          <text x="530" y="15" text-anchor="middle" font-size="9">[len][name][len][name]…</text>
+          <text x="530" y="28" text-anchor="middle" font-size="9">[28..28+RECLEN-20)</text>
+
+          <rect x="720" y="0" width="100" height="35" fill="#fca5a5" stroke="#dc2626"/>
+          <text x="770" y="15" text-anchor="middle" font-size="9">BACK-PTR</text>
+          <text x="770" y="28" text-anchor="middle" font-size="9">1, 2, or 3 bytes</text>
+        </g>
+
+        <!-- Data record -->
+        <text x="40" y="170" font-size="13" font-weight="bold" fill="#065f46">Data record (rectype=1)</text>
+
+        <g transform="translate(40, 180)">
+          <rect x="0" y="0" width="60" height="35" fill="#fde047" stroke="#ca8a04"/>
+          <text x="30" y="15" text-anchor="middle" font-size="9">RECLEN</text>
+          <text x="30" y="28" text-anchor="middle" font-size="9">[0..3]</text>
+
+          <rect x="60" y="0" width="60" height="35" fill="#93c5fd" stroke="#2563eb"/>
+          <text x="90" y="15" text-anchor="middle" font-size="9">type=1</text>
+          <text x="90" y="28" text-anchor="middle" font-size="9">[4..7]</text>
+
+          <rect x="120" y="0" width="80" height="35" fill="#93c5fd" stroke="#2563eb"/>
+          <text x="160" y="15" text-anchor="middle" font-size="9">OPTYP</text>
+          <text x="160" y="28" text-anchor="middle" font-size="9">[8..15]</text>
+
+          <rect x="200" y="0" width="60" height="35" fill="#93c5fd" stroke="#2563eb"/>
+          <text x="230" y="15" text-anchor="middle" font-size="9">OPNO</text>
+          <text x="230" y="28" text-anchor="middle" font-size="9">[16..19]</text>
+
+          <rect x="260" y="0" width="80" height="35" fill="#93c5fd" stroke="#2563eb"/>
+          <text x="300" y="15" text-anchor="middle" font-size="9">SECT</text>
+          <text x="300" y="28" text-anchor="middle" font-size="9">[20..27]</text>
+
+          <rect x="340" y="0" width="60" height="35" fill="#c4b5fd" stroke="#7c3aed"/>
+          <text x="370" y="15" text-anchor="middle" font-size="9">UNITFG</text>
+          <text x="370" y="28" text-anchor="middle" font-size="9">[28..31]</text>
+
+          <rect x="400" y="0" width="60" height="35" fill="#c4b5fd" stroke="#7c3aed"/>
+          <text x="430" y="15" text-anchor="middle" font-size="9">LEV</text>
+          <text x="430" y="28" text-anchor="middle" font-size="9">[32..35]</text>
+
+          <rect x="460" y="0" width="100" height="35" fill="#c4b5fd" stroke="#7c3aed"/>
+          <text x="510" y="15" text-anchor="middle" font-size="9">DATE[5]</text>
+          <text x="510" y="28" text-anchor="middle" font-size="9">[36..55]</text>
+
+          <rect x="560" y="0" width="180" height="35" fill="#86efac" stroke="#059669"/>
+          <text x="650" y="15" text-anchor="middle" font-size="9">float32 × VCOUNT</text>
+          <text x="650" y="28" text-anchor="middle" font-size="9">[56..56+VCOUNT*4)</text>
+
+          <rect x="740" y="0" width="80" height="35" fill="#fca5a5" stroke="#dc2626"/>
+          <text x="780" y="15" text-anchor="middle" font-size="9">BACK-PTR</text>
+          <text x="780" y="28" text-anchor="middle" font-size="9">1/2/3 B</text>
+        </g>
+
+        <!-- Quick formulas -->
+        <g transform="translate(40, 260)">
+          <text x="0" y="0" font-size="13" font-weight="bold" fill="#1f2937">Formulas you'll use constantly</text>
+          <g font-family="monospace" font-size="12" fill="#1f2937">
+            <text x="0" y="22">reclen      = (uint32_le(data[0..4])) >> 2</text>
+            <text x="0" y="40">total_size  = 28 + reclen + bp_width        (28 = length prefix + leader)</text>
+            <text x="0" y="58">bp_width    = 1 if (28+reclen) < 64 else 2 if < 16384 else 3</text>
+            <text x="0" y="76">float_start = record_offset + 56            (data records only)</text>
+            <text x="0" y="94">vcount      = (reclen - 32) / 4             (data records only)</text>
+          </g>
+        </g>
+      </svg>
+      <div class="diagram-caption">Figure 17: Byte-level cheat sheet for both record types. Pin this near your debugger.</div>
+    </div>
+
+    <h3>A.3 Glossary</h3>
+
+    <table>
+      <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>OPTYP</code></td><td>Operation type. 8-byte string: <code>"PERLND  "</code>, <code>"IMPLND  "</code>, or <code>"RCHRES  "</code>.</td></tr>
+        <tr><td><code>OPNO</code></td><td>Operation number (4-byte int). Segment ID for PERLND/IMPLND, reach number for RCHRES.</td></tr>
+        <tr><td><code>SECT</code> / Activity</td><td>Module section name. <code>"HYDR    "</code>, <code>"PWATER  "</code>, etc. See Section 3.1 for full list.</td></tr>
+        <tr><td><code>UNITFG</code></td><td>Unit system flag. <code>1</code> = English, <code>2</code> = Metric.</td></tr>
+        <tr><td><code>LEV</code> / TCode</td><td>Output time level. <code>2</code> = PIVL (sub-daily), <code>3</code> = daily, <code>4</code> = monthly, <code>5</code> = annual.</td></tr>
+        <tr><td><code>VCOUNT</code></td><td>Number of constituent values in a data record.</td></tr>
+        <tr><td><code>RECLEN</code></td><td>Record length (after unpacking). Counts everything from the start of leader through the payload, but <em>not</em> the 4-byte length prefix or the back-pointer.</td></tr>
+        <tr><td><code>CPOS</code></td><td>Internal cursor in <code>BINBUF</code>. Equals length-prefix + leader + payload before the back-pointer is appended.</td></tr>
+        <tr><td><code>FDFLAG</code></td><td>Per-unit flag tracking whether the magic 0xFD has been written. Forces it on first call.</td></tr>
+        <tr><td><code>PIVL</code></td><td>Print interval. Number of simulation timesteps per output row at level 2.</td></tr>
+        <tr><td>scatter pattern</td><td>When data for one (op, id, activity) key is split across multiple HBN files (typically from concatenated runs).</td></tr>
+        <tr><td>mmap</td><td>Memory-mapping. The OS maps a file into your address space; pages load on first access.</td></tr>
+        <tr><td>goroutine</td><td>Go's lightweight concurrent task. Cheaper than an OS thread, no GIL.</td></tr>
+        <tr><td>channel</td><td>Typed communication pipe between goroutines. <code>chan T</code> for type T.</td></tr>
+        <tr><td><code>sync.Pool</code></td><td>Reusable object pool. Eliminates GC pressure for hot-path allocations.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>A.4 Further Reading</h3>
+    <ul>
+      <li><strong>HSPF user manual</strong> — for the simulation semantics behind the constituents (ROVOL, IVOL, TAET, etc.).</li>
+      <li><strong>Fortran <code>$</code> edit descriptor</strong> — see Lahey/Watcom/Salford docs; modern <code>gfortran</code> honors it under <code>-std=legacy</code>.</li>
+      <li><strong>Go memory model</strong> — <a href="https://go.dev/ref/mem">go.dev/ref/mem</a>. Required reading before writing concurrent merge code (Phase 3).</li>
+      <li><strong>Go binary encoding patterns</strong> — <a href="https://pkg.go.dev/encoding/binary">pkg.go.dev/encoding/binary</a>. The <code>LittleEndian.Uint32</code> idioms are used everywhere in <code>mapper.go</code>.</li>
+    </ul>
+  </section>
+
+  <!-- ============= FOOTER ============= -->
+  <section style="margin-top: 80px; padding: 32px 0; border-top: 1px solid var(--c-border); color: var(--c-muted); font-size: 13px;">
+    <p>
+      <strong>Document version:</strong> 1.0 — Implementation reference for the HSPF binary reader project.<br>
+      <strong>Audience:</strong> Engineers implementing the <code>hbn-daemon</code> Go subprocess and <code>hbn_go.py</code> Python wrapper.<br>
+      <strong>Pre-flight checklist before starting:</strong>
+    </p>
+    <ul>
+      <li>Read Sections 2 and 3 in full. Every parser rule is grounded there.</li>
+      <li>Set up a fixture corpus: at least 3 real <code>.hbn</code> files of varying sizes, including one wide RCHRES NUTRX file (Section 4.2 bug repro).</li>
+      <li>Run the existing Python parser on each fixture, save results to a known-good baseline.</li>
+      <li>Apply Track A Quick Wins, re-run baseline, confirm parity (this catches the 3-byte BP bug if any of your fixtures trigger it).</li>
+      <li>Only then start Phase 1 of the Go implementation.</li>
+    </ul>
+    <p style="margin-top: 24px; text-align: center;">
+      <em>"Every byte in the file came from <code>BINBUF</code>. There are no surprises."</em>
+    </p>
+  </section>
+
+  </main>
+</div>
+
+<!-- Prism syntax highlighter -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+  // Add anchor links to headings
+  document.querySelectorAll('h2[id], h3[id]').forEach(h => {
+    if (!h.querySelector('.anchor-link')) {
+      const link = document.createElement('a');
+      link.href = '#' + h.id;
+      link.className = 'anchor-link';
+      link.textContent = '¶';
+      h.appendChild(link);
+    }
+  });
+
+  // Smooth scroll for sidebar links
+  document.querySelectorAll('nav.sidebar a').forEach(a => {
+    a.addEventListener('click', e => {
+      const href = a.getAttribute('href');
+      if (href.startsWith('#')) {
+        e.preventDefault();
+        const target = document.querySelector(href);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          history.pushState(null, '', href);
+        }
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

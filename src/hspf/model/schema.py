@@ -198,8 +198,8 @@ def load_schemas(csv_path: Path) -> dict:
 
     return schemas
 
-
-SCHEMAS: dict = load_schemas(_CSV_PATH)
+#TODO Fix this.
+#SCHEMAS: dict = load_schemas(_CSV_PATH)
 
 
 

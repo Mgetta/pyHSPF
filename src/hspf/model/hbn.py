@@ -31,7 +31,7 @@ TCODES2FREQ : dict
 """
 import mmap
 
-from hspf import helpers
+from hspf.core import helpers
 import pandas as pd
 import math
 from struct import unpack

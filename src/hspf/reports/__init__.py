@@ -10,13 +10,9 @@ This package provides a suite of functions for generating various reports and an
 from hspf.reports.loading import (
     catchment_areas,
     get_constituent_loading,
-    _join_catchments,
-    get_catchment_loading,
-    get_watershed_loading,
     constituent_loading_summary,
     loading_summary,
     catchment_loading_summary,
-    _filter_to_watershed,
     watershed_loading_summary,
 )
 
@@ -148,30 +144,17 @@ class ReportsAccessor:
         self.wdms = wdms
 
     # --- loading ---------------------------------------------------------
-    def catchment_loading(self, constituent, time_step=5):
-        """Return catchment-level loading.  Delegates to :func:`get_catchment_loading`."""
-        return get_catchment_loading(self.uci, self.hbns, constituent, time_step)
-
-    def watershed_loading(self, constituent, reach_ids=None,
-                          upstream_reach_ids=None, by_landcover=False,
-                          time_step=5):
-        """Return watershed-level loading.  Delegates to :func:`get_watershed_loading`."""
-        return get_watershed_loading(
-            self.uci, self.hbns, constituent, reach_ids,
-            upstream_reach_ids, by_landcover, time_step,
-        )
-
     def loading_summary(self, constituent, **kwargs):
         """Return unified loading summary.  Delegates to :func:`loading_summary`."""
         return loading_summary(self.uci, self.hbns, constituent, **kwargs)
 
-    def catchment_loading_summary(self, constituent, **kwargs):
+    def catchment_loading(self, constituent, **kwargs):
         """Return catchment loading summary.  Delegates to :func:`catchment_loading_summary`."""
         return catchment_loading_summary(
             self.uci, self.hbns, constituent, **kwargs,
         )
 
-    def watershed_loading_summary(self, constituent, **kwargs):
+    def watershed_loading(self, constituent, **kwargs):
         """Return watershed loading summary.  Delegates to :func:`watershed_loading_summary`."""
         return watershed_loading_summary(
             self.uci, self.hbns, constituent, **kwargs,
@@ -306,10 +289,14 @@ class ReportsAccessor:
         return annual_sediment_budget(self.uci, self.hbns)
 
     # --- phosphorus ------------------------------------------------------
-    def total_phosphorous(self, t_code=5, operation='PERLND'):
-        """Compute total phosphorous.  Delegates to :func:`total_phosphorous`."""
-        return total_phosphorous(self.uci, self.hbns, t_code, operation)
+    def total_phosphorus(self, t_code=5, operation='PERLND'):
+        """Compute total phosphorus.  Delegates to :func:`total_phosphorus`."""
+        return total_phosphorus(self.uci, self.hbns, t_code, operation)
 
+    # --- nitrogen ------------------------------------------------------
+    def total_nitrogen(self, t_code=5, operation='PERLND'):
+        """Compute total nitrogen.  Delegates to :func:`total_nitrogen`."""
+        return total_nitrogen(self.uci, self.hbns, t_code, operation)
 
 # Remaining non-class helper kept at package level
 def get_catchments(uci, reach_ids):
@@ -345,7 +332,7 @@ def _operation_metadata():
         Columns: ``TVOLNO``, ``SVOLNO``, ``SVOL``, ``AFACR``, ``MLNO``,
         ``LSID``, ``metzone``.
     """
-    from hspf import uci
+    from hspf.model import uci
     dfs = []
     for operation in ['PERLND', 'IMPLND', 'RCHRES']:
         df = uci.opnid_dict[operation].reset_index()

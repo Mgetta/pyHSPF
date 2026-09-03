@@ -3,8 +3,8 @@
 import math
 import numpy as np
 import pandas as pd
-from hspf.hbn import CF2CFS
-from hspf.parser import graph
+from hspf.model.hbn import CF2CFS
+from hspf.model import graph
 
 ACFT_TO_FT3 = 43560.0  # 1 acre-ft = 43,560 ft³
 

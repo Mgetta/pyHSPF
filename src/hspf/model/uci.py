@@ -22,15 +22,15 @@ import subprocess
 import sys
 import numpy as np
 import pandas as pd
-from .parser.parsers import Table
-from .parser.graph import reachNetwork
+from hspf.model.parsers import Table
+from hspf.model.graph import reachNetwork
 
 #from hspf_tools.parser import setup
 
 from pathlib import Path
 
 
-parseTable = pd.read_csv(Path(__file__).parent/'data/ParseTable.csv',
+parseTable = pd.read_csv(Path(__file__).parent.parent/'data/ParseTable.csv',
                           dtype = {'width': 'Int64',
                                   'start': 'Int64',
                                   'stop': 'Int64',

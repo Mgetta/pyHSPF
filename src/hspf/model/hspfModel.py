@@ -12,7 +12,7 @@ from hspf.model.uci import UCI
 from hspf.model import hbn
 from hspf.reports import ReportsAccessor
 from hspf.model.wdm import wdmInterface
-from hspf import wdmReader
+from hspf.model import wdmReader
 from hspf.outputs import outputWriter
  
 

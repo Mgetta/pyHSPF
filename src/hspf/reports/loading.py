@@ -63,6 +63,7 @@ def get_constituent_loading(uci,hbn,constituent,time_step =5,start_year = 1996,e
     
     df = df.loc[(df['datetime'].dt.year >= start_year) & (df['datetime'].dt.year <= end_year)]
 
+    df = df.astype({'OPNID': int, 'value': float, 'OPERATION': str})
     
     return df
 
@@ -460,7 +461,7 @@ def loading_summary(uci,hbn,constituent,start_year = 1996,end_year = 2100,
             df['loading_rate'] = df['load'] / df['catchment_area']
 
     elif spatial_grouping == 'watershed':
-        ws_area = df['watershed_area'].iloc[0] if len(df) > 0 else None
+        ws_area = df['watershed_area'].iloc[0].item() if len(df) > 0 else None
         if by_landcover:
             df = df.groupby(group_prefix + ['landcover','constituent'])[['landcover_area','load']].sum().reset_index()
             df['loading_rate'] = df['load'] / df['landcover_area']

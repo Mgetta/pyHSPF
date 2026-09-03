@@ -4,7 +4,7 @@ Legacy loading functions — older implementations kept for backward compatibili
 """
 import numpy as np
 import pandas as pd
-from hspf import helpers
+from hspf.core import helpers
 
 from hspf.reports.nutrients import total_phosphorus
 from hspf.reports.utils import weighted_describe

@@ -3,4 +3,10 @@
 *.gz
 __pycache__/
 docs/_build/
-tests/data
+# Ignore full fixture model files by default
+tests/data/models/*/*
+
+# Keep per-model goldens tracked
+!tests/data/models/*/
+!tests/data/models/*/goldens/
+!tests/data/models/*/goldens/**

@@ -2,7 +2,7 @@ import importlib
 import pytest
 from pathlib import Path
 
-SRC_PATH = Path(__file__).parent.parent.parent / "src/hspf"
+SRC_PATH = Path(__file__).parent.parent / "src/hspf"
 def _find_modules(src_path,modules=None, prefix="hspf"):
     if modules is None:
         modules = []

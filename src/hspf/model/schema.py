@@ -32,7 +32,7 @@ import pandas as pd
 # Data path — same CSV your current code uses, no changes to the file
 # ---------------------------------------------------------------------------
 
-_CSV_PATH = Path(__file__).parent / 'data' / 'ParseTable.csv'
+_CSV_PATH = Path(__file__).parent.parent / 'data' / 'ParseTable.csv'
 
 
 # ---------------------------------------------------------------------------

@@ -37,6 +37,15 @@ class GoldenTestConfig:
         """Return the path to the UCI file."""
         return self.model_dir_path / (self.model_name + ".uci")
 
+    @property
+    def goldens_dir_path(self) -> Path:
+        """Return the path to the goldens directory."""
+        return self.model_dir_path / "goldens"
+    
+    def golden_path(self, case):
+        """Return the path to the golden file for a given case."""
+        return self.goldens_dir_path / case.group / case.filename
+
 
 # Create a cached loader function
 @lru_cache(maxsize=None)
@@ -92,6 +101,8 @@ MiddleMN_CONFIG = GoldenTestConfig(
             {"operation": "PERLND", "t_code": 4, "variable": "SURO", "activity": "PWATER"},
             {"operation": "RCHRES", "t_code": 2, "variable": "ROVOL", "activity": "HYDR"},
         ])
+
+
 
 ALL_MODEL_CONFIGS = [BlueEarth_CONFIG, LOWUS_CONFIG, MiddleMN_CONFIG]
 

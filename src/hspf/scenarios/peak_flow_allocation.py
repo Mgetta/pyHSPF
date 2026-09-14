@@ -140,9 +140,9 @@ def analyze(results_csv):
         valid_area,
         results['delta_acft'] * results['avg_area'] / results['reach_area'],
         np.nan)
-    results['pct_of_baseline'] = np.where(
+    results['allocation_baseline_ratio'] = np.where(
         results['baseline_total_acft'] != 0,
-        results['delta_acft'] / results['baseline_total_acft'],
+        results['allocation'] / results['baseline_total_acft'],
         np.nan)
     results['rank'] = results['allocation'].rank(method='min', ascending=False)
     results.loc[results['scenario'].astype(str).str.lower() == 'baseline', 'rank'] = np.nan
@@ -378,7 +378,7 @@ class PeakFlowAllocation:
             'delta_acft': 0.0,
             'avg_area': self._average_area(),
             'allocation': np.nan,
-            'pct_of_baseline': 0.0,
+            'allocation_baseline_ratio': np.nan,
         }
         pd.DataFrame([row]).to_csv(self.results_path, index=False)
         return event_frame
@@ -497,21 +497,21 @@ class PeakFlowAllocation:
             'delta_acft': np.nan,
             'avg_area': avg_area,
             'allocation': np.nan,
-            'pct_of_baseline': np.nan,
+            'allocation_baseline_ratio': np.nan,
         }
         if status['ok']:
             scenario = UCI(uci_path, infer_metzones=False)
             series = daily_rovol(scenario.hbn_paths, self.outlet_reach)
             values, total = event_totals(series, event_dates)
             delta = baseline_total - total
+            alloc = allocation(baseline_total, total, avg_area, reach_area)
             row.update({
                 **dict(zip(event_dates, values.to_numpy())),
                 'total_acft': total,
                 'delta_acft': delta,
-                'allocation': allocation(
-                    baseline_total, total, avg_area, reach_area),
-                'pct_of_baseline': (
-                    delta / baseline_total if baseline_total else np.nan),
+                'allocation': alloc,
+                'allocation_baseline_ratio': (
+                    alloc / baseline_total if baseline_total else np.nan),
             })
         self._write_result_row(row)
         return row

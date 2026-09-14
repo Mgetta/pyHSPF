@@ -145,7 +145,8 @@ def test_analyze_recomputes_metrics_and_ranks_scenarios(tmp_path):
     assert np.isnan(result.loc[0, 'allocation'])
     assert result.loc[1, 'allocation'] == 100
     assert result.loc[2, 'allocation'] == 25
-    assert result.loc[1, 'pct_of_baseline'] == 0.2
+    assert result.loc[1, 'allocation_baseline_ratio'] == 1.0
+    assert result.loc[2, 'allocation_baseline_ratio'] == 0.25
     assert result.loc[1, 'rank'] == 1
     assert result.loc[2, 'rank'] == 2
     assert np.isnan(result.loc[0, 'rank'])

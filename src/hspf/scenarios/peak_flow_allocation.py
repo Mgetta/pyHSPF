@@ -522,6 +522,116 @@ class PeakFlowAllocation:
             raise FileNotFoundError('PFA results are not available')
         return analyze(self.results_path)
 
+    def map_allocation(self, subwatersheds_shp=None, output_dir=None,
+                        cmap=None, label_reaches=True):
+        """Create subwatershed maps of allocation and allocation/baseline ratio.
+
+        Each subwatershed polygon is colored by the allocation value of the
+        upstream RCHRES to which it drains. Reach numbers are labeled at
+        polygon centroids by default.
+
+        Parameters
+        ----------
+        subwatersheds_shp : Path-like, optional
+            Path to a subwatersheds shapefile. If None, searches for
+            '*_Subwatersheds.shp' in the GIS folder next to the source UCI.
+        output_dir : Path-like, optional
+            Directory to save map PNGs. Defaults to ``self.output_dir``.
+        cmap : str or matplotlib.colors.Colormap, optional
+            Matplotlib colormap. If None, uses a custom light-blue-to-dark-blue
+            ramp where low values are light blue and high values (rank 1) are
+            dark blue. Pass any matplotlib colormap name to override.
+        label_reaches : bool, optional
+            If True, label each subwatershed with its upstream reach number.
+
+        Returns
+        -------
+        tuple of Path
+            Paths to the saved allocation map and ratio map PNGs.
+        """
+        import geopandas as gpd
+        import matplotlib.patheffects as path_effects
+        import matplotlib.pyplot as plt
+        from matplotlib.colors import LinearSegmentedColormap
+
+        if cmap is None:
+            cmap = LinearSegmentedColormap.from_list(
+                'pfa_blue',
+                ['#A8C8EC', '#6BAED6', '#2171B5', '#003865'])
+
+        results = self.results()
+        scenario_results = results.loc[
+            results['scenario'].astype(str).str.lower() != 'baseline'].copy()
+
+        if subwatersheds_shp is None:
+            source_uci = Path(self.config['source_uci'])
+            gis_dir = source_uci.parent.parent / 'gis'
+            candidates = sorted(gis_dir.glob('*_Subwatersheds.shp'))
+            if not candidates:
+                raise FileNotFoundError(
+                    f'Could not find a *_Subwatersheds.shp file in {gis_dir}. '
+                    'Pass subwatersheds_shp explicitly.')
+            subwatersheds_shp = candidates[0]
+        else:
+            subwatersheds_shp = Path(subwatersheds_shp)
+        if not subwatersheds_shp.exists():
+            raise FileNotFoundError(subwatersheds_shp)
+
+        subwatersheds = gpd.read_file(subwatersheds_shp)
+        if 'SubID' not in subwatersheds.columns:
+            raise ValueError(
+                f"Subwatersheds shapefile {subwatersheds_shp.name} must "
+                "contain a 'SubID' column")
+
+        merged = subwatersheds.merge(
+            scenario_results, left_on='SubID', right_on='reach_id', how='left')
+
+        output_dir = Path(output_dir or self.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        base_name = f'peak_flow_allocation_RCH{self.outlet_reach}'
+        paths = []
+        for column, title, suffix in [
+            ('allocation', 'Peak Flow Allocation (ac-ft)', '_allocation'),
+            ('allocation_baseline_ratio', 'Allocation / Baseline (%)', '_ratio'),
+        ]:
+            fig, ax = plt.subplots(figsize=(10, 8))
+            if column == 'allocation_baseline_ratio':
+                plot_col = '_allocation_baseline_ratio_pct'
+                merged[plot_col] = merged[column] * 100
+                legend_kwds = {
+                    'label': 'Allocation / Baseline (%)',
+                    'shrink': 0.6,
+                    'format': '%.3f'}
+            else:
+                plot_col = column
+                legend_kwds = {'label': column, 'shrink': 0.6}
+            merged.plot(
+                column=plot_col, ax=ax, cmap=cmap, legend=True,
+                legend_kwds=legend_kwds,
+                missing_kwds={'color': 'lightgrey', 'label': 'No data'})
+            if label_reaches:
+                for _, row in merged.iterrows():
+                    reach_id = row.get('reach_id')
+                    if pd.notna(reach_id):
+                        point = row.geometry.representative_point()
+                        ax.text(
+                            point.x, point.y, str(int(reach_id)),
+                            fontsize=6, ha='center', va='center',
+                            color='white',
+                            path_effects=[
+                                path_effects.withStroke(
+                                    linewidth=1.5, foreground='black')])
+            ax.set_title(f'{title}\nOutlet RCH{self.outlet_reach}')
+            ax.set_axis_off()
+            plt.tight_layout()
+            path = output_dir / f'{base_name}{suffix}.png'
+            fig.savefig(path, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+            paths.append(path)
+
+        return tuple(paths)
+
     def cleanup_baseline(self):
         """Remove baseline run products while preserving its UCI."""
         removable = {'.hbn', '.wdm', '.ech', '.log'}

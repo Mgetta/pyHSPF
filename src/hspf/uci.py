@@ -108,6 +108,41 @@ class UCI():
             self.opnid_dict = self.get_metzones()
         self._LSID_flag = 0
 
+    def rebuild_network(self):
+        """Recompute active operation IDs and the reach-network graph."""
+        # TODO: Extract valid_opnids rebuilding for reuse by remove_operations.
+        opnseq = self.table('OPN SEQUENCE')
+        operations = ['PERLND', 'RCHRES', 'IMPLND', 'GENER', 'COPY']
+        self.valid_opnids = {
+            operation: opnseq['SEGMENT'][opnseq['OPERATION'] == operation].astype(int).to_list()
+            for operation in operations
+        }
+        operation_tables = [
+            key for key in self.uci if key[0] in operations]
+        for key in operation_tables:
+            self.uci[key].data = None
+            self.table(*key)
+        if ('EXT SOURCES', 'na', 0) in self.uci:
+            self.uci[('EXT SOURCES', 'na', 0)].data = None
+            self.table('EXT SOURCES', drop_comments=False)
+        for block in ['NETWORK', 'EXT TARGETS']:
+            key = (block, 'na', 0)
+            if key not in self.uci:
+                continue
+            table = self.table(block, drop_comments=False)
+            valid = pd.Series(True, index=table.index)
+            source_ids = pd.to_numeric(table['SVOLNO'], errors='coerce')
+            target_column = 'TOPFST' if 'TOPFST' in table else 'TVOLNO'
+            target_ids = pd.to_numeric(table[target_column], errors='coerce')
+            for operation in operations:
+                valid &= ((table['SVOL'] != operation) |
+                          source_ids.isin(self.valid_opnids[operation]))
+                valid &= ((table['TVOL'] != operation) |
+                          target_ids.isin(self.valid_opnids[operation]))
+            keep = valid | (table['comments'] != '')
+            self.replace_table(table.loc[keep], block)
+        self.network = reachNetwork(self)
+
         #compositions or totally separate classes?
         # self.network = network class
         # tableParser - Responsible for converting uci text to and from a pandas dataframe
@@ -868,6 +903,77 @@ class UCI():
 
 #TODO: More conveince methods that should probably be in a separate module
 
+def remove_operations(uci, operation, opnids):
+    """Remove operation IDs from OPN SEQUENCE and refresh valid_opnids."""
+    opnids = {int(opnid) for opnid in opnids}
+    table = uci._table('OPN SEQUENCE', 'na', 0)
+    kept = []
+    for line in table.lines:
+        tokens = line.split()
+        if line.lstrip().startswith('***') or len(tokens) < 2:
+            kept.append(line)
+            continue
+        try:
+            remove = tokens[0] == operation and int(tokens[1]) in opnids
+        except ValueError:
+            remove = False
+        if not remove:
+            kept.append(line)
+    table.lines = kept
+    table.data = None
+    opnseq = uci.table('OPN SEQUENCE')
+    uci.valid_opnids = {
+        op: opnseq['SEGMENT'][opnseq['OPERATION'] == op].astype(int).to_list()
+        for op in ['PERLND', 'RCHRES', 'IMPLND', 'GENER', 'COPY']
+    }
+
+
+def set_schematic_area(uci, reach_ids, value=0.0,
+                       source_operations=('PERLND', 'IMPLND')):
+    """Set local land-area factors for target reaches in SCHEMATIC."""
+    schematic = uci.table('SCHEMATIC', drop_comments=False)
+    rows = ((schematic['TVOL'] == 'RCHRES') &
+            schematic['TVOLNO'].isin(reach_ids) &
+            schematic['SVOL'].isin(source_operations))
+    schematic.loc[rows, 'AFACTR'] = value
+    uci.replace_table(schematic, 'SCHEMATIC')
+
+
+def reroute_reaches(uci, reach_ids):
+    """Bypass reaches in SCHEMATIC while preserving upstream routing."""
+    schematic = uci.table('SCHEMATIC', drop_comments=False)
+    for reach_id in reach_ids:
+        outgoing = ((schematic['SVOL'] == 'RCHRES') &
+                    (schematic['SVOLNO'] == reach_id) &
+                    (schematic['TVOL'] == 'RCHRES'))
+        destinations = schematic.loc[outgoing, 'TVOLNO'].dropna().astype(int).unique()
+        incoming = ((schematic['TVOL'] == 'RCHRES') &
+                    (schematic['TVOLNO'] == reach_id) &
+                    (schematic['SVOL'] == 'RCHRES'))
+        if len(destinations) > 1:
+            raise ValueError(f'RCHRES {reach_id} has multiple downstream reaches')
+        if len(destinations) == 1:
+            schematic.loc[incoming, 'TVOLNO'] = destinations[0]
+        else:
+            schematic = schematic.loc[~incoming].copy()
+        local_land = ((schematic['TVOL'] == 'RCHRES') &
+                      (schematic['TVOLNO'] == reach_id) &
+                      schematic['SVOL'].isin(['PERLND', 'IMPLND']))
+        schematic = schematic.loc[~(outgoing | local_land)].copy()
+    uci.replace_table(schematic, 'SCHEMATIC')
+
+
+def remove_routing_reaches(uci, reach_ids=None):
+    """Remove routing-only reaches from SCHEMATIC and OPN SEQUENCE."""
+    if reach_ids is None:
+        reach_ids = uci.network.routing_reaches
+    reach_ids = list(reach_ids)
+    reroute_reaches(uci, reach_ids)
+    remove_operations(uci, 'RCHRES', reach_ids)
+    uci.rebuild_network()
+    return reach_ids
+
+
 def run_model(uci_file, wait_for_completion=True):
     """Run the WinHSPF executable for a given UCI file.
 
@@ -885,7 +991,7 @@ def run_model(uci_file, wait_for_completion=True):
         On Windows, ``CREATE_NO_WINDOW`` is applied to suppress a console
         window when running in the background.
     """
-    winHSPF = str(Path(__file__).resolve().parent.parent) + '\\bin\\WinHSPFlt\\WinHspfLt.exe'
+    winHSPF = str(Path(__file__).resolve().parent) + '\\bin\\WinHSPFlt\\WinHspfLt.exe'
     
     # Arguments for the subprocess
     args = [winHSPF, uci_file.as_posix()]
@@ -1033,13 +1139,13 @@ def setup_geninfo(uci):
 
 
 
-def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None):
+def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None,reach_output = 2):
     """Set BINARY-INFO output time codes for all operations.
 
     Applies *default_output* to every BINARY-INFO flag column for PERLND,
     IMPLND, and RCHRES.  If *reach_ids* is provided, additionally sets
-    hourly output (time-code ``2``) for the flag columns associated with
-    each constituent in *constituents* for the specified reaches.
+    *reach_output* for the flag columns associated with each constituent in
+    *constituents* for the specified reaches.
 
     Parameters
     ----------
@@ -1049,14 +1155,15 @@ def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None
         Time-code written to all BINARY-INFO flag columns (default ``4``
         = monthly).
     reach_ids : list of int or None, optional
-        RCHRES operation IDs for which hourly output is enabled.  When
-        ``None``, no hourly overrides are applied.
+        RCHRES operation IDs that receive the selected output time-code.
     constituents : list of str or None, optional
         Constituent keys used to look up the BINARY-INFO columns that
-        should be set to hourly output for *reach_ids*.  Supported keys:
+        should use *reach_output* for *reach_ids*.  Supported keys:
         ``'Q'``, ``'TSS'``, ``'WT'``, ``'N'``, ``'TKN'``, ``'OP'``,
         ``'BOD'``, ``'TP'``.  When ``None`` and *reach_ids* is provided,
-        all relevant columns are set to hourly.
+        all relevant columns use *reach_output*.
+    reach_output : int, optional
+        Time-code written for the selected reaches (default ``2`` = hourly).
 
     Notes
     -----
@@ -1088,10 +1195,10 @@ def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None
     uci.update_table(default_output,'RCHRES','BINARY-INFO',0,columns = ['HYDRPR','SEDPR','HEATPR','OXRXPR','NUTRPR','PLNKPR'],operator = 'set')
     if reach_ids is not None:
         if constituents is None:
-             uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = ['SEDPR','OXRXPR','NUTRPR','PLNKPR','HEATPR','HYDRPR'],opnids = reach_ids,operator = 'set')
+             uci.update_table(reach_output,'RCHRES','BINARY-INFO',0,columns = ['SEDPR','OXRXPR','NUTRPR','PLNKPR','HEATPR','HYDRPR'],opnids = reach_ids,operator = 'set')
         else:
             for constituent in constituents:
-                uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = CONSTITUENT_MAP[constituent],opnids = reach_ids,operator = 'set')
+                uci.update_table(reach_output,'RCHRES','BINARY-INFO',0,columns = CONSTITUENT_MAP[constituent],opnids = reach_ids,operator = 'set')
 
 def _masslinks(uci):
     dfs = []

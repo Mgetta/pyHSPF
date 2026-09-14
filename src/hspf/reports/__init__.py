@@ -91,6 +91,7 @@ from hspf.reports.timeseries import (
     filter_years,
     filter_months,
     aggregate,
+    independent_peaks,
 )
 # --- residence ---
 from hspf.reports.residence import (

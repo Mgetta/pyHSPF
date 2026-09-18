@@ -522,46 +522,155 @@ class PeakFlowAllocation:
             raise FileNotFoundError('PFA results are not available')
         return analyze(self.results_path)
 
-    def map_allocation(self, subwatersheds_shp=None, output_dir=None,
-                        cmap=None, label_reaches=True):
-        """Create subwatershed maps of allocation and allocation/baseline ratio.
+    def map_allocation(self, subwatersheds_shp=None, reaches_shp=None,
+                        output_dir=None, cmap=None, label_reaches=True,
+                        basemap=True, basemap_source='Esri.WorldImagery',
+                        add_mn_background=True,
+                        add_watershed_boundary=True,
+                        figsize=(14, 11),
+                        watershed_name=None,
+                        metrics='both',
+                        subwatershed_fill='#E6DCC9',
+                        subwatershed_edge='#888888',
+                        reach_color='#295789',
+                        reach_linewidth=1.5,
+                        total_label=True,
+                        total_label_position='upper-left'):
+        """
+        Create deliverable-quality PFA maps.
 
-        Each subwatershed polygon is colored by the allocation value of the
-        upstream RCHRES to which it drains. Reach numbers are labeled at
-        polygon centroids by default.
+        This method always produces a reference subwatershed/reach map and one
+        or more metric maps. The reference map shows neutral subwatersheds,
+        semi-transparent blue reach lines, and reach number labels. Metric maps
+        color subwatersheds by allocation, allocation/baseline ratio, or both,
+        and label each subwatershed with its value(s). Titles and the total
+        peak-flow volume are drawn as overlays inside the map.
 
         Parameters
         ----------
         subwatersheds_shp : Path-like, optional
             Path to a subwatersheds shapefile. If None, searches for
             '*_Subwatersheds.shp' in the GIS folder next to the source UCI.
+        reaches_shp : Path-like, optional
+            Path to a reaches shapefile. If None, searches for '*_Reaches.shp'
+            in the GIS folder next to the source UCI.
         output_dir : Path-like, optional
-            Directory to save map PNGs. Defaults to ``self.output_dir``.
+            Directory to save the map PNGs. Defaults to ``self.output_dir``.
         cmap : str or matplotlib.colors.Colormap, optional
-            Matplotlib colormap. If None, uses a custom light-blue-to-dark-blue
-            ramp where low values are light blue and high values (rank 1) are
-            dark blue. Pass any matplotlib colormap name to override.
+            Matplotlib colormap for metric maps. If None, uses a custom
+            light-blue-to-dark-blue ramp.
         label_reaches : bool, optional
-            If True, label each subwatershed with its upstream reach number.
+            If True, label each subwatershed with its upstream reach number on
+            the reference map and with its allocation/ratio value(s) on metric
+            maps.
+        basemap : bool, optional
+            If True, add an XYZ tile basemap using ``contextily``. If
+            ``contextily`` is not installed, a warning is issued and the basemap
+            is skipped.
+        basemap_source : str, optional
+            ``contextily`` / XYZ source name. Examples:
+            ``'Esri.WorldImagery'``, ``'Esri.WorldStreetMap'``,
+            ``'OpenStreetMap.Mapnik'``, ``'CartoDB.Positron'``,
+            ``'USGS.USTopo'``.
+        add_mn_background : bool, optional
+            If True, draw the Minnesota background polygon shipped with the
+            package as a light-grey backdrop.
+        add_watershed_boundary : bool, optional
+            If True, dissolve the model subwatersheds and draw the watershed
+            boundary as a dark grey outline.
+        figsize : tuple, optional
+            Figure size in inches.
+        watershed_name : str, optional
+            Human-readable watershed name for map titles. If None, the project
+            folder name is used (e.g., ``'NFCrow'``).
+        metrics : {'allocation', 'ratio', 'both'} or list, optional
+            Metrics to map. ``'both'`` draws one map with both scales.
+            ``['allocation', 'ratio']`` draws two separate metric maps.
+        subwatershed_fill : str, optional
+            Fill color for subwatersheds on the reference map.
+        subwatershed_edge : str, optional
+            Outline color for subwatersheds on the reference map.
+        reach_color : str, optional
+            Line color for reaches on the reference map.
+        reach_linewidth : float, optional
+            Line width for reaches on the reference map.
+        total_label : bool, optional
+            If True, add the total peak-flow volume overlay to metric maps.
+        total_label_position : str or tuple, optional
+            Position of the total label on metric maps. Use ``'upper-left'``,
+            ``'upper-right'``, ``'lower-left'``, ``'lower-right'``, or an
+            ``(x, y)`` tuple in axes coordinates.
 
         Returns
         -------
-        tuple of Path
-            Paths to the saved allocation map and ratio map PNGs.
+        list of Path
+            Paths to the saved map PNGs. The reference map is always first.
+
+        TODO: Merge this maping function into mappers.py within phycal. Talk with Mulu to determine best location.
         """
+        import matplotlib
+        matplotlib.use('Agg', force=True)
+
         import geopandas as gpd
         import matplotlib.patheffects as path_effects
         import matplotlib.pyplot as plt
-        from matplotlib.colors import LinearSegmentedColormap
+        from matplotlib.colors import LinearSegmentedColormap, Normalize
+        from matplotlib.cm import ScalarMappable
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
 
         if cmap is None:
             cmap = LinearSegmentedColormap.from_list(
                 'pfa_blue',
                 ['#A8C8EC', '#6BAED6', '#2171B5', '#003865'])
 
+        # Optional contextily basemap with graceful fallback.
+        if basemap:
+            try:
+                import contextily as ctx
+            except ImportError:
+                warnings.warn(
+                    'contextily is not installed; basemap will be disabled. '
+                    'Install it with: pip install contextily')
+                ctx = None
+                basemap = False
+        else:
+            ctx = None
+
         results = self.results()
         scenario_results = results.loc[
             results['scenario'].astype(str).str.lower() != 'baseline'].copy()
+
+        if watershed_name is None:
+            watershed_name = Path(self.config['source_uci']).parent.parent.name
+
+        baseline_row = results.loc[
+            results['scenario'].astype(str).str.lower() == 'baseline']
+        if baseline_row.empty:
+            raise ValueError('Results CSV does not contain a baseline row')
+        baseline_total = int(round(float(
+            baseline_row.iloc[0]['baseline_total_acft'])))
+        total_text = (
+            f'Total peak-flow volume: {baseline_total:,} ac-ft')
+
+        # Parse metrics argument.
+        if metrics == 'both':
+            metric_groups = [('allocation', 'ratio')]
+        elif metrics == 'allocation':
+            metric_groups = [('allocation',)]
+        elif metrics == 'ratio':
+            metric_groups = [('ratio',)]
+        elif isinstance(metrics, (list, tuple)):
+            metric_groups = [(m,) for m in metrics]
+        else:
+            raise ValueError(
+                "metrics must be 'allocation', 'ratio', 'both', or a list of "
+                "those strings")
+        for group in metric_groups:
+            for metric in group:
+                if metric not in ('allocation', 'ratio'):
+                    raise ValueError(
+                        f"Unknown metric '{metric}'. Use 'allocation' or "
+                        "'ratio'.")
 
         if subwatersheds_shp is None:
             source_uci = Path(self.config['source_uci'])
@@ -583,54 +692,259 @@ class PeakFlowAllocation:
                 f"Subwatersheds shapefile {subwatersheds_shp.name} must "
                 "contain a 'SubID' column")
 
+        # Optional reaches shapefile.
+        if reaches_shp is None:
+            source_uci = Path(self.config['source_uci'])
+            gis_dir = source_uci.parent.parent / 'gis'
+            reach_candidates = sorted(gis_dir.glob('*_Reaches.shp'))
+            if reach_candidates:
+                reaches_shp = reach_candidates[0]
+            else:
+                reaches_shp = None
+        if reaches_shp is not None:
+            reaches_shp = Path(reaches_shp)
+            if not reaches_shp.exists():
+                reaches_shp = None
+        reaches = gpd.read_file(reaches_shp) if reaches_shp else None
+
+        # MN background shapefile shipped with the package.
+        mn_background_path = (
+            Path(__file__).resolve().parent / 'data' / 'MN_Background.shp')
+        if add_mn_background and mn_background_path.exists():
+            mn_background = gpd.read_file(mn_background_path)
+        elif add_mn_background:
+            warnings.warn(
+                f'MN_Background shapefile not found at {mn_background_path}; '
+                'skipping background layer.')
+            mn_background = None
+        else:
+            mn_background = None
+
+        # Use Web Mercator when a basemap is requested so contextily can place
+        # tiles without reprojecting; otherwise use UTM 15N for Minnesota.
+        if basemap and ctx is not None:
+            map_crs = 'EPSG:3857'
+        else:
+            map_crs = 'EPSG:26915'
+        subwatersheds = subwatersheds.to_crs(map_crs)
+        if mn_background is not None:
+            mn_background = mn_background.to_crs(map_crs)
+        if reaches is not None:
+            reaches = reaches.to_crs(map_crs)
+
         merged = subwatersheds.merge(
             scenario_results, left_on='SubID', right_on='reach_id', how='left')
+        merged.geometry = merged.geometry.make_valid()
+        merged['_allocation_baseline_ratio_pct'] = (
+            merged['allocation_baseline_ratio'] * 100)
+
+        if add_watershed_boundary:
+            watershed_boundary = subwatersheds.dissolve()
+            watershed_boundary.geometry = watershed_boundary.geometry.make_valid()
+        else:
+            watershed_boundary = None
 
         output_dir = Path(output_dir or self.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-
         base_name = f'peak_flow_allocation_RCH{self.outlet_reach}'
         paths = []
-        for column, title, suffix in [
-            ('allocation', 'Peak Flow Allocation (ac-ft)', '_allocation'),
-            ('allocation_baseline_ratio', 'Allocation / Baseline (%)', '_ratio'),
-        ]:
-            fig, ax = plt.subplots(figsize=(10, 8))
-            if column == 'allocation_baseline_ratio':
-                plot_col = '_allocation_baseline_ratio_pct'
-                merged[plot_col] = merged[column] * 100
-                legend_kwds = {
-                    'label': 'Allocation / Baseline (%)',
-                    'shrink': 0.6,
-                    'format': '%.3f'}
-            else:
-                plot_col = column
-                legend_kwds = {'label': column, 'shrink': 0.6}
-            merged.plot(
-                column=plot_col, ax=ax, cmap=cmap, legend=True,
-                legend_kwds=legend_kwds,
-                missing_kwds={'color': 'lightgrey', 'label': 'No data'})
-            if label_reaches:
-                for _, row in merged.iterrows():
-                    reach_id = row.get('reach_id')
-                    if pd.notna(reach_id):
-                        point = row.geometry.representative_point()
-                        ax.text(
-                            point.x, point.y, str(int(reach_id)),
-                            fontsize=6, ha='center', va='center',
-                            color='white',
-                            path_effects=[
-                                path_effects.withStroke(
-                                    linewidth=1.5, foreground='black')])
-            ax.set_title(f'{title}\nOutlet RCH{self.outlet_reach}')
-            ax.set_axis_off()
-            plt.tight_layout()
-            path = output_dir / f'{base_name}{suffix}.png'
-            fig.savefig(path, dpi=300, bbox_inches='tight')
-            plt.close(fig)
-            paths.append(path)
 
-        return tuple(paths)
+        def setup_base_layers(ax):
+            """Add basemap, MN background, and watershed boundary."""
+            # Plot an invisible boundary first to establish the watershed
+            # extent, then extend the top margin so titles can sit on the
+            # basemap without covering the watershed.
+            merged.boundary.plot(ax=ax, color='none', linewidth=0)
+            x_min, x_max = ax.get_xlim()
+            y_min, y_max = ax.get_ylim()
+            y_range = y_max - y_min
+            new_y_max = y_max + 0.12 * y_range
+            ax.set_ylim(y_min, new_y_max)
+
+            if basemap and ctx is not None:
+                ctx.add_basemap(
+                    ax, source=basemap_source, attribution=False)
+
+            if mn_background is not None:
+                alpha = 0.65 if basemap else 1.0
+                mn_background.plot(
+                    ax=ax, color='#F5F5F5', edgecolor='grey',
+                    linewidth=0.5, alpha=alpha, zorder=2)
+
+            if watershed_boundary is not None:
+                watershed_boundary.plot(
+                    ax=ax, color='none', edgecolor='#4A4A4A',
+                    linewidth=2, zorder=4)
+
+            return (x_min, x_max, y_min, new_y_max)
+
+        def add_reach_labels(ax):
+            """Label each subwatershed with its upstream reach number."""
+            if not label_reaches:
+                return
+            for _, row in merged.iterrows():
+                reach_id = row.get('reach_id')
+                if pd.notna(reach_id):
+                    point = row.geometry.representative_point()
+                    ax.text(
+                        point.x, point.y, str(int(reach_id)),
+                        fontsize=5, ha='center', va='center',
+                        color='white', zorder=6,
+                        path_effects=[
+                            path_effects.withStroke(
+                                linewidth=0.8, foreground='black')])
+
+        def add_value_labels(ax, metric):
+            """Label each subwatershed with its allocation and/or ratio."""
+            if not label_reaches:
+                return
+            for _, row in merged.iterrows():
+                reach_id = row.get('reach_id')
+                if not pd.notna(reach_id):
+                    continue
+                alloc = row.get('allocation')
+                ratio = row.get('_allocation_baseline_ratio_pct')
+                if metric == 'allocation':
+                    if pd.isna(alloc):
+                        continue
+                    text = f'{alloc:.1f}'
+                elif metric == 'ratio':
+                    if pd.isna(ratio):
+                        continue
+                    text = f'{ratio:.2f}%'
+                else:
+                    if pd.isna(alloc) and pd.isna(ratio):
+                        continue
+                    text = f'{alloc:.1f}\n({ratio:.2f}%)'
+                point = row.geometry.representative_point()
+                ax.text(
+                    point.x, point.y, text,
+                    fontsize=4.5, ha='center', va='center',
+                    color='white', zorder=6,
+                    path_effects=[
+                        path_effects.withStroke(
+                            linewidth=0.8, foreground='black')])
+
+        def add_total_label(ax):
+            """Add the total peak-flow volume overlay."""
+            if not total_label:
+                return
+            if isinstance(total_label_position, str):
+                position_map = {
+                    'upper-left': (0.02, 0.98, 'top'),
+                    'upper-right': (0.98, 0.98, 'top'),
+                    'lower-left': (0.02, 0.02, 'bottom'),
+                    'lower-right': (0.98, 0.02, 'bottom'),
+                }
+                if total_label_position not in position_map:
+                    raise ValueError(
+                        f"Unknown total_label_position '{total_label_position}'. "
+                        "Use 'upper-left', 'upper-right', 'lower-left', "
+                        "'lower-right', or an (x, y) tuple.")
+                x, y, va = position_map[total_label_position]
+            else:
+                x, y = total_label_position
+                va = 'top'
+            ax.text(
+                x, y, total_text,
+                transform=ax.transAxes, fontsize=10,
+                verticalalignment=va, zorder=10,
+                bbox=dict(boxstyle='round', facecolor='white',
+                          edgecolor='black', alpha=0.85))
+
+        def add_title(ax, title):
+            """Draw the map title inside the top margin of the map."""
+            ax.text(
+                0.5, 0.96, title,
+                transform=ax.transAxes, fontsize=14,
+                ha='center', va='top', zorder=10,
+                bbox=dict(boxstyle='round', facecolor='white',
+                          edgecolor='black', alpha=0.85))
+
+        # Reference subwatershed / reach map.
+        fig, ax = plt.subplots(figsize=figsize)
+        limits = setup_base_layers(ax)
+        subwatersheds.plot(
+            ax=ax, facecolor=subwatershed_fill, edgecolor=subwatershed_edge,
+            linewidth=0.5, zorder=3)
+        if reaches is not None:
+            reaches.plot(
+                ax=ax, color=reach_color, linewidth=reach_linewidth,
+                alpha=0.7, zorder=4)
+        add_reach_labels(ax)
+        ax.set_xlim(limits[0], limits[1])
+        ax.set_ylim(limits[2], limits[3])
+        add_title(ax, f'{watershed_name} HSPF Subwatersheds')
+        ax.set_axis_off()
+        ref_path = output_dir / f'{base_name}_subwatersheds.png'
+        fig.savefig(ref_path, dpi=300, bbox_inches='tight')
+        plt.close(fig)
+        paths.append(ref_path)
+
+        # Metric maps.
+        metric_titles = {
+            ('allocation',): f'{watershed_name} Peak Flow Allocation (ac-ft)',
+            ('ratio',): f'{watershed_name} Allocation / Baseline (%)',
+            ('allocation', 'ratio'): f'{watershed_name} Peak Flow Allocation',
+        }
+        metric_filenames = {
+            ('allocation',): f'{base_name}_allocation.png',
+            ('ratio',): f'{base_name}_ratio.png',
+            ('allocation', 'ratio'): f'{base_name}.png',
+        }
+
+        for group in metric_groups:
+            fig, ax = plt.subplots(figsize=figsize)
+            limits = setup_base_layers(ax)
+
+            if group == ('allocation',):
+                plot_col = 'allocation'
+            elif group == ('ratio',):
+                plot_col = '_allocation_baseline_ratio_pct'
+            else:
+                plot_col = 'allocation'
+
+            merged.plot(
+                column=plot_col, ax=ax, cmap=cmap, legend=False,
+                edgecolor='grey', linewidth=0.3, zorder=5,
+                missing_kwds={'color': 'lightgrey', 'label': 'No data'})
+
+            label_metric = 'both' if len(group) > 1 else group[0]
+            add_value_labels(ax, label_metric)
+
+            # Side-by-side color scales (ratio closest to map, allocation to
+            # the right) when both metrics are requested.
+            divider = make_axes_locatable(ax)
+            pad_values = [0.05, 0.55]
+            for index, metric in enumerate(group):
+                cax = divider.append_axes(
+                    'right', size='4%', pad=pad_values[index])
+                if metric == 'allocation':
+                    values = merged['allocation'].dropna()
+                    label = 'Allocation (ac-ft)'
+                    fmt = '%.1f'
+                else:
+                    values = merged['_allocation_baseline_ratio_pct'].dropna()
+                    label = 'Allocation / Baseline (%)'
+                    fmt = '%.3f'
+                norm = Normalize(
+                    vmin=float(values.min()), vmax=float(values.max()))
+                sm = ScalarMappable(norm=norm, cmap=cmap)
+                cbar = fig.colorbar(sm, cax=cax, format=fmt)
+                cbar.set_label(label, rotation=270, labelpad=18)
+
+            add_total_label(ax)
+            ax.set_xlim(limits[0], limits[1])
+            ax.set_ylim(limits[2], limits[3])
+            add_title(ax, metric_titles[group])
+            ax.set_axis_off()
+
+            metric_path = output_dir / metric_filenames[group]
+            fig.savefig(metric_path, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+            paths.append(metric_path)
+
+        return paths
 
     def cleanup_baseline(self):
         """Remove baseline run products while preserving its UCI."""

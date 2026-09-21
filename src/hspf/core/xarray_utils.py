@@ -3,8 +3,9 @@
 xarray-based dataset schema for storing HSPF model outputs across multiple
 time-step resolutions.
 
-HSPF writes binary outputs (HBN files) at different time-step codes:
-  2 = hourly, 3 = daily, 4 = monthly, 5 = yearly.
+HSPF writes binary outputs (HBN files) at different output levels:
+  2 = interval-level (hourly for the current MPCA models),
+  3 = daily, 4 = monthly, 5 = yearly.
 
 Because different variables may be stored at different resolutions their time
 axes have different lengths and cannot share a single ``time`` dimension in a
@@ -14,55 +15,19 @@ wrapped in the lightweight :class:`HspfDatasetCollection` container class.
 """
 from __future__ import annotations
 
-from enum import IntEnum
 from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
-# ---------------------------------------------------------------------------
-# TimeStep enum
-# ---------------------------------------------------------------------------
-
-
-class TimeStep(IntEnum):
-    """HBN time-step codes.
-
-    Values match the integer codes written into HSPF binary output files.
-    """
-
-    HOURLY = 2
-    DAILY = 3
-    MONTHLY = 4
-    YEARLY = 5
-
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-#: Human-readable label for each :class:`TimeStep`.
-TIMESTEP_LABELS: Dict[TimeStep, str] = {
-    TimeStep.HOURLY: "hourly",
-    TimeStep.DAILY: "daily",
-    TimeStep.MONTHLY: "monthly",
-    TimeStep.YEARLY: "yearly",
-}
-
-#: pandas frequency string for each :class:`TimeStep`.
-PANDAS_FREQ: Dict[TimeStep, str] = {
-    TimeStep.HOURLY: "h",
-    TimeStep.DAILY: "D",
-    TimeStep.MONTHLY: "ME",
-    TimeStep.YEARLY: "YE",
-}
-
-#: HSPF operation types.
-OPERATIONS = ("PERLND", "IMPLND", "RCHRES")
-
-#: Maximum valid operation ID (HSPF three-digit integer limitation).
-MAX_OPNID = 999
+from hspf.core.types import (
+    MAX_OPNID,
+    OPERATIONS,
+    PANDAS_FREQ,
+    TIMESTEP_LABELS,
+    OutputLevel as TimeStep,
+)
 
 #: Valid variables for each HSPF operation type.
 #:

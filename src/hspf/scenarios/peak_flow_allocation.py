@@ -535,16 +535,17 @@ class PeakFlowAllocation:
                         reach_color='#295789',
                         reach_linewidth=1.5,
                         total_label=True,
-                        total_label_position='upper-left'):
+                        total_label_position='upper-left',
+                        avoid_label_overlap=True):
         """
         Create deliverable-quality PFA maps.
 
-        This method always produces a reference subwatershed/reach map and one
-        or more metric maps. The reference map shows neutral subwatersheds,
-        semi-transparent blue reach lines, and reach number labels. Metric maps
-        color subwatersheds by allocation, allocation/baseline ratio, or both,
-        and label each subwatershed with its value(s). Titles and the total
-        peak-flow volume are drawn as overlays inside the map.
+        This method produces the requested reference or metric maps. The
+        subwatersheds map shows neutral subwatersheds, semi-transparent blue
+        reach lines, and reach number labels. Metric maps color subwatersheds
+        by allocation, allocation/baseline ratio, or both, and label each
+        subwatershed with its value(s). Titles and the total peak-flow volume
+        are drawn as overlays inside the map.
 
         Parameters
         ----------
@@ -583,9 +584,11 @@ class PeakFlowAllocation:
         watershed_name : str, optional
             Human-readable watershed name for map titles. If None, the project
             folder name is used (e.g., ``'NFCrow'``).
-        metrics : {'allocation', 'ratio', 'both'} or list, optional
-            Metrics to map. ``'both'`` draws one map with both scales.
-            ``['allocation', 'ratio']`` draws two separate metric maps.
+        metrics : {'subwatersheds', 'allocation', 'ratio', 'both'} or list
+            Map or maps to create. ``'subwatersheds'`` draws the reference map.
+            ``'both'`` draws one metric map with both scales. A list creates
+            each requested map, such as ``['subwatersheds', 'both']`` or
+            ``['subwatersheds', 'allocation', 'ratio']``.
         subwatershed_fill : str, optional
             Fill color for subwatersheds on the reference map.
         subwatershed_edge : str, optional
@@ -600,11 +603,16 @@ class PeakFlowAllocation:
             Position of the total label on metric maps. Use ``'upper-left'``,
             ``'upper-right'``, ``'lower-left'``, ``'lower-right'``, or an
             ``(x, y)`` tuple in axes coordinates.
+        avoid_label_overlap : bool, optional
+            If True, iteratively move overlapping labels among candidate
+            locations inside their associated polygons. Unresolved labels
+            remain visible at their best available internal locations.
 
         Returns
         -------
         list of Path
-            Paths to the saved map PNGs. The reference map is always first.
+            Paths to the requested map PNGs. The subwatersheds map is first
+            when requested.
 
         TODO: Merge this maping function into mappers.py within phycal. Talk with Mulu to determine best location.
         """
@@ -613,6 +621,7 @@ class PeakFlowAllocation:
 
         import geopandas as gpd
         import matplotlib.patheffects as path_effects
+        from shapely.geometry import Point
         import matplotlib.pyplot as plt
         from matplotlib.colors import LinearSegmentedColormap, Normalize
         from matplotlib.cm import ScalarMappable
@@ -652,25 +661,31 @@ class PeakFlowAllocation:
         total_text = (
             f'Total peak-flow volume: {baseline_total:,} ac-ft')
 
-        # Parse metrics argument.
-        if metrics == 'both':
-            metric_groups = [('allocation', 'ratio')]
-        elif metrics == 'allocation':
-            metric_groups = [('allocation',)]
-        elif metrics == 'ratio':
-            metric_groups = [('ratio',)]
+        if isinstance(metrics, str):
+            requested_maps = [metrics]
         elif isinstance(metrics, (list, tuple)):
-            metric_groups = [(m,) for m in metrics]
+            requested_maps = list(metrics)
         else:
             raise ValueError(
-                "metrics must be 'allocation', 'ratio', 'both', or a list of "
-                "those strings")
-        for group in metric_groups:
-            for metric in group:
-                if metric not in ('allocation', 'ratio'):
-                    raise ValueError(
-                        f"Unknown metric '{metric}'. Use 'allocation' or "
-                        "'ratio'.")
+                "metrics must be 'subwatersheds', 'allocation', 'ratio', "
+                "'both', or a list of those strings")
+        valid_maps = {'subwatersheds', 'allocation', 'ratio', 'both'}
+        unknown_maps = [name for name in requested_maps if name not in valid_maps]
+        if unknown_maps:
+            raise ValueError(
+                f"Unknown metric '{unknown_maps[0]}'. Use 'subwatersheds', "
+                "'allocation', 'ratio', or 'both'.")
+        if not requested_maps:
+            raise ValueError('metrics must request at least one map')
+        create_subwatersheds = 'subwatersheds' in requested_maps
+        metric_groups = []
+        for name in requested_maps:
+            if name == 'allocation':
+                metric_groups.append(('allocation',))
+            elif name == 'ratio':
+                metric_groups.append(('ratio',))
+            elif name == 'both':
+                metric_groups.append(('allocation', 'ratio'))
 
         if subwatersheds_shp is None:
             source_uci = Path(self.config['source_uci'])
@@ -778,26 +793,86 @@ class PeakFlowAllocation:
 
             return (x_min, x_max, y_min, new_y_max)
 
+        def label_candidates(geometry):
+            """Return interior label candidates ordered from center outward."""
+            origin = geometry.representative_point()
+            min_x, min_y, max_x, max_y = geometry.bounds
+            candidates = [origin]
+            fractions = (0.25, 0.375, 0.5, 0.625, 0.75)
+            points = [
+                Point(
+                    min_x + x * (max_x - min_x),
+                    min_y + y * (max_y - min_y))
+                for x in fractions for y in fractions]
+            points = [point for point in points if geometry.covers(point)]
+            points.sort(key=lambda point: point.distance(origin))
+            for point in points:
+                if all(point.distance(candidate) > 0 for candidate in candidates):
+                    candidates.append(point)
+            return candidates
+
+        def place_labels(ax, labels):
+            """Iteratively move conflicting labels to interior candidates."""
+            if not labels or not avoid_label_overlap:
+                return
+            ax.figure.canvas.draw()
+            renderer = ax.figure.canvas.get_renderer()
+            for _ in range(4):
+                changed = False
+                for index, label in enumerate(labels):
+                    text = label['text']
+                    old_position = text.get_position()
+                    other_boxes = [
+                        other['text'].get_window_extent(renderer).expanded(1.04, 1.08)
+                        for other_index, other in enumerate(labels)
+                        if other_index != index]
+
+                    def overlap_count():
+                        box = text.get_window_extent(renderer).expanded(1.04, 1.08)
+                        return sum(box.overlaps(other_box) for other_box in other_boxes)
+
+                    best_position = old_position
+                    best_count = overlap_count()
+                    if best_count == 0:
+                        continue
+                    for point in label['candidates']:
+                        text.set_position((point.x, point.y))
+                        count = overlap_count()
+                        if count < best_count:
+                            best_position = (point.x, point.y)
+                            best_count = count
+                            if count == 0:
+                                break
+                    text.set_position(best_position)
+                    changed = changed or best_position != old_position
+                if not changed:
+                    break
+
         def add_reach_labels(ax):
             """Label each subwatershed with its upstream reach number."""
             if not label_reaches:
                 return
+            labels = []
             for _, row in merged.iterrows():
                 reach_id = row.get('reach_id')
                 if pd.notna(reach_id):
-                    point = row.geometry.representative_point()
-                    ax.text(
+                    candidates = label_candidates(row.geometry)
+                    point = candidates[0]
+                    text = ax.text(
                         point.x, point.y, str(int(reach_id)),
                         fontsize=5, ha='center', va='center',
                         color='white', zorder=6,
                         path_effects=[
                             path_effects.withStroke(
                                 linewidth=0.8, foreground='black')])
+                    labels.append({'text': text, 'candidates': candidates})
+            place_labels(ax, labels)
 
         def add_value_labels(ax, metric):
             """Label each subwatershed with its allocation and/or ratio."""
             if not label_reaches:
                 return
+            labels = []
             for _, row in merged.iterrows():
                 reach_id = row.get('reach_id')
                 if not pd.notna(reach_id):
@@ -807,23 +882,26 @@ class PeakFlowAllocation:
                 if metric == 'allocation':
                     if pd.isna(alloc):
                         continue
-                    text = f'{alloc:.1f}'
+                    label = f'{alloc:.1f}'
                 elif metric == 'ratio':
                     if pd.isna(ratio):
                         continue
-                    text = f'{ratio:.2f}%'
+                    label = f'{ratio:.2f}%'
                 else:
                     if pd.isna(alloc) and pd.isna(ratio):
                         continue
-                    text = f'{alloc:.1f}\n({ratio:.2f}%)'
-                point = row.geometry.representative_point()
-                ax.text(
-                    point.x, point.y, text,
+                    label = f'{alloc:.1f}\n({ratio:.2f}%)'
+                candidates = label_candidates(row.geometry)
+                point = candidates[0]
+                text = ax.text(
+                    point.x, point.y, label,
                     fontsize=4.5, ha='center', va='center',
                     color='white', zorder=6,
                     path_effects=[
                         path_effects.withStroke(
                             linewidth=0.8, foreground='black')])
+                labels.append({'text': text, 'candidates': candidates})
+            place_labels(ax, labels)
 
         def add_total_label(ax):
             """Add the total peak-flow volume overlay."""
@@ -861,25 +939,25 @@ class PeakFlowAllocation:
                 bbox=dict(boxstyle='round', facecolor='white',
                           edgecolor='black', alpha=0.85))
 
-        # Reference subwatershed / reach map.
-        fig, ax = plt.subplots(figsize=figsize)
-        limits = setup_base_layers(ax)
-        subwatersheds.plot(
-            ax=ax, facecolor=subwatershed_fill, edgecolor=subwatershed_edge,
-            linewidth=0.5, zorder=3)
-        if reaches is not None:
-            reaches.plot(
-                ax=ax, color=reach_color, linewidth=reach_linewidth,
-                alpha=0.7, zorder=4)
-        add_reach_labels(ax)
-        ax.set_xlim(limits[0], limits[1])
-        ax.set_ylim(limits[2], limits[3])
-        add_title(ax, f'{watershed_name} HSPF Subwatersheds')
-        ax.set_axis_off()
-        ref_path = output_dir / f'{base_name}_subwatersheds.png'
-        fig.savefig(ref_path, dpi=300, bbox_inches='tight')
-        plt.close(fig)
-        paths.append(ref_path)
+        if create_subwatersheds:
+            fig, ax = plt.subplots(figsize=figsize)
+            limits = setup_base_layers(ax)
+            subwatersheds.plot(
+                ax=ax, facecolor=subwatershed_fill, edgecolor=subwatershed_edge,
+                linewidth=0.5, zorder=3)
+            if reaches is not None:
+                reaches.plot(
+                    ax=ax, color=reach_color, linewidth=reach_linewidth,
+                    alpha=0.7, zorder=4)
+            add_reach_labels(ax)
+            ax.set_xlim(limits[0], limits[1])
+            ax.set_ylim(limits[2], limits[3])
+            add_title(ax, f'{watershed_name} HSPF Subwatersheds')
+            ax.set_axis_off()
+            ref_path = output_dir / f'{base_name}_subwatersheds.png'
+            fig.savefig(ref_path, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+            paths.append(ref_path)
 
         # Metric maps.
         metric_titles = {

@@ -1,0 +1,573 @@
+operation,activity,name,sub1,sub2,max_sub1,max_sub2,kind,units_english,units_metric,description
+PERLND,MSTLAY,MST,1,1,5,1,state,lb/ac,kg/ha,"Water in surface, upper principal,upper auxiliary, lower, andgroundwater storages"
+PERLND,MSTLAY,MST,2,1,5,1,state,lb/ac,kg/ha,"Water in surface, upper principal,upper auxiliary, lower, andgroundwater storages"
+PERLND,MSTLAY,MST,3,1,5,1,state,lb/ac,kg/ha,"Water in surface, upper principal,upper auxiliary, lower, andgroundwater storages"
+PERLND,MSTLAY,MST,4,1,5,1,state,lb/ac,kg/ha,"Water in surface, upper principal,upper auxiliary, lower, andgroundwater storages"
+PERLND,MSTLAY,MST,5,1,5,1,state,lb/ac,kg/ha,"Water in surface, upper principal,upper auxiliary, lower, andgroundwater storages"
+PERLND,MSTLAY,FRAC,1,1,8,1,state,/ivl,/ivl,"Fractional fluxes through soil: FSO,FSP,FII,FUP,FIO,FLP,FLDP,FAO"
+PERLND,MSTLAY,FRAC,2,1,8,1,state,/ivl,/ivl,"Fractional fluxes through soil: FSO,FSP,FII,FUP,FIO,FLP,FLDP,FAO"
+PERLND,MSTLAY,FRAC,3,1,8,1,state,/ivl,/ivl,"Fractional fluxes through soil: FSO,FSP,FII,FUP,FIO,FLP,FLDP,FAO"
+PERLND,MSTLAY,FRAC,4,1,8,1,state,/ivl,/ivl,"Fractional fluxes through soil: FSO,FSP,FII,FUP,FIO,FLP,FLDP,FAO"
+PERLND,MSTLAY,FRAC,5,1,8,1,state,/ivl,/ivl,"Fractional fluxes through soil: FSO,FSP,FII,FUP,FIO,FLP,FLDP,FAO"
+PERLND,MSTLAY,FRAC,6,1,8,1,state,/ivl,/ivl,"Fractional fluxes through soil: FSO,FSP,FII,FUP,FIO,FLP,FLDP,FAO"
+PERLND,MSTLAY,FRAC,7,1,8,1,state,/ivl,/ivl,"Fractional fluxes through soil: FSO,FSP,FII,FUP,FIO,FLP,FLDP,FAO"
+PERLND,MSTLAY,FRAC,8,1,8,1,state,/ivl,/ivl,"Fractional fluxes through soil: FSO,FSP,FII,FUP,FIO,FLP,FLDP,FAO"
+PERLND,PQUAL,SQO,NQOF,1,NQOF,1,state,qty/ac,qty/ha,Storage of QUALOF on the surface
+PERLND,PQUAL,IOQC,NQIF,1,NQIF,1,flux,qty/ft3,qty/l,QUALIF outflow concentration
+PERLND,PQUAL,AOQC,NQGW,1,NQGW,1,flux,qty/ft3,qty/l,QUALGW outflow concentration
+PERLND,PQUAL,SOQSP,NQSD,1,NQSD,1,flux,qty/ton,qty/tonne,QUALSD outflow potency factor
+PERLND,PQUAL,WASHQS,NQSD,1,NQSD,1,flux,qty/ac.ivld,qty/ha.ivld,Removal of QUALSD by association with detached sediment washoff
+PERLND,PQUAL,SCRQS,NQSD,1,NQSD,1,flux,qty/ac.ivld,qty/ha.ivld,Removal of QUALSD by association with scour of matrix soil
+PERLND,PQUAL,SOQS,NQSD,1,NQSD,1,flux,qty/ac.ivld,qty/ha.ivld,Total flux of QUALSD from surface
+PERLND,PQUAL,SOQO,NQOF,1,NQOF,1,flux,qty/ac.ivld,qty/ha.ivld,Washoff of QUALOF from surface
+PERLND,PQUAL,SOQOC,NQOF,1,NQOF,1,flux,qty/ft3,qty/l,Concentration of QUALOF in surface outflow
+PERLND,PQUAL,SOQUAL,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Total outflow of QUAL from the surface
+PERLND,PQUAL,SOQC,NQ,1,NQ,1,flux,qty/ft3,qty/l,Concentration of QUAL (QUALSD+QUALOF) in surface outflow
+PERLND,PQUAL,IOQUAL,NQIF,1,NQIF,1,flux,qty/ac.ivld,qty/ha.ivld,Outflow of QUAL in interflow(QUALIF)
+PERLND,PQUAL,AOQUAL,NQGW,1,NQGW,1,flux,qty/ac.ivld,qty/ha.ivld,Outflow of QUAL in active ground-(QUALGW)
+PERLND,PQUAL,POQUAL,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Total flux of QUAL from the PLS
+PERLND,PQUAL,POQC,NQ,1,NQ,1,flux,qty/ft3,qty/l,Concentration of QUAL (total) in total outflow from PLS
+PERLND,PQUAL,PQADDR,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Dry atmospheric deposition of QUAL
+PERLND,PQUAL,PQADWT,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Wet atmospheric deposition of QUAL
+PERLND,PQUAL,PQADEP,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Total atmospheric deposition of QUAL
+PERLND,PQUAL,ISQO,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Total inflow of QUAL
+PERLND,PSTEMP,AIRTC,1,1,1,1,flux,DegF,DegC,Air temperature on the PLS
+PERLND,PSTEMP,SLTMP,1,1,1,1,flux,DegF,DegC,Surface layer soil temperature
+PERLND,PSTEMP,ULTMP,1,1,1,1,flux,DegF,DegC,Upper layer soil temperature
+PERLND,PSTEMP,LGTMP,1,1,1,1,flux,DegF,DegC,Lower and groundwater layer soil temperature
+PERLND,PWATER,PERS,1,1,1,1,state,in,mm,Total water stored in the PLS
+PERLND,PWATER,CEPS,1,1,1,1,state,in,mm,Interception storage
+PERLND,PWATER,SURS,1,1,1,1,state,in,mm,Surface (overland flow) storage
+PERLND,PWATER,UZS,1,1,1,1,state,in,mm,Upper zone storage
+PERLND,PWATER,IFWS,1,1,1,1,state,in,mm,Interflow storage
+PERLND,PWATER,LZS,1,1,1,1,state,in,mm,Lower zone storage
+PERLND,PWATER,AGWS,1,1,1,1,state,in,mm,Active groundwater storage
+PERLND,PWATER,TGWS,1,1,1,1,state,in,mm,Total groundwater storage (HWTFG=1)
+PERLND,PWATER,GWEL,1,1,1,1,state,ft,m,Groundwater elevation (HWTFG=1)
+PERLND,PWATER,GWVS,1,1,1,1,state,in,mm,Groundwater variable storage index
+PERLND,PWATER,INFFAC,1,1,1,1,state,none,none,Adjustment factor for infiltration index due to frozen ground (CSNOFG=1)
+PERLND,PWATER,PETADJ,1,1,1,1,state,none,none,Adjustment factor for potential ET
+PERLND,PWATER,RZWS,1,1,1,1,state,in,mm,Root zone water storage (IRRGFG=2)
+PERLND,PWATER,RPARM,1,1,1,1,flux,in/ivld,mm/ivld,Current value of maximum lower zone E-T opportunity
+PERLND,PWATER,SUPY,1,1,1,1,flux,in/ivld,mm/ivld,"Water supply to soil surface (If CSNOFG = 0, same as precipitation.)"
+PERLND,PWATER,SURO,1,1,1,1,flux,in/ivld,mm/ivld,Surface outflow
+PERLND,PWATER,IFWO,1,1,1,1,flux,in/ivld,mm/ivld,Interflow outflow
+PERLND,PWATER,AGWO,1,1,1,1,flux,in/ivld,mm/ivld,Active groundwater outflow
+PERLND,PWATER,PERO,1,1,1,1,flux,in/ivld,mm/ivld,Total outflow from PLS
+PERLND,PWATER,IGWI,1,1,1,1,flux,in/ivld,mm/ivld,Inflow to inactive (deep) GW
+PERLND,PWATER,PET,1,1,1,1,flux,in/ivld,mm/ivld,"Potential E-T, adjusted for snow cover and air temperature"
+PERLND,PWATER,CEPE,1,1,1,1,flux,in/ivld,mm/ivld,Evap. from interception storage
+PERLND,PWATER,SURET,1,1,1,1,flux,in/ivld,mm/ivld,Evap. from surface storage (HWTFG=1)
+PERLND,PWATER,UZET,1,1,1,1,flux,in/ivld,mm/ivld,E-T from upper zone
+PERLND,PWATER,LZET,1,1,1,1,flux,in/ivld,mm/ivld,E-T from lower zone
+PERLND,PWATER,AGWET,1,1,1,1,flux,in/ivld,mm/ivld,E-T from active groundwater storage
+PERLND,PWATER,BASET,1,1,1,1,flux,in/ivld,mm/ivld,E-T taken from active groundwater outflow (baseflow)
+PERLND,PWATER,TAET,1,1,1,1,flux,in/ivld,mm/ivld,Total simulated E-T
+PERLND,PWATER,IFWI,1,1,1,1,flux,in/ivld,mm/ivld,Interflow inflow (excluding any lateral inflow)
+PERLND,PWATER,UZI,1,1,1,1,flux,in/ivld,mm/ivld,Upper zone inflow
+PERLND,PWATER,INFIL,1,1,1,1,flux,in/ivld,mm/ivld,Infiltration to the soil
+PERLND,PWATER,PERC,1,1,1,1,flux,in/ivld,mm/ivld,Percolation from upper to lower zone
+PERLND,PWATER,LZI,1,1,1,1,flux,in/ivld,mm/ivld,Lower zone inflow
+PERLND,PWATER,AGWI,1,1,1,1,flux,in/ivld,mm/ivld,Active groundwater inflow (excluding any lateral inflow)
+PERLND,PWATER,SURI,1,1,1,1,flux,in/ivld,mm/ivld,Surface inflow (including any lateral inflow)
+PERLND,PWATER,IRRDEM,1,1,1,1,flux,in/ivld,mm/ivld,Irrigation demand (IRRGFG > 0)
+PERLND,PWATER,IRSHRT,1,1,1,1,flux,in/ivld,mm/ivld,Irrigation shortfall (IRRGFG > 0)
+PERLND,PWATER,IRDRAW,1,1,3,1,flux,in/ivld,mm/ivld,Withdrawal of irrigation water from: 1) imports; 2) groundwater; 3) RCHRES (IRRGFG > 0)
+PERLND,PWATER,IRDRAW,2,1,3,1,flux,in/ivld,mm/ivld,Withdrawal of irrigation water from: 1) imports; 2) groundwater; 3) RCHRES (IRRGFG > 0)
+PERLND,PWATER,IRDRAW,3,1,3,1,flux,in/ivld,mm/ivld,Withdrawal of irrigation water from: 1) imports; 2) groundwater; 3) RCHRES (IRRGFG > 0)
+PERLND,PWATER,IRRAPP,1,1,6,1,flux,in/ivld,mm/ivld,Application of irrigation water to: 1) interception storage; 2) soil surface; 3) upper zone; 4) lower zone; 5) groundwater; 6) total
+PERLND,PWATER,IRRAPP,2,1,6,1,flux,in/ivld,mm/ivld,Application of irrigation water to: 1) interception storage; 2) soil surface; 3) upper zone; 4) lower zone; 5) groundwater; 6) total
+PERLND,PWATER,IRRAPP,3,1,6,1,flux,in/ivld,mm/ivld,Application of irrigation water to: 1) interception storage; 2) soil surface; 3) upper zone; 4) lower zone; 5) groundwater; 6) total
+PERLND,PWATER,IRRAPP,4,1,6,1,flux,in/ivld,mm/ivld,Application of irrigation water to: 1) interception storage; 2) soil surface; 3) upper zone; 4) lower zone; 5) groundwater; 6) total
+PERLND,PWATER,IRRAPP,5,1,6,1,flux,in/ivld,mm/ivld,Application of irrigation water to: 1) interception storage; 2) soil surface; 3) upper zone; 4) lower zone; 5) groundwater; 6) total
+PERLND,PWATER,IRRAPP,6,1,6,1,flux,in/ivld,mm/ivld,Application of irrigation water to: 1) interception storage; 2) soil surface; 3) upper zone; 4) lower zone; 5) groundwater; 6) total
+PERLND,PWATGAS,SOTMP,1,1,1,1,state,DegF,DegC,Temperature of surface outflow
+PERLND,PWATGAS,IOTMP,1,1,1,1,state,DegF,DegC,Temperature of interflow outflow
+PERLND,PWATGAS,AOTMP,1,1,1,1,state,DegF,DegC,Temperature of active groundwater outflow
+PERLND,PWATGAS,SODOX,1,1,1,1,state,mg/l,mg/l,DO concentration in surface outflow
+PERLND,PWATGAS,SOCO2,1,1,1,1,state,mg/l,mg/l,CO2 concentration in surface outflow
+PERLND,PWATGAS,IODOX,1,1,1,1,state,mg/l,mg/l,DO concentration in interflow outflow
+PERLND,PWATGAS,IOCO2,1,1,1,1,state,mg/l,mg/l,CO2 concentration in interflow outflow
+PERLND,PWATGAS,AODOX,1,1,1,1,state,mg/l,mg/l,DO concentration in active groundwater outflow
+PERLND,PWATGAS,AOCO2,1,1,1,1,state,mg/l,mg/l,CO2 concentration in active groundwater outflow
+PERLND,PWATGAS,SOHT,1,1,1,1,flux,BTU/ac.ivld,kcal/ha.ivld,Heat energy in surface outflow (relative to freezing point)
+PERLND,PWATGAS,IOHT,1,1,1,1,flux,BTU/ac.ivld,kcal/ha.ivld,Heat energy in interflow outflow
+PERLND,PWATGAS,AOHT,1,1,1,1,flux,BTU/ac.ivld,kcal/ha.ivld,Heat energy in active groundwater outflow
+PERLND,PWATGAS,POHT,1,1,1,1,flux,BTU/ac.ivld,kcal/ha.ivld,Heat energy in total outflow from PLS
+PERLND,PWATGAS,SODOXM,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,Flux of DO in surface outflow
+PERLND,PWATGAS,SOCO2M,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,Flux of CO2 in surface outflow
+PERLND,PWATGAS,IODOXM,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,Flux of DO in interflow outflow
+PERLND,PWATGAS,IOCO2M,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,Flux of CO2 in interflow outflow
+PERLND,PWATGAS,AODOXM,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,Flux of DO in active groundwater outflow
+PERLND,PWATGAS,AOCO2M,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,Flux of CO2 in active groundwater outflow
+PERLND,PWATGAS,PODOXM,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,DO in total outflow from PLS
+PERLND,PWATGAS,POCO2M,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,CO2 in total outflow from PLS
+PERLND,SEDMNT,DETS,1,1,1,1,state,tons/ac,tonnes/ha,Storage of detached sediment
+PERLND,SEDMNT,STCAP,1,1,1,1,state,tons/ac.ivld,tonnes/ha.ivld,Sediment transport capacity by surface runoff
+PERLND,SEDMNT,COVER,1,1,1,1,state,none,none,Cover fraction
+PERLND,SEDMNT,WSSD,1,1,1,1,flux,tons/ac.ivld,tonnes/ha.ivld,Washoff of detached sediment
+PERLND,SEDMNT,SCRSD,1,1,1,1,flux,tons/ac.ivld,tonnes/ha.ivld,Scour of matrix (attached) soil
+PERLND,SEDMNT,SOSED,1,1,1,1,flux,tons/ac.ivld,tonnes/ha.ivld,Total removal of soil and sediment
+PERLND,SEDMNT,DET,1,1,1,1,flux,tons/ac.ivld,tonnes/ha.ivld,Quantity of sediment detached from soil matrix by rainfall impact
+PERLND,SEDMNT,NVSI,1,1,1,1,flux,tons/ac.ivld,tonnes/ha.ivld,Net vertical sediment input
+PERLND,SNOW,PACK,1,1,1,1,state,in,mm,Total contents of pack (water equiv)
+PERLND,SNOW,PACKF,1,1,1,1,state,in,mm,"Frozen contents of pack, ie. snow + ice (water equivalent)"
+PERLND,SNOW,PACKW,1,1,1,1,state,in,mm,Liquid water in pack
+PERLND,SNOW,PACKI,1,1,1,1,state,in,mm,Ice in pack (water equivalent)
+PERLND,SNOW,PDEPTH,1,1,1,1,state,in,mm,Pack depth
+PERLND,SNOW,COVINX,1,1,1,1,state,in,mm,Snow cover index (water equivalent)
+PERLND,SNOW,NEGHTS,1,1,1,1,state,in,mm,Negative heat storage (water equivalent)
+PERLND,SNOW,XLNMLT,1,1,1,1,state,in,mm,Maximum increment to ice in pack
+PERLND,SNOW,RDENPF,1,1,1,1,state,none,none,Relative density of frozen contents of pack (PACKF/PDEPTH)
+PERLND,SNOW,SKYCLR,1,1,1,1,state,none,none,Fraction of sky assumed clear
+PERLND,SNOW,SNOCOV,1,1,1,1,state,none,none,Fraction of Land-segment covered by pack
+PERLND,SNOW,DULL,1,1,1,1,state,none,none,Dullness index of the pack (available only if SNOPFG= 0)
+PERLND,SNOW,ALBEDO,1,1,1,1,state,none,none,Albedo of the pack (available only if SNOPFG= 0)
+PERLND,SNOW,PAKTMP,1,1,1,1,state,DegF,DegC,Mean temperature of the pack
+PERLND,SNOW,SNOTMP,1,1,1,1,state,DegF,DegC,Max air temperature for snowfall to occur
+PERLND,SNOW,DEWTMP,1,1,1,1,state,DegF,DegC,Effective dewpoint temperature
+PERLND,SNOW,SNOWF,1,1,1,1,flux,in/ivld,mm/ivld,"Snowfall, water equivalent"
+PERLND,SNOW,PRAIN,1,1,1,1,flux,in/ivld,mm/ivld,Rainfall directly onto the snowpack
+PERLND,SNOW,SNOWE,1,1,1,1,flux,in/ivld,mm/ivld,"Evaporation from PACKF (sublimation), water equivalent (available only if SNOPFG= 0)"
+PERLND,SNOW,WYIELD,1,1,1,1,flux,in/ivld,mm/ivld,Water yielded by the pack (released to the land-surface)
+PERLND,SNOW,MELT,1,1,1,1,flux,in/ivld,mm/ivld,Quantity of melt from PACKF (water equivalent)
+PERLND,SNOW,RAINF,1,1,1,1,flux,in/ivld,mm/ivld,Rainfall
+IMPLND,IQUAL,SQO,NQOF,1,NQOF,1,state,qty/ac,qty/ha,Storage of QUALOF on the surface
+IMPLND,IQUAL,SOQSP,NQSD,1,NQSD,1,flux,qty/ton,qty/tonne,QUALSD outflow potency factor\tonne
+IMPLND,IQUAL,SOQS,NQSD,1,NQSD,1,flux,qty/ac.ivld,qty/ha.ivld,Total flux of QUALSD from surface
+IMPLND,IQUAL,SOQO,NQOF,1,NQOF,1,flux,qty/ac.ivld,qty/ha.ivld,Washoff of QUALOF from surface
+IMPLND,IQUAL,SOQOC,NQOF,1,NQOF,1,flux,qty/ft3,qty/l,Concentration of QUALOF in surface outflow
+IMPLND,IQUAL,SOQUAL,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Total outflow of QUAL from the surface
+IMPLND,IQUAL,SOQC,NQ,1,NQ,1,flux,qty/ft3,qty/l,Concentration of QUAL in surface outflow (QUALSD+QUALOF)
+IMPLND,IQUAL,IQADDR,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Dry atmospheric deposition of QUAL
+IMPLND,IQUAL,IQADWT,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Wet atmospheric deposition of QUAL
+IMPLND,IQUAL,IQADEP,NQ,1,NQ,1,flux,qty/ac.ivld,qty/ha.ivld,Total atmospheric deposition of QUAL
+IMPLND,IWATER,IMPS,1,1,1,1,state,in,mm,Total water stored in the ILS
+IMPLND,IWATER,RETS,1,1,1,1,state,in,mm,Retention storage
+IMPLND,IWATER,SURS,1,1,1,1,state,in,mm,Surface (overland flow) storage
+IMPLND,IWATER,PETADJ,1,1,1,1,state,none,none,Adjustment factor for potential ET
+IMPLND,IWATER,SUPY,1,1,1,1,flux,in/ivld,mm/ivld,"Water supply to soil surface (If CSNOFG is 0, same as precipitation.)"
+IMPLND,IWATER,SURO,1,1,1,1,flux,in/ivld,mm/ivld,Surface outflow
+IMPLND,IWATER,PET,1,1,1,1,flux,in/ivld,mm/ivld,"Potential E-T, adjusted for snow cover and air temperature"
+IMPLND,IWATER,IMPEV,1,1,1,1,flux,in/ivld,mm/ivld,Total simulated E-T
+IMPLND,IWATER,SURI,1,1,1,1,flux,in/ivld,mm/ivld,Surface inflow (including any lateral inflow if RTLIFG=1)
+IMPLND,IWTGAS,SOTMP,1,1,1,1,state,DegF,DegC,Temperature of surface outflow
+IMPLND,IWTGAS,SODOX,1,1,1,1,state,mg/l,mg/l,DO concentration in surface outflow
+IMPLND,IWTGAS,SOCO2,1,1,1,1,state,mg/l,mg/l,CO2 concentration in surface outflow
+IMPLND,IWTGAS,SOHT,1,1,1,1,flux,BTU/ac.ivld,kcal/ha.ivld,Heat energy in surface outflow (relative to freezing point)
+IMPLND,IWTGAS,SODOXM,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,Flux of DO in surface outflow
+IMPLND,IWTGAS,SOCO2M,1,1,1,1,flux,lb/ac.ivld,kg/ha.ivld,Flux of CO2 in surface outflow
+IMPLND,SOLIDS,SLDS,1,1,1,1,state,tons/ac,tonnes/ha,Storage of solids on surface
+IMPLND,SOLIDS,SOSLD,1,1,1,1,flux,tons/ac.ivld,tonnes/ha.ivld,Washoff of solids from surface
+RCHRES,CONS,CON,NCONS,1,NCONS,1,state,concid,concid,Concentration of conservative constituents
+RCHRES,CONS,ICON,NCONS,1,NCONS,1,flux,qty/ivld,qty/ivld,Sum of inflows of conservative constituents
+RCHRES,CONS,COADDR,NCONS,1,NCONS,1,flux,qty/ivld,qty/ivld,Dry atmospheric deposition of conservative
+RCHRES,CONS,COADWT,NCONS,1,NCONS,1,flux,qty/ivld,qty/ivld,Wet atmospheric deposition of conservative
+RCHRES,CONS,COADEP,NCONS,1,NCONS,1,flux,qty/ivld,qty/ivld,Total atmospheric deposition of conservative
+RCHRES,CONS,ROCON,NCONS,1,NCONS,1,flux,qty/ivld,qty/ivld,Total outflow of conservatives
+RCHRES,CONS,OCON,NEXITS,NCONS,NEXITS,NCONS,flux,qty/ivld,qty/ivld,Outflow of conservatives through individual exits (available only if NEXITS > 1)
+RCHRES,GQUAL,DQAL,NGQUAL,1,NGQUAL,1,state,concu/l,concu/l,Dissolved concentration of qual.
+RCHRES,GQUAL,SQAL,1,NGQUAL,6,NGQUAL,state,concu/mg,concu/mg,Concentration of qual on sediment. First subscript selects: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay
+RCHRES,GQUAL,SQAL,2,NGQUAL,6,NGQUAL,state,concu/mg,concu/mg,Concentration of qual on sediment. First subscript selects: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay
+RCHRES,GQUAL,SQAL,3,NGQUAL,6,NGQUAL,state,concu/mg,concu/mg,Concentration of qual on sediment. First subscript selects: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay
+RCHRES,GQUAL,SQAL,4,NGQUAL,6,NGQUAL,state,concu/mg,concu/mg,Concentration of qual on sediment. First subscript selects: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay
+RCHRES,GQUAL,SQAL,5,NGQUAL,6,NGQUAL,state,concu/mg,concu/mg,Concentration of qual on sediment. First subscript selects: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay
+RCHRES,GQUAL,SQAL,6,NGQUAL,6,NGQUAL,state,concu/mg,concu/mg,Concentration of qual on sediment. First subscript selects: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay
+RCHRES,GQUAL,RDQAL,NGQUAL,1,NGQUAL,1,state,qty,qty,Total storage of qual in dissolved form
+RCHRES,GQUAL,RSQAL,1,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,2,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,3,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,4,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,5,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,6,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,7,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,8,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,9,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,10,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,11,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RSQAL,12,NGQUAL,12,NGQUAL,state,qty,qty,"Storage of sediment-associated qual. First subscript selects: 1 susp sand, 2 susp silt, 3 susp clay, 4 susp total, 5 bed sand, 6 bed silt,7 bed clay, 8 bed total,9 total on sand, 10 total on silt,11 total on clay, 12 grand total"
+RCHRES,GQUAL,RRQAL,NGQUAL,1,NGQUAL,1,state,qty,qty,Total storage of qual in the RCHRES
+RCHRES,GQUAL,IDQAL,NGQUAL,1,NGQUAL,1,flux,qty/ivld,qty/ivld,Sum of inflows of dissolved qual
+RCHRES,GQUAL,ISQAL,1,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,"Sum of inflows of qual associated with: 1 Sand, 2 Silt, 3 Clay, 4 Total"
+RCHRES,GQUAL,ISQAL,2,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,"Sum of inflows of qual associated with: 1 Sand, 2 Silt, 3 Clay, 4 Total"
+RCHRES,GQUAL,ISQAL,3,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,"Sum of inflows of qual associated with: 1 Sand, 2 Silt, 3 Clay, 4 Total"
+RCHRES,GQUAL,ISQAL,4,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,"Sum of inflows of qual associated with: 1 Sand, 2 Silt, 3 Clay, 4 Total"
+RCHRES,GQUAL,TIQAL,NGQUAL,1,NGQUAL,1,flux,qty/ivld,qty/ivld,Total inflow of qual
+RCHRES,GQUAL,PDQAL,NGQUAL,1,NGQUAL,1,flux,qty/ivld,qty/ivld,"Input to this qual in this RCHRES, from decay of parent quals"
+RCHRES,GQUAL,GQADDR,NGQUAL,1,NGQUAL,1,flux,qty/ivld,qty/ivld,Dry atmospheric deposition of qual
+RCHRES,GQUAL,GQADWT,NGQUAL,1,NGQUAL,1,flux,qty/ivld,qty/ivld,Wet atmospheric deposition of qual
+RCHRES,GQUAL,GQADEP,NGQUAL,1,NGQUAL,1,flux,qty/ivld,qty/ivld,Total atmospheric deposition of qual
+RCHRES,GQUAL,DDQAL,1,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of dissolved qual. First subscript selects decay path: 1 hydrolysis 2 oxidation 3 photolysis 4 volatilization 5 biodegradation 6 general (other) 7 total of 1-6 .
+RCHRES,GQUAL,DDQAL,2,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of dissolved qual. First subscript selects decay path: 1 hydrolysis 2 oxidation 3 photolysis 4 volatilization 5 biodegradation 6 general (other) 7 total of 1-6 .
+RCHRES,GQUAL,DDQAL,3,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of dissolved qual. First subscript selects decay path: 1 hydrolysis 2 oxidation 3 photolysis 4 volatilization 5 biodegradation 6 general (other) 7 total of 1-6 .
+RCHRES,GQUAL,DDQAL,4,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of dissolved qual. First subscript selects decay path: 1 hydrolysis 2 oxidation 3 photolysis 4 volatilization 5 biodegradation 6 general (other) 7 total of 1-6 .
+RCHRES,GQUAL,DDQAL,5,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of dissolved qual. First subscript selects decay path: 1 hydrolysis 2 oxidation 3 photolysis 4 volatilization 5 biodegradation 6 general (other) 7 total of 1-6 .
+RCHRES,GQUAL,DDQAL,6,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of dissolved qual. First subscript selects decay path: 1 hydrolysis 2 oxidation 3 photolysis 4 volatilization 5 biodegradation 6 general (other) 7 total of 1-6 .
+RCHRES,GQUAL,DDQAL,7,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of dissolved qual. First subscript selects decay path: 1 hydrolysis 2 oxidation 3 photolysis 4 volatilization 5 biodegradation 6 general (other) 7 total of 1-6 .
+RCHRES,GQUAL,RODQAL,NGQUAL,1,NGQUAL,1,flux,qty/ivld,qty/ivld,Total outflow of dissolved qual from the RCHRES
+RCHRES,GQUAL,DSQAL,1,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,Deposition/scour of qual. First subscript selects carrier: 1 sand 2 silt 3 clay 4 total
+RCHRES,GQUAL,DSQAL,2,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,Deposition/scour of qual. First subscript selects carrier: 1 sand 2 silt 3 clay 4 total
+RCHRES,GQUAL,DSQAL,3,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,Deposition/scour of qual. First subscript selects carrier: 1 sand 2 silt 3 clay 4 total
+RCHRES,GQUAL,DSQAL,4,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,Deposition/scour of qual. First subscript selects carrier: 1 sand 2 silt 3 clay 4 total
+RCHRES,GQUAL,ROSQAL,1,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,Total outflow of sediment-associated qual from RCHRES. First subscript selects carrier: 1 sand 2 silt 3 clay 4 total
+RCHRES,GQUAL,ROSQAL,2,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,Total outflow of sediment-associated qual from RCHRES. First subscript selects carrier: 1 sand 2 silt 3 clay 4 total
+RCHRES,GQUAL,ROSQAL,3,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,Total outflow of sediment-associated qual from RCHRES. First subscript selects carrier: 1 sand 2 silt 3 clay 4 total
+RCHRES,GQUAL,ROSQAL,4,NGQUAL,4,NGQUAL,flux,qty/ivld,qty/ivld,Total outflow of sediment-associated qual from RCHRES. First subscript selects carrier: 1 sand 2 silt 3 clay 4 total
+RCHRES,GQUAL,TROQAL,NGQUAL,1,NGQUAL,1,flux,qty/ivld,qty/ivld,Total outflow of qual
+RCHRES,GQUAL,SQDEC,1,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of sediment-associated qual on: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,SQDEC,2,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of sediment-associated qual on: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,SQDEC,3,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of sediment-associated qual on: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,SQDEC,4,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of sediment-associated qual on: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,SQDEC,5,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of sediment-associated qual on: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,SQDEC,6,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of sediment-associated qual on: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,SQDEC,7,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Decay of sediment-associated qual on: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,ADQAL,1,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Adsorption/desorption between dissolved state and: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,ADQAL,2,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Adsorption/desorption between dissolved state and: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,ADQAL,3,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Adsorption/desorption between dissolved state and: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,ADQAL,4,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Adsorption/desorption between dissolved state and: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,ADQAL,5,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Adsorption/desorption between dissolved state and: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,ADQAL,6,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Adsorption/desorption between dissolved state and: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,ADQAL,7,NGQUAL,7,NGQUAL,flux,qty/ivld,qty/ivld,Adsorption/desorption between dissolved state and: 1 susp sand 2 susp silt 3 susp clay 4 bed sand 5 bed silt 6 bed clay 7 total
+RCHRES,GQUAL,ODQAL,NEXITS,NGQUAL,NEXITS,NGQUAL,flux,qty/ivld,qty/ivld,Outflow of dissolved qual through individual exits. (available only if NEXITS > 1)
+RCHRES,GQUAL,OSQAL,NEXITS,NGQ3,NEXITS,NGQ3,flux,qty/ivld,qty/ivld,"Outflows of sediment-associated qual through individual exits. Second subscript selects: 1 sand, first qual 2 silt, first qual 3 clay, first qual (NGQ3= 4 sand, second qual NGQUAL*3) etc. (available only if NEXITS > 1)"
+RCHRES,GQUAL,TOSQAL,NEXITS,NGQUAL,NEXITS,NGQUAL,flux,qty/ivld,qty/ivld,Total outflows (sand+silt+clay) of sediment-associated qual through individual exits
+RCHRES,HTRCH,TW,1,1,1,1,state,DegF,DegC,Simulated water temperature
+RCHRES,HTRCH,AIRTMP,1,1,1,1,state,DegF,DegC,"Air temperature, adjusted for elev. difference between gage and RCHRES"
+RCHRES,HTRCH,IHEAT,1,1,1,1,flux,BTU/ivld,kcal/ivld,Sum of inflows of heat (relative to freezing)
+RCHRES,HTRCH,HTEXCH,1,1,1,1,flux,BTU/ivld,kcal/ivld,Net heat exchanged with atmosphere and stream bed
+RCHRES,HTRCH,ROHEAT,1,1,1,1,flux,BTU/ivld,kcal/ivld,Total outflow of thermal energy through active exits
+RCHRES,HTRCH,OHEAT,NEXITS,1,NEXITS,1,flux,BTU/ivld,kcal/ivld,Outflow of thermal energy through individual exits (available only if NEXITS > 1)
+RCHRES,HTRCH,HTCF4,1,1,7,1,flux,BTU/ft2/ivld,kcal/m2/ivld,"Components of heat exchange per unit area of surface: 1) total, 2) solar radiation, 3) longwave radiation, 4) evaporation, 5) conduction, 6) percipitation, 7) bed exchange (positive = gain of heat)."
+RCHRES,HTRCH,HTCF4,2,1,7,1,flux,BTU/ft2/ivld,kcal/m2/ivld,"Components of heat exchange per unit area of surface: 1) total, 2) solar radiation, 3) longwave radiation, 4) evaporation, 5) conduction, 6) percipitation, 7) bed exchange (positive = gain of heat)."
+RCHRES,HTRCH,HTCF4,3,1,7,1,flux,BTU/ft2/ivld,kcal/m2/ivld,"Components of heat exchange per unit area of surface: 1) total, 2) solar radiation, 3) longwave radiation, 4) evaporation, 5) conduction, 6) percipitation, 7) bed exchange (positive = gain of heat)."
+RCHRES,HTRCH,HTCF4,4,1,7,1,flux,BTU/ft2/ivld,kcal/m2/ivld,"Components of heat exchange per unit area of surface: 1) total, 2) solar radiation, 3) longwave radiation, 4) evaporation, 5) conduction, 6) percipitation, 7) bed exchange (positive = gain of heat)."
+RCHRES,HTRCH,HTCF4,5,1,7,1,flux,BTU/ft2/ivld,kcal/m2/ivld,"Components of heat exchange per unit area of surface: 1) total, 2) solar radiation, 3) longwave radiation, 4) evaporation, 5) conduction, 6) percipitation, 7) bed exchange (positive = gain of heat)."
+RCHRES,HTRCH,HTCF4,6,1,7,1,flux,BTU/ft2/ivld,kcal/m2/ivld,"Components of heat exchange per unit area of surface: 1) total, 2) solar radiation, 3) longwave radiation, 4) evaporation, 5) conduction, 6) percipitation, 7) bed exchange (positive = gain of heat)."
+RCHRES,HTRCH,HTCF4,7,1,7,1,flux,BTU/ft2/ivld,kcal/m2/ivld,"Components of heat exchange per unit area of surface: 1) total, 2) solar radiation, 3) longwave radiation, 4) evaporation, 5) conduction, 6) percipitation, 7) bed exchange (positive = gain of heat)."
+RCHRES,HTRCH,SHDFAC,1,1,1,1,state,none,none,Effective shading factor – computed by SHADE function
+RCHRES,HYDR,VOL,1,1,1,1,state,ac.ft,Mm3,Volume of water in the RCHRES
+RCHRES,HYDR,CVOL,CAT,1,CAT,1,state,ac.ft,Mm3,Volume of water of each category
+RCHRES,HYDR,DEP,1,1,1,1,state,ft,m,"Depth at specified location, AUX1FG must be 1 to be computed"
+RCHRES,HYDR,STAGE,1,1,1,1,state,ft,m,"Stage (DEP+STCOR), AUX1FG must be 1 to be computed"
+RCHRES,HYDR,AVDEP,1,1,1,1,state,ft,m,"Average depth (volume/surface area), AUX1FG must be 1 to be computed"
+RCHRES,HYDR,TWID,1,1,1,1,state,ft,m,"Mean topwidth (surface area/length), AUX1FG must be 1 to be computed"
+RCHRES,HYDR,HRAD,1,1,1,1,state,ft,m,"Hydraulic radius, AUX1FG must be 1 to be computed"
+RCHRES,HYDR,SAREA,1,1,1,1,state,ac,ha,"Surface area, AUX1FG must be 1 to be computed"
+RCHRES,HYDR,AVVEL,1,1,1,1,state,ft/s,m/s,Average velocity (RO/VOL)
+RCHRES,HYDR,AVSECT,1,1,1,1,state,ft2,m2,"Average cross-sectional area of RCHRES (VOL/length), AUX2FG must be 1 to be computed"
+RCHRES,HYDR,USTAR,1,1,1,1,state,ft/s,m/s,"Shear velocity,AUX3FG must be 1 to be computed"
+RCHRES,HYDR,TAU,1,1,1,1,state,lb/ft2,kg/m2,"Bed shear stress,AUX3FG must be 1 to be computed"
+RCHRES,HYDR,RO,1,1,1,1,state,ft3/s,m3/s,Total rate of outflow from RCHRES
+RCHRES,HYDR,CRO,CAT,1,CAT,1,state,ft3/s,m3/s,Rates of outflow of each category
+RCHRES,HYDR,O,NEXITS,1,NEXITS,1,state,ft3/s,m3/s,Rates of outflow through individual exits (available only if NEXITS > 1)
+RCHRES,HYDR,CO,NEXITS,CAT,NEXITS,CAT,state,ft3/s,m3/s,Rates of outflow through individual exits of each category (available only if NEXITS > 1)
+RCHRES,HYDR,CDFVOL,NEXITS,CAT,NEXITS,CAT,state,ac.ft,Mm3,Current cumulative deficit of each category demand by exit
+RCHRES,HYDR,IVOL,1,1,1,1,flux,ac.ft/ivld,Mm3/ivld,Sum of inflows to the RCHRES
+RCHRES,HYDR,CIVOL,CAT,1,CAT,1,flux,ac.ft/ivld,Mm3/ivld,Sum of inflows of water belonging to each category
+RCHRES,HYDR,PRSUPY,1,1,1,1,flux,ac.ft/ivld,Mm3/ivld,Volume of water contributed by precipitation on surface
+RCHRES,HYDR,VOLEV,1,1,1,1,flux,ac.ft/ivld,Mm3/ivld,Volume of water lost by evaporation
+RCHRES,HYDR,ROVOL,1,1,1,1,flux,ac.ft/ivld,Mm3/ivld,Total volume of outflow from RCHRES
+RCHRES,HYDR,CROVOL,CAT,1,CAT,1,flux,ac.ft/ivld,Mm3/ivld,Total volume of outflow from RCHRES of each category
+RCHRES,HYDR,OVOL,NEXITS,1,NEXITS,1,flux,ac.ft/ivld,Mm3/ivld,Volume of outflow through individual exits (available only if NEXITS > 1)
+RCHRES,HYDR,COVOL,NEXITS,CAT,NEXITS,CAT,flux,ac.ft/ivld,Mm3/ivld,Volume of outflow through individual exits of each category (available onlyif NEXITS > 1)
+RCHRES,HYDR,RIRDEM,1,1,1,1,flux,ac.ft/ivld,Mm3/ivld,Irrigation withdrawal demanded by all PERLNDs from the RCHRES
+RCHRES,HYDR,RIRSHT,1,1,1,1,flux,ac.ft/ivld,Mm3/ivld,"Shortage in irrigation withdrawal,i.e. total demand RIRDEM minus actualwithdrawal OVOL(IREXIT)"
+RCHRES,NUTRX,DNUST,1,1,6,1,state,mg/l,mg/l,"Dissolved nutrient concentrations;Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4, 5=NH4+, 6=NH3."
+RCHRES,NUTRX,DNUST,2,1,6,1,state,mg/l,mg/l,"Dissolved nutrient concentrations;Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4, 5=NH4+, 6=NH3."
+RCHRES,NUTRX,DNUST,3,1,6,1,state,mg/l,mg/l,"Dissolved nutrient concentrations;Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4, 5=NH4+, 6=NH3."
+RCHRES,NUTRX,DNUST,4,1,6,1,state,mg/l,mg/l,"Dissolved nutrient concentrations;Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4, 5=NH4+, 6=NH3."
+RCHRES,NUTRX,DNUST,5,1,6,1,state,mg/l,mg/l,"Dissolved nutrient concentrations;Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4, 5=NH4+, 6=NH3."
+RCHRES,NUTRX,DNUST,6,1,6,1,state,mg/l,mg/l,"Dissolved nutrient concentrations;Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4, 5=NH4+, 6=NH3."
+RCHRES,NUTRX,SNH4,1,1,3,1,state,mg/kg,mg/kg,"Particulate NH4-N concentrations; Subscript 1: 1=sand, 2=silt, 3=clay"
+RCHRES,NUTRX,SNH4,2,1,3,1,state,mg/kg,mg/kg,"Particulate NH4-N concentrations; Subscript 1: 1=sand, 2=silt, 3=clay"
+RCHRES,NUTRX,SNH4,3,1,3,1,state,mg/kg,mg/kg,"Particulate NH4-N concentrations; Subscript 1: 1=sand, 2=silt, 3=clay"
+RCHRES,NUTRX,SPO4,1,1,3,1,state,mg/kg,mg/kg,"Particulate PO4-P concentrations; Subscript 1: 1=sand, 2=silt, 3=clay"
+RCHRES,NUTRX,SPO4,2,1,3,1,state,mg/kg,mg/kg,"Particulate PO4-P concentrations; Subscript 1: 1=sand, 2=silt, 3=clay"
+RCHRES,NUTRX,SPO4,3,1,3,1,state,mg/kg,mg/kg,"Particulate PO4-P concentrations; Subscript 1: 1=sand, 2=silt, 3=clay"
+RCHRES,NUTRX,DNUST2,1,1,6,1,state,lbs,kg,Dissolved nutrient storages; same subscript values as DNUST
+RCHRES,NUTRX,DNUST2,2,1,6,1,state,lbs,kg,Dissolved nutrient storages; same subscript values as DNUST
+RCHRES,NUTRX,DNUST2,3,1,6,1,state,lbs,kg,Dissolved nutrient storages; same subscript values as DNUST
+RCHRES,NUTRX,DNUST2,4,1,6,1,state,lbs,kg,Dissolved nutrient storages; same subscript values as DNUST
+RCHRES,NUTRX,DNUST2,5,1,6,1,state,lbs,kg,Dissolved nutrient storages; same subscript values as DNUST
+RCHRES,NUTRX,DNUST2,6,1,6,1,state,lbs,kg,Dissolved nutrient storages; same subscript values as DNUST
+RCHRES,NUTRX,RSNH4,1,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,2,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,3,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,4,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,5,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,6,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,7,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,8,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,9,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,10,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,11,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSNH4,12,1,12,1,state,lbs,kg,"Particulate NH4-N storages; 1-3= suspended sand, silt, clay, 4=total suspended, 5-7=bed sand, silt, clay, 8=total bed, 9-11=total sand, total silt, total clay, 12=grand total"
+RCHRES,NUTRX,RSPO4,1,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,2,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,3,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,4,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,5,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,6,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,7,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,8,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,9,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,10,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,11,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,RSPO4,12,1,12,1,state,lbs,kg,Particulate PO4-P storages; same subscript values as RSNH4
+RCHRES,NUTRX,NUST,1,1,4,1,state,lbs,kg,"Total nutrient storages in RCHRES,(dissolved + particulate);Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4Same subscript values as NUST"
+RCHRES,NUTRX,NUST,2,1,4,1,state,lbs,kg,"Total nutrient storages in RCHRES,(dissolved + particulate);Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4Same subscript values as NUST"
+RCHRES,NUTRX,NUST,3,1,4,1,state,lbs,kg,"Total nutrient storages in RCHRES,(dissolved + particulate);Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4Same subscript values as NUST"
+RCHRES,NUTRX,NUST,4,1,4,1,state,lbs,kg,"Total nutrient storages in RCHRES,(dissolved + particulate);Subscript 1: 1=NO3, 2=TAM, 3=NO2,4=PO4Same subscript values as NUST"
+RCHRES,NUTRX,NUIF2,1,1,4,2,flux,lb/ivld,kg/ivld,"Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total"
+RCHRES,NUTRX,NUIF2,1,2,4,2,flux,lb/ivld,kg/ivld,"Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total"
+RCHRES,NUTRX,NUIF2,2,1,4,2,flux,lb/ivld,kg/ivld,"Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total"
+RCHRES,NUTRX,NUIF2,2,2,4,2,flux,lb/ivld,kg/ivld,"Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total"
+RCHRES,NUTRX,NUIF2,3,1,4,2,flux,lb/ivld,kg/ivld,"Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total"
+RCHRES,NUTRX,NUIF2,3,2,4,2,flux,lb/ivld,kg/ivld,"Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total"
+RCHRES,NUTRX,NUIF2,4,1,4,2,flux,lb/ivld,kg/ivld,"Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total"
+RCHRES,NUTRX,NUIF2,4,2,4,2,flux,lb/ivld,kg/ivld,"Sum of inflows of 1=particulate NH4, 2=particulate PO4 on 1=sand, 2=silt, 3=clay, 4=total"
+RCHRES,NUTRX,TNUIF,1,1,4,1,flux,lb/ivld,kg/ivld,Sum of total inflows of nutrient: Same subscript values as NUST
+RCHRES,NUTRX,TNUIF,2,1,4,1,flux,lb/ivld,kg/ivld,Sum of total inflows of nutrient: Same subscript values as NUST
+RCHRES,NUTRX,TNUIF,3,1,4,1,flux,lb/ivld,kg/ivld,Sum of total inflows of nutrient: Same subscript values as NUST
+RCHRES,NUTRX,TNUIF,4,1,4,1,flux,lb/ivld,kg/ivld,Sum of total inflows of nutrient: Same subscript values as NUST
+RCHRES,NUTRX,NUADDR,1,1,3,1,flux,lb/ivld,kg/ivld,"Dry atmospheric deposition of nutrient; Subscript 1: 1=NO3, 2=TAM, 3=PO4"
+RCHRES,NUTRX,NUADDR,2,1,3,1,flux,lb/ivld,kg/ivld,"Dry atmospheric deposition of nutrient; Subscript 1: 1=NO3, 2=TAM, 3=PO4"
+RCHRES,NUTRX,NUADDR,3,1,3,1,flux,lb/ivld,kg/ivld,"Dry atmospheric deposition of nutrient; Subscript 1: 1=NO3, 2=TAM, 3=PO4"
+RCHRES,NUTRX,NUADWT,1,1,3,1,flux,lb/ivld,kg/ivld,Wet atmospheric deposition of nutrient; Subscript same as NUADDR
+RCHRES,NUTRX,NUADWT,2,1,3,1,flux,lb/ivld,kg/ivld,Wet atmospheric deposition of nutrient; Subscript same as NUADDR
+RCHRES,NUTRX,NUADWT,3,1,3,1,flux,lb/ivld,kg/ivld,Wet atmospheric deposition of nutrient; Subscript same as NUADDR
+RCHRES,NUTRX,NUADEP,1,1,3,1,flux,lb/ivld,kg/ivld,Total atmospheric deposition of nutrient; Subscript same as NUADDR
+RCHRES,NUTRX,NUADEP,2,1,3,1,flux,lb/ivld,kg/ivld,Total atmospheric deposition of nutrient; Subscript same as NUADDR
+RCHRES,NUTRX,NUADEP,3,1,3,1,flux,lb/ivld,kg/ivld,Total atmospheric deposition of nutrient; Subscript same as NUADDR
+RCHRES,NUTRX,NUCF1,1,1,4,1,flux,lb/ivld,kg/ivld,Total outflow of dissolved nutrient; Same subscript values as NUST
+RCHRES,NUTRX,NUCF1,2,1,4,1,flux,lb/ivld,kg/ivld,Total outflow of dissolved nutrient; Same subscript values as NUST
+RCHRES,NUTRX,NUCF1,3,1,4,1,flux,lb/ivld,kg/ivld,Total outflow of dissolved nutrient; Same subscript values as NUST
+RCHRES,NUTRX,NUCF1,4,1,4,1,flux,lb/ivld,kg/ivld,Total outflow of dissolved nutrient; Same subscript values as NUST
+RCHRES,NUTRX,NUCF2,1,1,4,2,flux,lb/ivld,kg/ivld,"Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4"
+RCHRES,NUTRX,NUCF2,1,2,4,2,flux,lb/ivld,kg/ivld,"Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4"
+RCHRES,NUTRX,NUCF2,2,1,4,2,flux,lb/ivld,kg/ivld,"Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4"
+RCHRES,NUTRX,NUCF2,2,2,4,2,flux,lb/ivld,kg/ivld,"Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4"
+RCHRES,NUTRX,NUCF2,3,1,4,2,flux,lb/ivld,kg/ivld,"Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4"
+RCHRES,NUTRX,NUCF2,3,2,4,2,flux,lb/ivld,kg/ivld,"Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4"
+RCHRES,NUTRX,NUCF2,4,1,4,2,flux,lb/ivld,kg/ivld,"Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4"
+RCHRES,NUTRX,NUCF2,4,2,4,2,flux,lb/ivld,kg/ivld,"Total outflow of particulate NH4 and PO4; Subscript 1: 1=(on) sand, 2=silt, 3=clay, 4=total; Subscript 2: 1 = NH4, 2 = PO4"
+RCHRES,NUTRX,TNUCF1,1,1,4,1,flux,lb/ivld,kg/ivld,Total outflow of nutrient; Same subscript values as NUST
+RCHRES,NUTRX,TNUCF1,2,1,4,1,flux,lb/ivld,kg/ivld,Total outflow of nutrient; Same subscript values as NUST
+RCHRES,NUTRX,TNUCF1,3,1,4,1,flux,lb/ivld,kg/ivld,Total outflow of nutrient; Same subscript values as NUST
+RCHRES,NUTRX,TNUCF1,4,1,4,1,flux,lb/ivld,kg/ivld,Total outflow of nutrient; Same subscript values as NUST
+RCHRES,NUTRX,NUCF3,1,1,4,2,flux,lb/ivld,kg/ivld,"Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2"
+RCHRES,NUTRX,NUCF3,1,2,4,2,flux,lb/ivld,kg/ivld,"Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2"
+RCHRES,NUTRX,NUCF3,2,1,4,2,flux,lb/ivld,kg/ivld,"Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2"
+RCHRES,NUTRX,NUCF3,2,2,4,2,flux,lb/ivld,kg/ivld,"Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2"
+RCHRES,NUTRX,NUCF3,3,1,4,2,flux,lb/ivld,kg/ivld,"Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2"
+RCHRES,NUTRX,NUCF3,3,2,4,2,flux,lb/ivld,kg/ivld,"Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2"
+RCHRES,NUTRX,NUCF3,4,1,4,2,flux,lb/ivld,kg/ivld,"Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2"
+RCHRES,NUTRX,NUCF3,4,2,4,2,flux,lb/ivld,kg/ivld,"Scour/deposition fluxes of particulate NH4 and PO4; + = scour, - = deposition; same subscript values as NUCF2"
+RCHRES,NUTRX,NUCF4,1,1,7,1,flux,lb/ivld,kg/ivld,Process fluxes for NO3;1- nitrification (+)2- denitrification (-)3- BOD decay (+)4- phytoplankton growth/respir. (+/-)5- zooplankton death/respir. (+)6- benthic algae growth/respir. (+/-)7- total (+/-)
+RCHRES,NUTRX,NUCF4,2,1,7,1,flux,lb/ivld,kg/ivld,Process fluxes for NO3;1- nitrification (+)2- denitrification (-)3- BOD decay (+)4- phytoplankton growth/respir. (+/-)5- zooplankton death/respir. (+)6- benthic algae growth/respir. (+/-)7- total (+/-)
+RCHRES,NUTRX,NUCF4,3,1,7,1,flux,lb/ivld,kg/ivld,Process fluxes for NO3;1- nitrification (+)2- denitrification (-)3- BOD decay (+)4- phytoplankton growth/respir. (+/-)5- zooplankton death/respir. (+)6- benthic algae growth/respir. (+/-)7- total (+/-)
+RCHRES,NUTRX,NUCF4,4,1,7,1,flux,lb/ivld,kg/ivld,Process fluxes for NO3;1- nitrification (+)2- denitrification (-)3- BOD decay (+)4- phytoplankton growth/respir. (+/-)5- zooplankton death/respir. (+)6- benthic algae growth/respir. (+/-)7- total (+/-)
+RCHRES,NUTRX,NUCF4,5,1,7,1,flux,lb/ivld,kg/ivld,Process fluxes for NO3;1- nitrification (+)2- denitrification (-)3- BOD decay (+)4- phytoplankton growth/respir. (+/-)5- zooplankton death/respir. (+)6- benthic algae growth/respir. (+/-)7- total (+/-)
+RCHRES,NUTRX,NUCF4,6,1,7,1,flux,lb/ivld,kg/ivld,Process fluxes for NO3;1- nitrification (+)2- denitrification (-)3- BOD decay (+)4- phytoplankton growth/respir. (+/-)5- zooplankton death/respir. (+)6- benthic algae growth/respir. (+/-)7- total (+/-)
+RCHRES,NUTRX,NUCF4,7,1,7,1,flux,lb/ivld,kg/ivld,Process fluxes for NO3;1- nitrification (+)2- denitrification (-)3- BOD decay (+)4- phytoplankton growth/respir. (+/-)5- zooplankton death/respir. (+)6- benthic algae growth/respir. (+/-)7- total (+/-)
+RCHRES,NUTRX,NUCF5,1,1,8,1,flux,lb/ivld,kg/ivld,Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+RCHRES,NUTRX,NUCF5,2,1,8,1,flux,lb/ivld,kg/ivld,Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+RCHRES,NUTRX,NUCF5,3,1,8,1,flux,lb/ivld,kg/ivld,Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+RCHRES,NUTRX,NUCF5,4,1,8,1,flux,lb/ivld,kg/ivld,Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+RCHRES,NUTRX,NUCF5,5,1,8,1,flux,lb/ivld,kg/ivld,Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+RCHRES,NUTRX,NUCF5,6,1,8,1,flux,lb/ivld,kg/ivld,Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+RCHRES,NUTRX,NUCF5,7,1,8,1,flux,lb/ivld,kg/ivld,Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+RCHRES,NUTRX,NUCF5,8,1,8,1,flux,lb/ivld,kg/ivld,Process fluxes for TAM;1- nitrification (-)2- volatilization (-)3- benthal release (+)4- BOD decay(+)5- phytoplankton growth/respir. (+/-)6- zooplankton death/respir. (+)7- benthic algae growth/respir. (+/-)8- total (+/-)
+RCHRES,NUTRX,NUCF6,1,1,1,1,flux,lb/ivld,kg/ivld,Process flux for NO2; Nitrification (+/-)
+RCHRES,NUTRX,NUCF7,1,1,6,1,flux,lb/ivld,kg/ivld,Process fluxes for PO4; 1- benthal release (+) 2- BOD decay (+) 3- phytoplankton growth/respir. (+/-) 4- zooplankton death/respir. (+) 5- benthic algae growth/respir. (+/-) 6- total (+/-)
+RCHRES,NUTRX,NUCF7,2,1,6,1,flux,lb/ivld,kg/ivld,Process fluxes for PO4; 1- benthal release (+) 2- BOD decay (+) 3- phytoplankton growth/respir. (+/-) 4- zooplankton death/respir. (+) 5- benthic algae growth/respir. (+/-) 6- total (+/-)
+RCHRES,NUTRX,NUCF7,3,1,6,1,flux,lb/ivld,kg/ivld,Process fluxes for PO4; 1- benthal release (+) 2- BOD decay (+) 3- phytoplankton growth/respir. (+/-) 4- zooplankton death/respir. (+) 5- benthic algae growth/respir. (+/-) 6- total (+/-)
+RCHRES,NUTRX,NUCF7,4,1,6,1,flux,lb/ivld,kg/ivld,Process fluxes for PO4; 1- benthal release (+) 2- BOD decay (+) 3- phytoplankton growth/respir. (+/-) 4- zooplankton death/respir. (+) 5- benthic algae growth/respir. (+/-) 6- total (+/-)
+RCHRES,NUTRX,NUCF7,5,1,6,1,flux,lb/ivld,kg/ivld,Process fluxes for PO4; 1- benthal release (+) 2- BOD decay (+) 3- phytoplankton growth/respir. (+/-) 4- zooplankton death/respir. (+) 5- benthic algae growth/respir. (+/-) 6- total (+/-)
+RCHRES,NUTRX,NUCF7,6,1,6,1,flux,lb/ivld,kg/ivld,Process fluxes for PO4; 1- benthal release (+) 2- BOD decay (+) 3- phytoplankton growth/respir. (+/-) 4- zooplankton death/respir. (+) 5- benthic algae growth/respir. (+/-) 6- total (+/-)
+RCHRES,NUTRX,NUIF1,1,1,4,1,flux,lb/ivld,kg/ivld,Sum of dissolved inflows of nutrient Same subscript values as NUST
+RCHRES,NUTRX,NUIF1,2,1,4,1,flux,lb/ivld,kg/ivld,Sum of dissolved inflows of nutrient Same subscript values as NUST
+RCHRES,NUTRX,NUIF1,3,1,4,1,flux,lb/ivld,kg/ivld,Sum of dissolved inflows of nutrient Same subscript values as NUST
+RCHRES,NUTRX,NUIF1,4,1,4,1,flux,lb/ivld,kg/ivld,Sum of dissolved inflows of nutrient Same subscript values as NUST
+RCHRES,NUTRX,NUCF8,1,1,4,2,flux,lb/ivld,kg/ivld,"Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4"
+RCHRES,NUTRX,NUCF8,1,2,4,2,flux,lb/ivld,kg/ivld,"Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4"
+RCHRES,NUTRX,NUCF8,2,1,4,2,flux,lb/ivld,kg/ivld,"Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4"
+RCHRES,NUTRX,NUCF8,2,2,4,2,flux,lb/ivld,kg/ivld,"Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4"
+RCHRES,NUTRX,NUCF8,3,1,4,2,flux,lb/ivld,kg/ivld,"Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4"
+RCHRES,NUTRX,NUCF8,3,2,4,2,flux,lb/ivld,kg/ivld,"Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4"
+RCHRES,NUTRX,NUCF8,4,1,4,2,flux,lb/ivld,kg/ivld,"Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4"
+RCHRES,NUTRX,NUCF8,4,2,4,2,flux,lb/ivld,kg/ivld,"Adsorption (+) or desorption (-) of NH4 and PO4; Subscript 1: 1=sand, 2=silt, 3=clay; Subscript 2: 1=NH4, 2=PO4"
+RCHRES,NUTRX,NUCF9,NEXITS,1,NEXITS,4,flux,lb/ivld,kg/ivld,"Outflow of dissolved nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)"
+RCHRES,NUTRX,NUCF9,NEXITS,2,NEXITS,4,flux,lb/ivld,kg/ivld,"Outflow of dissolved nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)"
+RCHRES,NUTRX,NUCF9,NEXITS,3,NEXITS,4,flux,lb/ivld,kg/ivld,"Outflow of dissolved nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)"
+RCHRES,NUTRX,NUCF9,NEXITS,4,NEXITS,4,flux,lb/ivld,kg/ivld,"Outflow of dissolved nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)"
+RCHRES,NUTRX,OSNH4,NEXITS,1,NEXITS,4,flux,lb/ivld,kg/ivld,"Outflows of particulate NH4; Subscript 1 selects exit, Subscript 2: 1=sand, 2=silt, 3=clay, 4=total (available only if NEXITS > 1)"
+RCHRES,NUTRX,OSNH4,NEXITS,2,NEXITS,4,flux,lb/ivld,kg/ivld,"Outflows of particulate NH4; Subscript 1 selects exit, Subscript 2: 1=sand, 2=silt, 3=clay, 4=total (available only if NEXITS > 1)"
+RCHRES,NUTRX,OSNH4,NEXITS,3,NEXITS,4,flux,lb/ivld,kg/ivld,"Outflows of particulate NH4; Subscript 1 selects exit, Subscript 2: 1=sand, 2=silt, 3=clay, 4=total (available only if NEXITS > 1)"
+RCHRES,NUTRX,OSNH4,NEXITS,4,NEXITS,4,flux,lb/ivld,kg/ivld,"Outflows of particulate NH4; Subscript 1 selects exit, Subscript 2: 1=sand, 2=silt, 3=clay, 4=total (available only if NEXITS > 1)"
+RCHRES,NUTRX,OSPO4,NEXITS,1,NEXITS,4,flux,lb/ivld,kg/ivld,Outflows of particulate PO4-P; Subscript values same as OSNH4 (available only if NEXITS > 1)
+RCHRES,NUTRX,OSPO4,NEXITS,2,NEXITS,4,flux,lb/ivld,kg/ivld,Outflows of particulate PO4-P; Subscript values same as OSNH4 (available only if NEXITS > 1)
+RCHRES,NUTRX,OSPO4,NEXITS,3,NEXITS,4,flux,lb/ivld,kg/ivld,Outflows of particulate PO4-P; Subscript values same as OSNH4 (available only if NEXITS > 1)
+RCHRES,NUTRX,OSPO4,NEXITS,4,NEXITS,4,flux,lb/ivld,kg/ivld,Outflows of particulate PO4-P; Subscript values same as OSNH4 (available only if NEXITS > 1)
+RCHRES,NUTRX,TNUCF2,NEXITS,1,NEXITS,4,flux,lb/ivld,kg/ivld,"Total outflows of nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)"
+RCHRES,NUTRX,TNUCF2,NEXITS,2,NEXITS,4,flux,lb/ivld,kg/ivld,"Total outflows of nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)"
+RCHRES,NUTRX,TNUCF2,NEXITS,3,NEXITS,4,flux,lb/ivld,kg/ivld,"Total outflows of nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)"
+RCHRES,NUTRX,TNUCF2,NEXITS,4,NEXITS,4,flux,lb/ivld,kg/ivld,"Total outflows of nutrients through individual exits; Subscript 1 selects exit, Subscript 2: same as NUCF2 (available only if NEXITS > 1)"
+RCHRES,OXRX,DOX,1,1,1,1,state,mg/l,mg/l,DO concentration
+RCHRES,OXRX,BOD,1,1,1,1,state,mg/l,mg/l,BOD concentration
+RCHRES,OXRX,SATDO,1,1,1,1,state,mg/l,mg/l,Saturation DO concentration
+RCHRES,OXRX,OXIF,1,1,2,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1-DO, 2-BOD"
+RCHRES,OXRX,OXIF,2,1,2,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1-DO, 2-BOD"
+RCHRES,OXRX,OXCF1,1,1,2,1,flux,lb/ivld,kg/ivld,"Total outflows of DO (OXCF1(1,1))and BOD (OXCF1(2,1)) from the RCHRES"
+RCHRES,OXRX,OXCF1,2,1,2,1,flux,lb/ivld,kg/ivld,"Total outflows of DO (OXCF1(1,1))and BOD (OXCF1(2,1)) from the RCHRES"
+RCHRES,OXRX,OXCF2,NEXITS,1,NEXITS,2,flux,lb/ivld,kg/ivld,"Outflows of DO and BOD through individual exits (available only if NEXITS > 1)The first subscript selects the exit. The second selects theconstituent: 1 means DO, 2 means BOD."
+RCHRES,OXRX,OXCF2,NEXITS,2,NEXITS,2,flux,lb/ivld,kg/ivld,"Outflows of DO and BOD through individual exits (available only if NEXITS > 1)The first subscript selects the exit. The second selects theconstituent: 1 means DO, 2 means BOD."
+RCHRES,OXRX,OXCF3,1,1,8,1,flux,lb/ivld,kg/ivld,Dissolved oxygen process fluxes: 1- reaeration (+/-) 2- BOD decay (-) 3- benthal demand (-) 4- nitrification (-) 5- phytoplankton (+/-) 6- zooplankton (-) 7- benthic algae (+/-) 8- total (+/-)
+RCHRES,OXRX,OXCF3,2,1,8,1,flux,lb/ivld,kg/ivld,Dissolved oxygen process fluxes: 1- reaeration (+/-) 2- BOD decay (-) 3- benthal demand (-) 4- nitrification (-) 5- phytoplankton (+/-) 6- zooplankton (-) 7- benthic algae (+/-) 8- total (+/-)
+RCHRES,OXRX,OXCF3,3,1,8,1,flux,lb/ivld,kg/ivld,Dissolved oxygen process fluxes: 1- reaeration (+/-) 2- BOD decay (-) 3- benthal demand (-) 4- nitrification (-) 5- phytoplankton (+/-) 6- zooplankton (-) 7- benthic algae (+/-) 8- total (+/-)
+RCHRES,OXRX,OXCF3,4,1,8,1,flux,lb/ivld,kg/ivld,Dissolved oxygen process fluxes: 1- reaeration (+/-) 2- BOD decay (-) 3- benthal demand (-) 4- nitrification (-) 5- phytoplankton (+/-) 6- zooplankton (-) 7- benthic algae (+/-) 8- total (+/-)
+RCHRES,OXRX,OXCF3,5,1,8,1,flux,lb/ivld,kg/ivld,Dissolved oxygen process fluxes: 1- reaeration (+/-) 2- BOD decay (-) 3- benthal demand (-) 4- nitrification (-) 5- phytoplankton (+/-) 6- zooplankton (-) 7- benthic algae (+/-) 8- total (+/-)
+RCHRES,OXRX,OXCF3,6,1,8,1,flux,lb/ivld,kg/ivld,Dissolved oxygen process fluxes: 1- reaeration (+/-) 2- BOD decay (-) 3- benthal demand (-) 4- nitrification (-) 5- phytoplankton (+/-) 6- zooplankton (-) 7- benthic algae (+/-) 8- total (+/-)
+RCHRES,OXRX,OXCF3,7,1,8,1,flux,lb/ivld,kg/ivld,Dissolved oxygen process fluxes: 1- reaeration (+/-) 2- BOD decay (-) 3- benthal demand (-) 4- nitrification (-) 5- phytoplankton (+/-) 6- zooplankton (-) 7- benthic algae (+/-) 8- total (+/-)
+RCHRES,OXRX,OXCF3,8,1,8,1,flux,lb/ivld,kg/ivld,Dissolved oxygen process fluxes: 1- reaeration (+/-) 2- BOD decay (-) 3- benthal demand (-) 4- nitrification (-) 5- phytoplankton (+/-) 6- zooplankton (-) 7- benthic algae (+/-) 8- total (+/-)
+RCHRES,OXRX,OXCF4,1,1,8,1,flux,lb/ivld,kg/ivld,"Process fluxes are reported as positive if they increase the consituent, and negative if they decrease it. BOD process fluxes: 1- BOD decay (-) 2- benthal release (+) 3- sinking (-) 4- denitrification (+) 5- phytoplankton (+) 6- zooplankton (+) 7- benthic algae (+) 8- total (+/-)"
+RCHRES,OXRX,OXCF4,2,1,8,1,flux,lb/ivld,kg/ivld,"Process fluxes are reported as positive if they increase the consituent, and negative if they decrease it. BOD process fluxes: 1- BOD decay (-) 2- benthal release (+) 3- sinking (-) 4- denitrification (+) 5- phytoplankton (+) 6- zooplankton (+) 7- benthic algae (+) 8- total (+/-)"
+RCHRES,OXRX,OXCF4,3,1,8,1,flux,lb/ivld,kg/ivld,"Process fluxes are reported as positive if they increase the consituent, and negative if they decrease it. BOD process fluxes: 1- BOD decay (-) 2- benthal release (+) 3- sinking (-) 4- denitrification (+) 5- phytoplankton (+) 6- zooplankton (+) 7- benthic algae (+) 8- total (+/-)"
+RCHRES,OXRX,OXCF4,4,1,8,1,flux,lb/ivld,kg/ivld,"Process fluxes are reported as positive if they increase the consituent, and negative if they decrease it. BOD process fluxes: 1- BOD decay (-) 2- benthal release (+) 3- sinking (-) 4- denitrification (+) 5- phytoplankton (+) 6- zooplankton (+) 7- benthic algae (+) 8- total (+/-)"
+RCHRES,OXRX,OXCF4,5,1,8,1,flux,lb/ivld,kg/ivld,"Process fluxes are reported as positive if they increase the consituent, and negative if they decrease it. BOD process fluxes: 1- BOD decay (-) 2- benthal release (+) 3- sinking (-) 4- denitrification (+) 5- phytoplankton (+) 6- zooplankton (+) 7- benthic algae (+) 8- total (+/-)"
+RCHRES,OXRX,OXCF4,6,1,8,1,flux,lb/ivld,kg/ivld,"Process fluxes are reported as positive if they increase the consituent, and negative if they decrease it. BOD process fluxes: 1- BOD decay (-) 2- benthal release (+) 3- sinking (-) 4- denitrification (+) 5- phytoplankton (+) 6- zooplankton (+) 7- benthic algae (+) 8- total (+/-)"
+RCHRES,OXRX,OXCF4,7,1,8,1,flux,lb/ivld,kg/ivld,"Process fluxes are reported as positive if they increase the consituent, and negative if they decrease it. BOD process fluxes: 1- BOD decay (-) 2- benthal release (+) 3- sinking (-) 4- denitrification (+) 5- phytoplankton (+) 6- zooplankton (+) 7- benthic algae (+) 8- total (+/-)"
+RCHRES,OXRX,OXCF4,8,1,8,1,flux,lb/ivld,kg/ivld,"Process fluxes are reported as positive if they increase the consituent, and negative if they decrease it. BOD process fluxes: 1- BOD decay (-) 2- benthal release (+) 3- sinking (-) 4- denitrification (+) 5- phytoplankton (+) 6- zooplankton (+) 7- benthic algae (+) 8- total (+/-)"
+RCHRES,PLANK,PHYTO,1,1,1,1,state,mg/l,mg/l,Phytoplankton concentration
+RCHRES,PLANK,ZOO,1,1,1,1,state,organism/l,organism/l,Zooplankton population
+RCHRES,PLANK,BENAL,1,1,4,1,state,mg/m2,mg/m2,Benthic algae biomass (species 1-4)
+RCHRES,PLANK,BENAL,2,1,4,1,state,mg/m2,mg/m2,Benthic algae biomass (species 1-4)
+RCHRES,PLANK,BENAL,3,1,4,1,state,mg/m2,mg/m2,Benthic algae biomass (species 1-4)
+RCHRES,PLANK,BENAL,4,1,4,1,state,mg/m2,mg/m2,Benthic algae biomass (species 1-4)
+RCHRES,PLANK,TBENAL,1,1,2,1,state,mg/m2,mg/m2,"Total benthic algae (1-biomass mg/m2, ug/m2 ug/m2 2-chlorophyll a ug/m2)"
+RCHRES,PLANK,TBENAL,2,1,2,1,state,mg/m2,mg/m2,"Total benthic algae (1-biomass mg/m2, ug/m2 ug/m2 2-chlorophyll a ug/m2)"
+RCHRES,PLANK,PHYCLA,1,1,1,1,state,ug/l,ug/l,Phytoplankton as chlorophyll a
+RCHRES,PLANK,BALCLA,1,1,4,1,state,ug/m2,ug/m2,Benthic algae as chlorophyll a
+RCHRES,PLANK,BALCLA,2,1,4,1,state,ug/m2,ug/m2,Benthic algae as chlorophyll a
+RCHRES,PLANK,BALCLA,3,1,4,1,state,ug/m2,ug/m2,Benthic algae as chlorophyll a
+RCHRES,PLANK,BALCLA,4,1,4,1,state,ug/m2,ug/m2,Benthic algae as chlorophyll a
+RCHRES,PLANK,PKST3,1,1,7,1,state,mg/l,mg/l,Concentrations of organics: 1- dead refractory organic N (ORN) 2- dead refractory organic P (ORP) 3- dead refractory organic C (ORC) 4- total organic N (TORN) 5- total organic P (TORP) 6- total organic C (TORC) 7- potential BOD (POTBOD)
+RCHRES,PLANK,PKST3,2,1,7,1,state,mg/l,mg/l,Concentrations of organics: 1- dead refractory organic N (ORN) 2- dead refractory organic P (ORP) 3- dead refractory organic C (ORC) 4- total organic N (TORN) 5- total organic P (TORP) 6- total organic C (TORC) 7- potential BOD (POTBOD)
+RCHRES,PLANK,PKST3,3,1,7,1,state,mg/l,mg/l,Concentrations of organics: 1- dead refractory organic N (ORN) 2- dead refractory organic P (ORP) 3- dead refractory organic C (ORC) 4- total organic N (TORN) 5- total organic P (TORP) 6- total organic C (TORC) 7- potential BOD (POTBOD)
+RCHRES,PLANK,PKST3,4,1,7,1,state,mg/l,mg/l,Concentrations of organics: 1- dead refractory organic N (ORN) 2- dead refractory organic P (ORP) 3- dead refractory organic C (ORC) 4- total organic N (TORN) 5- total organic P (TORP) 6- total organic C (TORC) 7- potential BOD (POTBOD)
+RCHRES,PLANK,PKST3,5,1,7,1,state,mg/l,mg/l,Concentrations of organics: 1- dead refractory organic N (ORN) 2- dead refractory organic P (ORP) 3- dead refractory organic C (ORC) 4- total organic N (TORN) 5- total organic P (TORP) 6- total organic C (TORC) 7- potential BOD (POTBOD)
+RCHRES,PLANK,PKST3,6,1,7,1,state,mg/l,mg/l,Concentrations of organics: 1- dead refractory organic N (ORN) 2- dead refractory organic P (ORP) 3- dead refractory organic C (ORC) 4- total organic N (TORN) 5- total organic P (TORP) 6- total organic C (TORC) 7- potential BOD (POTBOD)
+RCHRES,PLANK,PKST3,7,1,7,1,state,mg/l,mg/l,Concentrations of organics: 1- dead refractory organic N (ORN) 2- dead refractory organic P (ORP) 3- dead refractory organic C (ORC) 4- total organic N (TORN) 5- total organic P (TORP) 6- total organic C (TORC) 7- potential BOD (POTBOD)
+RCHRES,PLANK,PKST4,1,1,2,1,state,mg/l,mg/l,Concentrations of 1=Total N and 2=Total P
+RCHRES,PLANK,PKST4,2,1,2,1,state,mg/l,mg/l,Concentrations of 1=Total N and 2=Total P
+RCHRES,PLANK,PKIF,1,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,PKIF,2,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,PKIF,3,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,PKIF,4,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,PKIF,5,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,TPKIF,1,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,TPKIF,2,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,TPKIF,3,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,TPKIF,4,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,TPKIF,5,1,5,1,flux,lb/ivld,kg/ivld,"Sum of inflows of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,PKCF1,1,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,PKCF1,2,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,PKCF1,3,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,PKCF1,4,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,PKCF1,5,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC"
+RCHRES,PLANK,TPKCF1,1,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,TPKCF1,2,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,TPKCF1,3,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,TPKCF1,4,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,TPKCF1,5,1,5,1,flux,lb/ivld,kg/ivld,"Total outflows from the RCHRES of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P"
+RCHRES,PLANK,PKCF2,NEXITS,1,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC (available only if NEXITS > 1)"
+RCHRES,PLANK,PKCF2,NEXITS,2,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC (available only if NEXITS > 1)"
+RCHRES,PLANK,PKCF2,NEXITS,3,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC (available only if NEXITS > 1)"
+RCHRES,PLANK,PKCF2,NEXITS,4,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC (available only if NEXITS > 1)"
+RCHRES,PLANK,PKCF2,NEXITS,5,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=Phyto, 2=Zoo, 3=ORN, 4=ORP, 5=ORC (available only if NEXITS > 1)"
+RCHRES,PLANK,TPKCF2,NEXITS,1,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P (available only if NEXITS > 1)"
+RCHRES,PLANK,TPKCF2,NEXITS,2,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P (available only if NEXITS > 1)"
+RCHRES,PLANK,TPKCF2,NEXITS,3,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P (available only if NEXITS > 1)"
+RCHRES,PLANK,TPKCF2,NEXITS,4,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P (available only if NEXITS > 1)"
+RCHRES,PLANK,TPKCF2,NEXITS,5,NEXITS,5,flux,lb/ivld,kg/ivld,"Outflows through individual exits of: 1=TORN, 2=TORP, 3=TORC, 4=Total N, 5=Total P (available only if NEXITS > 1)"
+RCHRES,PLANK,PLADDR,1,1,3,1,flux,lb/ivld,kg/ivld,"Dry atmospheric deposition of organics the first subscript selects the constituent:1 for ORN, 2 for ORP, 3 for ORC"
+RCHRES,PLANK,PLADDR,2,1,3,1,flux,lb/ivld,kg/ivld,"Dry atmospheric deposition of organics the first subscript selects the constituent:1 for ORN, 2 for ORP, 3 for ORC"
+RCHRES,PLANK,PLADDR,3,1,3,1,flux,lb/ivld,kg/ivld,"Dry atmospheric deposition of organics the first subscript selects the constituent:1 for ORN, 2 for ORP, 3 for ORC"
+RCHRES,PLANK,PLADWT,1,1,3,1,flux,lb/ivld,kg/ivld,"Wet atmospheric deposition of organics the first subscript selects the constituent: 1 for ORN, 2 for ORP, 3 for ORC"
+RCHRES,PLANK,PLADWT,2,1,3,1,flux,lb/ivld,kg/ivld,"Wet atmospheric deposition of organics the first subscript selects the constituent: 1 for ORN, 2 for ORP, 3 for ORC"
+RCHRES,PLANK,PLADWT,3,1,3,1,flux,lb/ivld,kg/ivld,"Wet atmospheric deposition of organics the first subscript selects the constituent: 1 for ORN, 2 for ORP, 3 for ORC"
+RCHRES,PLANK,PLADEP,1,1,3,1,flux,lb/ivld,kg/ivld,"Total atmospheric deposition of organics. the first subscript selects the constituent: 1 for ORN, 2 for ORP, 3 for ORC"
+RCHRES,PLANK,PLADEP,2,1,3,1,flux,lb/ivld,kg/ivld,"Total atmospheric deposition of organics. the first subscript selects the constituent: 1 for ORN, 2 for ORP, 3 for ORC"
+RCHRES,PLANK,PLADEP,3,1,3,1,flux,lb/ivld,kg/ivld,"Total atmospheric deposition of organics. the first subscript selects the constituent: 1 for ORN, 2 for ORP, 3 for ORC"
+RCHRES,PLANK,PKCF5,1,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for phytoplankton 1- sinking (-) 2- zoolankton predation (-) 3- death (-) 4- growth/respiration (+/-) 5- total (+/-)
+RCHRES,PLANK,PKCF5,2,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for phytoplankton 1- sinking (-) 2- zoolankton predation (-) 3- death (-) 4- growth/respiration (+/-) 5- total (+/-)
+RCHRES,PLANK,PKCF5,3,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for phytoplankton 1- sinking (-) 2- zoolankton predation (-) 3- death (-) 4- growth/respiration (+/-) 5- total (+/-)
+RCHRES,PLANK,PKCF5,4,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for phytoplankton 1- sinking (-) 2- zoolankton predation (-) 3- death (-) 4- growth/respiration (+/-) 5- total (+/-)
+RCHRES,PLANK,PKCF5,5,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for phytoplankton 1- sinking (-) 2- zoolankton predation (-) 3- death (-) 4- growth/respiration (+/-) 5- total (+/-)
+RCHRES,PLANK,PKCF6,1,1,3,1,flux,lb/ivld,kg/ivld,Process fluxes for zooplankton 1- growth/respiration (+/-) 2- death (-) 3- total (+/-)
+RCHRES,PLANK,PKCF6,2,1,3,1,flux,lb/ivld,kg/ivld,Process fluxes for zooplankton 1- growth/respiration (+/-) 2- death (-) 3- total (+/-)
+RCHRES,PLANK,PKCF6,3,1,3,1,flux,lb/ivld,kg/ivld,Process fluxes for zooplankton 1- growth/respiration (+/-) 2- death (-) 3- total (+/-)
+RCHRES,PLANK,PKCF7,1,1,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,1,2,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,1,3,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,1,4,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,2,1,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,2,2,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,2,3,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,2,4,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,3,1,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,3,2,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,3,3,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,PKCF7,3,4,3,4,flux,mg/m2/ivld,mg/m2/ivld,Process fluxes for benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-) Second subscript selects species 1-4
+RCHRES,PLANK,TPKCF7,1,1,3,1,flux,mg/m2/ivld,mg/m2/ivld,Total process fluxes for all species of benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-)
+RCHRES,PLANK,TPKCF7,2,1,3,1,flux,mg/m2/ivld,mg/m2/ivld,Total process fluxes for all species of benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-)
+RCHRES,PLANK,TPKCF7,3,1,3,1,flux,mg/m2/ivld,mg/m2/ivld,Total process fluxes for all species of benthic algae 1- growth/respiration (+/-) 2- death (-) 3- total (+/-)
+RCHRES,PLANK,PKCF8,1,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic N 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF8,2,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic N 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF8,3,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic N 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF8,4,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic N 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF8,5,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic N 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF9,1,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic P 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF9,2,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic P 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF9,3,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic P 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF9,4,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic P 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF9,5,1,5,1,flux,lb/ivld,kg/ivld,Process fluxes for dead refractory organic P 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-)
+RCHRES,PLANK,PKCF10,1,1,5,1,flux,lb/ivld,kg/ivld,"Process fluxes for dead refractory organic C 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-) Process fluxes are reported as positive if they increase the constituent, and negative if they decrease it."
+RCHRES,PLANK,PKCF10,2,1,5,1,flux,lb/ivld,kg/ivld,"Process fluxes for dead refractory organic C 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-) Process fluxes are reported as positive if they increase the constituent, and negative if they decrease it."
+RCHRES,PLANK,PKCF10,3,1,5,1,flux,lb/ivld,kg/ivld,"Process fluxes for dead refractory organic C 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-) Process fluxes are reported as positive if they increase the constituent, and negative if they decrease it."
+RCHRES,PLANK,PKCF10,4,1,5,1,flux,lb/ivld,kg/ivld,"Process fluxes for dead refractory organic C 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-) Process fluxes are reported as positive if they increase the constituent, and negative if they decrease it."
+RCHRES,PLANK,PKCF10,5,1,5,1,flux,lb/ivld,kg/ivld,"Process fluxes for dead refractory organic C 1- sinking (-) 2- phytoplankton death (+) 3- zooplankton death/excretion (+) 4- benthic algae death (+) 5- total (+/-) Process fluxes are reported as positive if they increase the constituent, and negative if they decrease it."
+RCHRES,SEDTRN,SSED,1,1,4,1,state,mg/l,mg/l,Suspended sediment concentrations
+RCHRES,SEDTRN,SSED,2,1,4,1,state,mg/l,mg/l,Suspended sediment concentrations
+RCHRES,SEDTRN,SSED,3,1,4,1,state,mg/l,mg/l,Suspended sediment concentrations
+RCHRES,SEDTRN,SSED,4,1,4,1,state,mg/l,mg/l,Suspended sediment concentrations
+RCHRES,SEDTRN,RSED,1,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,RSED,2,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,RSED,3,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,RSED,4,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,RSED,5,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,RSED,6,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,RSED,7,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,RSED,8,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,RSED,9,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,RSED,10,1,10,1,state,ton,tonne,Sediment storages
+RCHRES,SEDTRN,TSED,1,1,3,1,state,ton,tonne,Total sediment storages by fraction
+RCHRES,SEDTRN,TSED,2,1,3,1,state,ton,tonne,Total sediment storages by fraction
+RCHRES,SEDTRN,TSED,3,1,3,1,state,ton,tonne,Total sediment storages by fraction
+RCHRES,SEDTRN,BEDDEP,1,1,1,1,state,ft,m,Bed depth (thickness)
+RCHRES,SEDTRN,ISED,1,1,4,1,flux,ton/ivld,tonne/ivld,Sum of inflows of sediment
+RCHRES,SEDTRN,ISED,2,1,4,1,flux,ton/ivld,tonne/ivld,Sum of inflows of sediment
+RCHRES,SEDTRN,ISED,3,1,4,1,flux,ton/ivld,tonne/ivld,Sum of inflows of sediment
+RCHRES,SEDTRN,ISED,4,1,4,1,flux,ton/ivld,tonne/ivld,Sum of inflows of sediment
+RCHRES,SEDTRN,DEPSCR,1,1,4,1,flux,ton/ivld,tonne/ivld,Deposition (positive) or scour (negative)
+RCHRES,SEDTRN,DEPSCR,2,1,4,1,flux,ton/ivld,tonne/ivld,Deposition (positive) or scour (negative)
+RCHRES,SEDTRN,DEPSCR,3,1,4,1,flux,ton/ivld,tonne/ivld,Deposition (positive) or scour (negative)
+RCHRES,SEDTRN,DEPSCR,4,1,4,1,flux,ton/ivld,tonne/ivld,Deposition (positive) or scour (negative)
+RCHRES,SEDTRN,ROSED,1,1,4,1,flux,ton/ivld,tonne/ivld,Total outflows of sediment from the RCHRES
+RCHRES,SEDTRN,ROSED,2,1,4,1,flux,ton/ivld,tonne/ivld,Total outflows of sediment from the RCHRES
+RCHRES,SEDTRN,ROSED,3,1,4,1,flux,ton/ivld,tonne/ivld,Total outflows of sediment from the RCHRES
+RCHRES,SEDTRN,ROSED,4,1,4,1,flux,ton/ivld,tonne/ivld,Total outflows of sediment from the RCHRES
+RCHRES,SEDTRN,OSED,NEXITS,1,NEXITS,4,flux,ton/ivld,tonne/ivld,Outflows of sediment through individual exits (available only if NEXITS > 1)
+RCHRES,SEDTRN,OSED,NEXITS,2,NEXITS,4,flux,ton/ivld,tonne/ivld,Outflows of sediment through individual exits (available only if NEXITS > 1)
+RCHRES,SEDTRN,OSED,NEXITS,3,NEXITS,4,flux,ton/ivld,tonne/ivld,Outflows of sediment through individual exits (available only if NEXITS > 1)
+RCHRES,SEDTRN,OSED,NEXITS,4,NEXITS,4,flux,ton/ivld,tonne/ivld,Outflows of sediment through individual exits (available only if NEXITS > 1)

@@ -145,6 +145,8 @@ class Block:
 
     entity_type: EntityType
     activity: Activity
+    tcode: int
+
 
     _VALID_ACTIVITIES: ClassVar[dict[EntityType, frozenset[Activity]]] = (
         VALID_ACTIVITIES
@@ -155,6 +157,7 @@ class Block:
         activity = _coerce_enum(Activity, self.activity)
         object.__setattr__(self, "entity_type", entity_type)
         object.__setattr__(self, "activity", activity)
+        object.__setattr__(self, "tcode", int(self.tcode))
         if activity not in self._VALID_ACTIVITIES[entity_type]:
             raise ValueError(f"{activity.value} is not valid for {entity_type.value}")
 
@@ -163,8 +166,8 @@ class Block:
         return f"{self.entity_type.value.lower()}_{self.activity.value.lower()}"
 
     @classmethod
-    def from_strings(cls, entity_type: str, activity: str) -> "Block":
-        return cls(EntityType(entity_type.upper()), Activity(activity.upper()))
+    def from_strings(cls, entity_type: str, activity: str, tcode: int) -> "Block":
+        return cls(EntityType(entity_type.upper()), Activity(activity.upper()), tcode)
 
 
 @dataclass(frozen=True)

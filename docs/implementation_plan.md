@@ -206,18 +206,119 @@ shims at every old path. **Zero behavior change** — goldens must be byte-ident
 ### Work items
 
 1. **Create `src/hspf/core/`.**
-   - `core/types.py`: move `TimeStep`, `TIMESTEP_LABELS`, `PANDAS_FREQ`,
-     `OPERATIONS`, `MAX_OPNID` out of `xarray_utils.py` (lines ~29–65);
-     `xarray_utils.py` re-imports them from core (its public names unchanged, so
-     `tests/test_xarray_utils.py` still passes). Add the `Block` taxonomy
-     (`entity_type × activity`) as a frozen dataclass/enum — used by Phase 2.
-   - `core/constituents.py`: move `helpers.get_tcons`, `nutrient_name`,
-     `nutrient_id` (the constituent-alias vocabulary).
-   - `core/util.py`: move the remaining `helpers.py` functions
-     (`decompose_perlands`, `get_months`, `get_adjacent_month`).
-   - `core/conventions.py`: new — period-start timestamp rule
-     (`shift_to_period_start(index, timestep)`), UNC-path helpers, naming rules.
-     Written now, exercised from Phase 2 on.
+   - `core/types.py`: the shared vocabulary, organized by **provenance** —
+     *conceptual HSPF types* transcribed from the users manual (docstring cites
+     the manual section; changes only with HSPF releases) vs *package types*
+     defined by architecture.md (docstring cites the section; expect
+     versioning). Per-variable facts stay **out** (`VALID_OPERATION_VARIABLE`,
+     `UNITS_BY_VARIABLE`, tcon aliases, `MASSLINK_SCHEME` are Phase-3 lexicon
+     rows), as do parser layouts (`model/schema.py`) and policies
+     (`core/conventions.py`).
+     - Move `TimeStep`, `TIMESTEP_LABELS`, `PANDAS_FREQ`, `OPERATIONS`,
+       `MAX_OPNID` out of `xarray_utils.py` (lines ~29–65); `xarray_utils.py`
+       re-imports them (public names unchanged, so `tests/test_xarray_utils.py`
+       still passes). **Redocument `TimeStep` as HSPF output levels** (manual,
+       PRINT-INFO / BINARY-INFO): 2 = every PIVL intervals (PIVL × INDELT
+       minutes; INDELT spans 1 minute–1 day), 3/4/5 = day/month/year, 6 =
+       never (excluded — the lake stores only materialized series). "Level 2 =
+       hourly" and `PANDAS_FREQ[2] = "h"` are house assumptions that Phase-2
+       ingest *validates per run*, never trusts.
+     - `OperationType` (conceptual, 11 values: PERLND, IMPLND, RCHRES, COPY,
+       GENER, PLTGEN, DISPLY, DURANL, MUTSIN, BMPRAC, REPORT — the
+       OPN SEQUENCE / SCHEMATIC SVOL/TVOL vocabulary) as a **distinct enum
+       from** `EntityType` (PERLND, IMPLND, RCHRES — the HBN-writing,
+       lake-entity subset): an `EntityRef` typed GENER must be
+       unconstructible while a GENER edge endpoint stays legal.
+     - `Activity` (conceptual): 12 PERLND / 6 IMPLND / 10 RCHRES section names
+       plus the per-entity-type validity map, transcribed from the manual's
+       ACTIVITY table specs and cross-checked against
+       `data/Timeseries Catalog/` directory names and observed HBN activity
+       strings (note OXRX/NUTRX/PLANK/PHCARB sit under the RQUAL umbrella in
+       RCHRES flags). Do **not** hardcode an activity↔flag-column map in
+       core — derive it in the model layer from `ParseTable.csv` when Phase 3's
+       series-map compiler needs it (single source of truth: the parser
+       schema).
+     - `Block` (package): frozen `(entity_type, activity)` validated against
+       the map at construction — the raw-tier partition unit, the
+       `iter_blocks()` yield type, and the lexicon key prefix.
+     - `EntityRef` (package, id validated 1–`MAX_OPNID`) and `RunRef`
+       (package, §6.1).
+     - Pull forward the small closed conceptual vocabularies Phases 2–3 need:
+       `TemporalSemantics` (INST-VAL / PER-AVER / PER-CUM — manual, DSS data
+       types), `TransformFunction` (SAME, AVER, SUM, DIV, INTP, LAST, MAX,
+       MIN, PCT — TSGET/TSPUT functions), `UnitSystem` (ENGLISH = 1,
+       METRIC = 2 — GLOBAL EMFG); plus the package classification
+       vocabularies `VariableKind` (FLUX, STATE, CONCENTRATION,
+       TEMPERATURE — the lexicon's `physical_kind` domain) and
+       `AggregationMethod` (SUM, MEAN, LAST, WEIGHTED_MEAN — the
+       `aggregate_by` domain, deliberately distinct from
+       `TransformFunction`: WEIGHTED_MEAN is ours, and the disaggregation
+       functions SAME/DIV/INTP never appear in rollups).
+   - `core/constituents.py`: the **substance & transport vocabulary** —
+     sibling of `types.py`'s structural vocabulary, same rules (nouns only,
+     no I/O, provenance-cited docstrings). HSPF uses "constituent" for four
+     different things; the module documents that taxonomy and owns only the
+     vocabulary classes (canonical name list in the core module inventory
+     below):
+     - *Fixed species* (conceptual, manual-cited): `NutrientSpecies` (NO3=1,
+       TAM=2, NO2=3, PO4=4 — canonical NUST/NUIF1 subscript indices),
+       `SedimentFraction` (SAND=1, SILT=2, CLAY=3), `PlanktonMember`
+       (PHYTO=1, ZOO=2, ORN=3, ORP=4, ORC=5 — PKIF subscripts),
+       `OxygenMember` (DOX=1, BOD=2 — OXIF subscripts) — plus
+       `MEMBER_SUBSCRIPTS`, the per-member subscript layouts for the members
+       the Phase-3 recipe compiler interprets (NUIF1, NUIF2, PKIF, OXIF,
+       ISED and their outflow counterparts, names verified against the Time
+       Series Catalog at implementation). Documented caveat: subscript
+       meanings are **member-specific** (NUADDR uses 1=NO3, 2=TAM, 3=PO4),
+       so layouts are keyed by member, never assumed module-global.
+     - *Transport roles and phases*: `TransportRole` (CARRIER, TRANSPORTED,
+       DUAL), `Phase` (DISSOLVED, PARTICULATE, TOTAL), `PathwayAssociation`
+       (SURFACE, INTERFLOW, GROUNDWATER, SEDIMENT — mirroring the QUAL-PROPS
+       association flags QSOFG/QIFWFG/QAGWFG/QSDFG), and the frozen triple
+       `SubstancePhase` `(species, phase, fraction)` that replaces
+       `MASSLINK_SCHEME`'s snake_case string keys in Phase 3. Payoffs:
+       derivable `weight_variable` defaults (intensive variables weight by
+       their carrier's flux), gate-2 mass-balance ledgers (water / sediment /
+       substance), typed recipe terms, and Phase-6 observable↔phase mapping.
+     - *House reporting constituents* (package): `ReportingConstituent`
+       (TSS, TKN, N, TN, OP, TP, BOD, Q, WT, CHLA, DO — names only; their
+       realizations are lexicon/recipe data) and `CONSTITUENT_ROLES`
+       (constituent → `TransportRole`; Q, TSS, and WT are DUAL — carriers
+       that are also calibration targets, heat being carried by water).
+     - *Relocations, marked with destinies*: `helpers.get_tcons` (interim
+       fused lookup — the fixed-member rows become lexicon seed in Phase 3;
+       the PERLND/IMPLND QUALID-composed rows become per-run constituent-
+       registry facts in Phase 3; the function becomes a shim over generated
+       data in Phase 5); `nutrient_name`/`nutrient_id` (external-integration
+       ids, `legacy/` candidates).
+     - Explicitly *not* here: QUALID bindings (per-run registry, Phase 3),
+       TP/TN recipes (catalog), stoichiometric factors (per-run UCI
+       parameters), `MASSLINK_SCHEME` (recipe-compiler configuration).
+   - `core/util.py`: move `get_months`, `get_adjacent_month` (MON-* monthly
+     column helpers) only. `decompose_perlands` relocates to
+     `core/conventions.py` instead — it is the **house PERLND opnid grammar**
+     (opnid encodes metzone + landcover), an identifier convention rather than
+     a utility; superseded by the Phase-3 entities catalog and validated
+     against it once both exist. `util.py` is a dissolve-by-Phase-5 module:
+     nothing new may land in it.
+   - `core/conventions.py`: new — the rules of architecture §9 (rationale
+     recorded there): period-start shift where level-2 series take a *resolved
+     duration* argument rather than trusting the enum; PYREND-aware yearly
+     handling (calendar-year only when PYREND = 12); timezone-naive policy;
+     `snake_case` normalizer for catalog names plus the verbatim-raw-names
+     anti-rule; `run_id` grammar (generate + validate — nothing downstream
+     parses run ids); the house PERLND opnid grammar (`decompose_perlands`,
+     relocated here — see the `core/util.py` note); UNC-path helpers. Written now, exercised from Phase 2
+     on — Phase 1 stays byte-identical because the model layer keeps HSPF's
+     native end-of-interval labels.
+   - `core/errors.py`: new — the shared failure vocabulary: `HspfError`
+     (root), `ConventionError` (convention violations: bad run id, tz-aware
+     index, non-UNC metadata path), `ValidationError` (publish-blocking gate
+     failure, carrying the §8 gate number and offending context), and
+     `SchemaConformanceError(ValidationError)` (the gate-4 specialization:
+     unknown variable/column). Gives Phases 2–3 a single way to say
+     "publish-blocking" and lets `lake/publish.py` catch one exception
+     family instead of guessing.
 2. **Create `src/hspf/model/` by relocation.**
    - `uci.py` → `model/uci.py`. Extract engine execution into `model/runner.py`:
      `UCI._run()` (~604), module `run_model()` (~871), plus `run_uci()` and
@@ -254,11 +355,88 @@ shims at every old path. **Zero behavior change** — goldens must be byte-ident
    `docs/hbn.rst` autodoc targets → `hspf.model.*` (or rely on shims short-term;
    prefer updating so warnings don't leak into built docs).
 
+### Core module inventory (canonical names)
+
+The authoritative list of what Phase 1 defines in `core/`. Provenance tags:
+**[M]** = conceptual HSPF type (docstring cites the users manual section;
+changes only with HSPF releases); **[A]** = package type (docstring cites
+architecture.md; expect versioning); **[L]** = legacy relocation, marked with
+its destiny.
+
+**`core/types.py` — structural vocabulary**
+
+| Name | Kind | Contents / notes |
+|---|---|---|
+| `TimeStep` [M] | IntEnum | `HOURLY=2, DAILY=3, MONTHLY=4, YEARLY=5`; documented as HSPF output levels (level 2 = every PIVL intervals; level 6 "never" excluded) |
+| `TIMESTEP_LABELS` [A] | dict[TimeStep, str] | `"hourly"/"daily"/"monthly"/"yearly"` partition labels |
+| `PANDAS_FREQ` [A] | dict[TimeStep, str] | `"h"/"D"/"ME"/"YE"`; the `"h"` entry is the house assumption ingest validates per run |
+| `OperationType` [M] | str Enum | `PERLND, IMPLND, RCHRES, COPY, GENER, PLTGEN, DISPLY, DURANL, MUTSIN, BMPRAC, REPORT` |
+| `EntityType` [M] | str Enum | `PERLND, IMPLND, RCHRES` — the HBN-writing, lake-entity subset |
+| `OPERATIONS` [L] | tuple | legacy alias of the `EntityType` values (`xarray_utils` compatibility) |
+| `MAX_OPNID` [M] | int | `999` (OPN SEQUENCE operation-id ceiling) |
+| `Activity` [M] | str Enum | 26 members: `ATEMP, SNOW, PWATER, SEDMNT, PSTEMP, PWTGAS, PQUAL, MSTLAY, PEST, NITR, PHOS, TRACER, IWATER, SOLIDS, IWTGAS, IQUAL, HYDR, ADCALC, CONS, HTRCH, SEDTRN, GQUAL, OXRX, NUTRX, PLANK, PHCARB` |
+| `VALID_ACTIVITIES` [M] | dict[EntityType, frozenset[Activity]] | 12 PERLND / 6 IMPLND / 10 RCHRES validity map |
+| `Block` [A] | frozen dataclass | `(entity_type, activity)`, validated against `VALID_ACTIVITIES` at construction; `.name` partition label (`perlnd_pwater`); `.from_strings()` |
+| `EntityRef` [A] | frozen dataclass | `(entity_type, entity_id)`, id validated `1..MAX_OPNID` |
+| `RunRef` [A] | frozen dataclass | `(run_id,)`; grammar lives in `conventions` |
+| `TemporalSemantics` [M] | Enum | `INST_VAL, PER_AVER, PER_CUM` (DSS data types) |
+| `TransformFunction` [M] | Enum | `SAME, AVER, SUM, DIV, INTP, LAST, MAX, MIN, PCT` (TSGET/TSPUT) |
+| `UnitSystem` [M] | IntEnum | `ENGLISH=1, METRIC=2` (GLOBAL EMFG) |
+| `VariableKind` [A] | Enum | `FLUX, STATE, CONCENTRATION, TEMPERATURE` (+ grows with the lexicon) |
+| `AggregationMethod` [A] | Enum | `SUM, MEAN, LAST, WEIGHTED_MEAN` — the `aggregate_by` domain |
+
+**`core/conventions.py` — rules (constants + pure helpers)**
+
+| Name | Kind | Contents / notes |
+|---|---|---|
+| `TIMESTAMP_CONVENTION` [A] | str const | `"period_start"`; stamped into every manifest |
+| `HSPF_TIMESTAMP_CONVENTION` [M] | str const | `"period_end"` (native engine labeling) |
+| `shift_to_period_start(index, timestep, *, interval_minutes=None, pyrend=12)` [A] | function | duration-aware for level-2 series; PYREND-aware for yearly |
+| `RAW_UNIT_POLICY` [A] | str const | `"engine_native"`; no conversion at ingest |
+| `to_snake_case(name)`, `is_catalog_name(name)`, `CATALOG_NAME_PATTERN` [A] | functions / const | catalog/curated naming; never applied to raw member names |
+| `RAW_VARIABLE_NAMES_ARE_VERBATIM` [A] | const | the anti-normalization rule for raw HSPF names |
+| `make_run_id(timestamp, model_name)`, `validate_run_id(run_id)`, `RUN_ID_PATTERN` [A] | functions / const | run-id grammar; nothing downstream parses run ids |
+| `decompose_perlands(metzones, landcovers)` [L] | function | house PERLND opnid grammar (metzone + landcover); superseded by the Phase-3 entities catalog |
+| `to_unc_path(path)`, `relative_run_path(path, run_root)` [A] | functions | UNC-in-metadata / relative-within-run path policy |
+
+**`core/constituents.py` — substance & transport vocabulary**
+
+| Name | Kind | Contents / notes |
+|---|---|---|
+| `NutrientSpecies` [M] | IntEnum | `NO3=1, TAM=2, NO2=3, PO4=4` (NUST/NUIF1 subscripts) |
+| `SedimentFraction` [M] | IntEnum | `SAND=1, SILT=2, CLAY=3` |
+| `PlanktonMember` [M] | IntEnum | `PHYTO=1, ZOO=2, ORN=3, ORP=4, ORC=5` (PKIF subscripts) |
+| `OxygenMember` [M] | IntEnum | `DOX=1, BOD=2` (OXIF subscripts) |
+| `MEMBER_SUBSCRIPTS` [M] | dict | per-member subscript layouts for `NUIF1, NUIF2, PKIF, OXIF, ISED` + outflow counterparts (member-specific: NUADDR is `1=NO3, 2=TAM, 3=PO4`) |
+| `TransportRole` [A] | Enum | `CARRIER, TRANSPORTED, DUAL` |
+| `Phase` [A] | Enum | `DISSOLVED, PARTICULATE, TOTAL` |
+| `PathwayAssociation` [M] | Enum | `SURFACE, INTERFLOW, GROUNDWATER, SEDIMENT` (QUAL-PROPS QSOFG/QIFWFG/QAGWFG/QSDFG) |
+| `SubstancePhase` [A] | frozen dataclass | `(species, phase, fraction: SedimentFraction \| None)` — typed replacement for `MASSLINK_SCHEME`'s string keys |
+| `ReportingConstituent` [A] | str Enum | `TSS, TKN, N, TN, OP, TP, BOD, Q, WT, CHLA, DO` |
+| `CONSTITUENT_ROLES` [A] | dict[ReportingConstituent, TransportRole] | `Q`, `TSS`, `WT` are `DUAL` (carrier + calibration target) |
+| `get_tcons(...)` [L] | function | fused lookup → lexicon seed + registry facts (Phase 3), shim over generated data (Phase 5) |
+| `nutrient_name(id)`, `nutrient_id(name)` [L] | functions | external-integration ids; `legacy/` candidates |
+
+**`core/errors.py` — shared failure vocabulary**
+
+| Name | Kind | Contents / notes |
+|---|---|---|
+| `HspfError` [A] | Exception | root of the family |
+| `ConventionError` [A] | Exception(HspfError) | convention violations (bad run id, tz-aware index, non-UNC metadata path) |
+| `ValidationError` [A] | Exception(HspfError) | publish-blocking gate failure; carries the §8 gate number + context |
+| `SchemaConformanceError` [A] | Exception(ValidationError) | gate-4 specialization (unknown variable/column) |
+
+**`core/util.py` — residual (dissolves by Phase 5; nothing new may land here)**
+
+| Name | Kind | Contents / notes |
+|---|---|---|
+| `get_months(month)`, `get_adjacent_month(month, side)` [L] | functions | MON-* monthly-column helpers |
+
 ### File impact
 
 | File | Action |
 |---|---|
-| `src/hspf/core/{__init__,types,constituents,util,conventions}.py` | Create |
+| `src/hspf/core/{__init__,types,constituents,util,conventions,errors}.py` | Create |
 | `src/hspf/model/{__init__,uci,hbn,wdm,graph,runner,session}.py`, `model/parser/` | Create (by move/split) |
 | `src/hspf/uci.py`, `hbn.py`, `wdm.py`, `wdmReader.py`, `hspfModel.py`, `helpers.py`, `parser/*` | Shim |
 | `src/hspf/xarray_utils.py` | Modify (constants re-imported from `core.types`) |
@@ -300,19 +478,29 @@ manifests, run registration, structural validation, and atomic publish.
    - **Base-resolution selection:** for each `(block, variable)` keep the smallest
      tcode present (2 < 3 < 4 < 5, per `core.types.TimeStep`); redundant coarser
      series are retained in memory for gate 1 (Phase 3) and *not written*.
-   - Normalize timestamps (`core.conventions.shift_to_period_start`); preserve
-     native float precision; sort by `(opnid, datetime)`; write Parquet via
-     pyarrow (zstd, row-group stats, ~1 M rows/group); hourly blocks split by
-     `year=` only if projected file size exceeds ~1 GB.
+   - **Resolve the real time geometry:** for level-2 series compute
+     `interval_minutes` = INDELT (OPN SEQUENCE) × PIVL (BINARY-INFO) and assert
+     observed timestamp spacing matches — publish-blocking; "level 2 = hourly"
+     is a house assumption, not an HSPF fact. For yearly series read PYREND;
+     calendar-year handling only when PYREND = 12, otherwise record the
+     boundary month. Both land in the manifest's per-series inventory (and in
+     the Phase-3 series map).
+   - Normalize timestamps (`core.conventions.shift_to_period_start`, passing
+     the resolved duration for level-2 series); preserve native float32
+     precision; sort by `(opnid, datetime)`; write Parquet via pyarrow (zstd,
+     row-group stats, ~1 M rows/group); interval-level blocks split by `year=`
+     only if projected file size exceeds ~1 GB.
 5. **Create `src/hspf/lake/catalog/runs.py`.** Run registration replacing
    `build_warehouse.build_model_table()`: surrogate `run_id` allocation
    (`r<timestamp>_<model_name>`), core columns per architecture §6.1 (`sim_start`/
    `sim_end` from `uci.table('GLOBAL')` exactly as `build_model_table` extracts
-   them today), `attributes` JSON, `status` transitions
+   them today; `unit_system` from GLOBAL `EMFG` — 1 = English, 2 = Metric),
+   `attributes` JSON, `status` transitions
    (`active`/`deprecated`/`superseded_by`). Catalog persisted as
    `catalog/runs.parquet` via the same staged publish as data.
 6. **Create `src/hspf/lake/validate.py`** with the structural gates: coverage
-   (§8.3), schema conformance stub (§8.4 — full check needs the Phase-3 lexicon;
+   (§8.3, including observed spacing = declared `interval_minutes` for level-2
+   series), schema conformance stub (§8.4 — full check needs the Phase-3 lexicon;
    until then verify names against `xarray_utils.VALID_OPERATION_VARIABLE`),
    sanity (§8.6, entity counts vs `uci.table('OPN SEQUENCE')`).
 7. **Create `src/hspf/lake/publish.py`.** Single-writer lock file
@@ -370,36 +558,61 @@ compiled recipes, unified edges, entities, UCI EAV — enabling gates 1/2/5.
    English/Metric, description) into `variables.parquet`. Merge the curated
    constants from `xarray_utils.py` — `VALID_OPERATION_VARIABLE` (~77) and
    `UNITS_BY_VARIABLE` (~120) — and the alias map from
-   `core/constituents.get_tcons`. Add the `kind` column
-   (flux/state/concentration/…) and default `aggregate_by`/`weight_variable`;
-   seed kinds for the variables the marts actually consume first, expand
-   opportunistically. Long-term, `xarray_utils`' constants become *generated
-   from* the lexicon (Phase 5).
+   `core/constituents.get_tcons`. Add the two **orthogonal** kind columns
+   (§6.3): `temporal_semantics` (INST-VAL / PER-AVER / PER-CUM — HSPF-native,
+   manual-derivable, drives `produced_as` defaults and gate-1 reducers) and
+   `physical_kind` (flux/state/concentration/… — ours, drives curated
+   weighting and sanity thresholds); plus the `base_member`/`qualifier`
+   decomposition of compositional HBN names (verbatim name preserved;
+   qualifier vocabulary is supplied per run by the constituent registry,
+   item 9). Add
+   default `aggregate_by`/`weight_variable`; seed the variables the marts
+   actually consume first, expand opportunistically. Long-term,
+   `xarray_utils`' constants become *generated from* the lexicon (Phase 5).
 2. **`lake/catalog/series_map.py`.** Per-run provenance compiler:
    - `produced_as` from the UCI `BINARY-INFO` tables
      (`uci.table('PERLND','BINARY-INFO')` etc. — the tables
      `UCI.initialize_binary_info()` writes) and, where outputs route through
      `EXT TARGETS`, from the `AGGST`/`TRAN` columns already captured by
-     `build_warehouse.build_exttargets_table()`;
-   - observed timestep from the HBN inventory (`hbnInterface._mapn`);
+     `build_warehouse.build_exttargets_table()` — **resolving blank `TRAN`
+     fields through the manual's kind-dependent default table**
+     (SAME/AVER/SUM/DIV/INTP/LAST selected by interval relation × point/mean
+     kinds; manual, EXT SOURCES/TARGETS transformation-function table) using
+     the lexicon's `temporal_semantics`; never copy the raw column as-is. The
+     activity↔flag-column mapping needed to read `BINARY-INFO` columns is
+     derived from `ParseTable.csv` in the model layer (see Phase 1), not
+     hand-maintained;
+   - observed timestep plus `interval_minutes`/`pyrend` from the HBN inventory
+     (`hbnInterface._mapn`) and the Phase-2 ingest manifests;
    - `aggregate_by`/`weight_variable` defaulted from the lexicon, with sparse
      per-run/per-entity override rows only where configs differ.
-   Cross-check compiled provenance against the HBN's actual tcodes and fail
-   loudly on mismatch.
+   Cross-check compiled provenance against the HBN's actual tcodes and
+   recorded interval durations, and fail loudly on mismatch.
 3. **`lake/catalog/recipes.py`.** Compile MASS-LINK into linear recipe rows,
    porting the *selection logic* of `reports/nutrients.py` without executing it:
-   `MASSLINK_SCHEME` provides (species → TMEMN/TMEMSB1/TMEMSB2); enumerate
-   MASS-LINK tables exactly as `build_warehouse.build_masslink_table()` does
+   `MASSLINK_SCHEME` provides (species → TMEMN/TMEMSB1/TMEMSB2), rewritten to
+   reference the fixed-species subscript layouts in `core/constituents.py`
+   and expressed as typed `SubstancePhase` triples instead of bare string
+   literals (e.g. `NUIF1` subscript 4 *means*
+   dissolved PO4 — a manual constant the compiler should name, not assume);
+   enumerate MASS-LINK tables exactly as
+   `build_warehouse.build_masslink_table()` does
    (`uci.table_names('MASS-LINK')`); apply `_pathway_transform`'s row filter
    (TMEMN/TMEMSB match, `MFACTOR` fillna(1)); resolve **entity → MLNO
    applicability** through SCHEMATIC (`uci.network.subwatersheds()` carries
-   `MLNO` per SVOL/SVOLNO); fold in the `_calculate_BOD_*` factors. Emit
+   `MLNO` per SVOL/SVOLNO); fold in the BOD → N/P stoichiometric factors
+   **computed from each run's `CONV-VAL1` parameters** (`CVBO`, `CVBPC`,
+   `CVBPN`, `BPCNTC` — calibration parameters, as `_calculate_BOD_*` already
+   does), and **retire the hardcoded module constants**
+   (`_BOD_PHOSPHORUS_CONVERSION`/`_BOD_NITROGEN_CONVERSION` freeze one
+   model's stoichiometry). Emit
    `(derived_variable, run_id, entity_type, entity_id_range, term_order,
    source_block, source_variable, factor, source_ref)`.
    **Oracle test:** a generic recipe evaluator applied to Phase-2 raw must
    reproduce the Phase-0 `total_phosphorus`/`total_nitrogen` goldens within
-   float tolerance on all fixture models. This is the go/no-go gate for the
-   whole recipe concept.
+   float tolerance on all fixture models — and at least one fixture must have
+   non-default `CVB*` values so the frozen-constant path cannot silently
+   pass. This is the go/no-go gate for the whole recipe concept.
 4. **`lake/catalog/edges.py`.** Union SCHEMATIC + NETWORK into one edge list
    (`link_kind` preserving origin), reusing `build_schematic_table`/
    `build_network_table` extraction and the edge semantics of
@@ -428,23 +641,36 @@ compiled recipes, unified edges, entities, UCI EAV — enabling gates 1/2/5.
    `reports/gener.instructions(uci)`.
 8. **`lake/catalog/gauges.py`.** Schema + loader for the gauge↔reach map
    (curated CSV input; observation *data* ingestion is Phase 6).
-9. **Extend `lake/validate.py`.** Gate 1 (cross-resolution: recompute coarse from
-   base using `produced_as`, diff vs the engine's own coarse series captured
-   during ingest), gate 2 (mass balance across `edges` with SCHEMATIC AFACTR),
-   gate 5 (referential integrity: recipes/edges/weights resolve), and complete
-   gate 4 against the lexicon.
+9. **`lake/catalog/constituents.py`.** Per-run **constituent registry**
+   compiler for user-named generic constituents — identities that are pure
+   model configuration, not HSPF facts: PQUAL/IQUAL QUALs (`QUALID`,
+   established positionally — the Nth QUAL-PROPS/QUAL-INPUT table group
+   defines QUAL #N, per the manual), GQUAL constituents (`GQID`), CONS
+   (`CONID`). Emit `(run_id, entity_type, activity, slot_index,
+   constituent_id, quantity_units, association flags —
+   QSDFG/QSOFG/QIFWFG/QAGWFG)`. Cross-check: compose the expected HBN member
+   names (base member + qualifier, e.g. `POQUAL` + `ORTHO P` →
+   `POQUALORTHO P`) and verify them against the HBN inventory — fail loudly
+   on mismatch. This registry supplies the lexicon's qualifier vocabulary
+   (item 1) and replaces `get_tcons`'s hardcoded PERLND/IMPLND rows with
+   compiled, per-run facts.
+10. **Extend `lake/validate.py`.** Gate 1 (cross-resolution: recompute coarse from
+    base using `produced_as`, diff vs the engine's own coarse series captured
+    during ingest), gate 2 (mass balance across `edges` with SCHEMATIC AFACTR),
+    gate 5 (referential integrity: recipes/edges/weights resolve), and complete
+    gate 4 against the lexicon.
 
 ### File impact
 
 | File | Action |
 |---|---|
-| `src/hspf/lake/catalog/{lexicon,series_map,recipes,edges,uci_tables,entities,transforms,gauges}.py` | Create |
+| `src/hspf/lake/catalog/{lexicon,series_map,recipes,edges,uci_tables,entities,transforms,gauges,constituents}.py` | Create |
 | `src/hspf/lake/validate.py` | Modify (gates 1/2/5, full 4) |
 | `src/hspf/build_warehouse.py` | Split → `lake/catalog/*` + Shim |
 | `src/hspf/model/graph.py` | Modify (`graph_from_edges`) |
 | `src/hspf/data/cross_model_links.csv` | Create (seed) |
 | `src/hspf/reports/nutrients.py`, `reports/gener.py` | Unchanged (serve as oracles/sources) |
-| `tests/test_catalog_{lexicon,series_map,recipes,edges}.py` | Create |
+| `tests/test_catalog_{lexicon,series_map,recipes,edges,constituents}.py` | Create |
 
 ### Exit criteria
 

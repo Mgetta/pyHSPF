@@ -1,0 +1,10 @@
+1. Oracle user name bug (always defaulting to os environment
+2. Merge outlets method for getting stations into datamanger
+3. export_raw_to csv and export_station_to_csv permission erros
+
+
+
+
+1. Mismatches between implied uci hydrozone (usually embedded in the dsn number) and the spatial layers.
+	- Hydrozones from completely different models are applied to a specific model. This occurs when a consultant extended a collection of models (eg. upper miss basin) and decided for whatever reason to apply the met input from one hydrozone to perlnds and/or reaches located in another hydrozone. What combination of reaches and perlnds get this treatment is not consistent. For example, PERLND 130 might receive 
+2. Routing reaches are not present in spatial layer. For routing reaches not between two reaches with the same hydrozone it is ambiguous which hydrozone it belongs to. 

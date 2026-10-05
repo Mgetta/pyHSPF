@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum, IntEnum
-from typing import ClassVar
+from enum import Enum, IntEnum, StrEnum
+from typing import ClassVar, NamedTuple
 
 
 class OutputLevel(IntEnum):
@@ -63,6 +63,22 @@ class EntityType(str, Enum):
 OPERATIONS = tuple(entity_type.value for entity_type in EntityType)
 MAX_OPNID = 999
 
+
+class RoutingSource(StrEnum):
+    """How a routing-transfer row was declared in the UCI."""
+
+    SCHEMATIC_MASS_LINK = "SCHEMATIC_MASS_LINK"
+    NETWORK = "NETWORK"
+    MANUAL = "MANUAL"
+
+
+class EdgeRole(StrEnum):
+    """High-level operation-to-operation routing role."""
+
+    LAND_TO_REACH = "LAND_TO_REACH"
+    LAND_TO_LAND = "LAND_TO_LAND"
+    REACH_TO_REACH = "REACH_TO_REACH"
+    UTILITY = "UTILITY"
 
 class Activity(str, Enum):
     """HSPF activity/module names used in output blocks."""
@@ -169,6 +185,10 @@ class Block:
     def from_strings(cls, entity_type: str, activity: str, tcode: int) -> "Block":
         return cls(EntityType(entity_type.upper()), Activity(activity.upper()), tcode)
 
+
+class OperationKey(NamedTuple):        # NEW — the node identity everywhere
+    operation: str                     # "PERLND" | "IMPLND" | "RCHRES" | ...
+    opnid: int
 
 @dataclass(frozen=True)
 class EntityRef:

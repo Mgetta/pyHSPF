@@ -31,7 +31,7 @@ TCODES2FREQ : dict
 """
 import mmap
 
-from hspf.core import helpers
+from hspf.core import constituents
 import pandas as pd
 import math
 from struct import unpack
@@ -43,6 +43,9 @@ from collections import defaultdict
 from collections.abc import MutableMapping
 #from pathlib import Path
 from contextlib import contextmanager
+
+from hspf.core.conventions import pandas_freq
+from hspf.core.types import Activity, Block, EntityType, OutputLevel
 
 
 
@@ -133,7 +136,7 @@ def get_simulated_implnd_constituent(hbn,constituent,time_step):
     pandas.DataFrame
         Summed constituent time-series across all IMPLND segments.
     """
-    t_cons = helpers.get_tcons(constituent,'IMPLND')
+    t_cons = constituents.get_tcons(constituent,'IMPLND')
     df = sum([hbn.get_multiple_timeseries(t_opn='IMPLND', 
                                        t_con= t_con, 
                                        t_code = time_step) for t_con in t_cons])
@@ -167,7 +170,7 @@ def get_simulated_perlnd_constituent(hbn,constituent,time_step):
     pandas.DataFrame
         Summed constituent time-series across all PERLND segments.
     """
-    t_cons = helpers.get_tcons(constituent,'PERLND')
+    t_cons = constituents.get_tcons(constituent,'PERLND')
     df = sum([hbn.get_multiple_timeseries(t_opn='PERLND', 
                                        t_con= t_con, 
                                        t_code = time_step) for t_con in t_cons])
@@ -329,7 +332,7 @@ def get_simulated_reach_constituent(hbn,constituent,time_step,reach_ids,unit = N
     else:
         assert(unit in ['mg/l','lb'])
         
-    t_cons = helpers.get_tcons(constituent,'RCHRES','lb')
+    t_cons = constituents.get_tcons(constituent,'RCHRES','lb')
     
     # Correct instances when a reach output needs to be subtracted (rare)
     df = pd.concat([hbn.get_multiple_timeseries('RCHRES',time_step,t_con,[abs(reach_id) for reach_id in reach_ids])*sign for t_con in t_cons],axis=1).sum(axis=1)
@@ -379,9 +382,107 @@ class hbnInterface:
     def _clear_cache(self):
         """Clear cached DataFrames in every underlying :class:`hbnClass`."""
         [hbn._clear_cache() for hbn in self.hbns]
-        
 
+    def output_dictionary(self):
+        """Retrieve the output dictionary from all underlying HBN files.
+
+        Returns
+        -------
+        dict
+            Combined output dictionary from each HBN file.
+        """
+        output_dicts = [hbn.output_dictionary for hbn in self.hbns]
+        combined_dict = {}
+        for d in output_dicts:
+            combined_dict.update(d)
+        return combined_dict
+
+    def mapd(self):
+        """Map all underlying HBN files.
+
+        Returns
+        -------
+        dictionary of mmap.mmap
+            Memory-mapped file objects for each HBN file.
+        """
+        # merge the dictionaries from each hbnClass into a single dictionary
+        merged_dict = {}
+        for hbn in self.hbns:
+            merged_dict |= hbn.mapd
+        return merged_dict
+    
+    def get_output(self, operation, opnid, activity, tcode):
+        """Read the output for a specific operation, opnid, activity, and tcode from all HBN files and concatenate.
+
+        Parameters
+        ----------
+        operation : str
+            HSPF operation type (``'PERLND'``, ``'IMPLND'``, or ``'RCHRES'``).
+        opnid : int
+            Operation segment ID.
+        activity : str
+            HSPF activity name (e.g. ``'HYDR'``).  Inferred when ``None``.
+        tcode : int or str
+            HSPF time-code or frequency string.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Output data concatenated from each HBN file.
+
+        Raises
+        ------
+        ValueError
+            If no data is found for the given query parameters.
+        """
+        df_list = [hbn.get_output(operation, opnid, activity, tcode) for hbn in self.hbns]
+        df = pd.concat(df_list, axis=0)
+        if df.empty:
+            raise ValueError(f"No data found for {operation} {opnid} {activity} {tcode}")
+        return df
+    
+    def get_block(self, operation, activity, tcode):
+        """Read a single HBN block from all files and concatenate.
+
+        Parameters
+        ----------
+        operation : str
+            HSPF operation type (``'PERLND'``, ``'IMPLND'``, or
+            ``'RCHRES'``).
+
+        activity : str
+            HSPF activity name (e.g. ``'HYDR'``).  Inferred when ``None``.
+        tcode : int or str
+            HSPF time-code or frequency string.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Block of data concatenated from each HBN file.
+
+        Raises
+        ------
+        ValueError
+            If no data is found for the given query parameters.
+        """
+        df_list = [hbn.get_block(operation, activity, tcode) for hbn in self.hbns]
+        df = pd.concat(df_list, axis=0)
+        if df.empty:
+            raise ValueError(f"No data found for {operation} {activity} {tcode}")
+        return df
+
+    def iter_blocks(self):
+        """Retrieve all unique blocks across the HBN files.
+
+        Returns
+        -------
+        set of tuples
+            Each tuple contains (operation, activity, tcode) representing a unique block.
+        """
         
+        blocks = [(operation, activity, int(tcode)) for operation, _, activity, tcode  in self.mapd().keys()]
+        return set(blocks)
+    
     def get_time_series(self, t_opn, t_cons, t_code, opnid, activity = None):
         """Retrieve a single constituent time-series concatenated across files.
 
@@ -596,7 +697,7 @@ class hbnInterface:
             Concatenated time-series for the constituent's underlying
             HBN names across all PERLND segments.
         """
-        t_cons = helpers.get_tcons(constituent,'PERLND')
+        t_cons = constituents.get_tcons(constituent,'PERLND')
         
         df = pd.concat([self.get_multiple_timeseries(t_opn = 'PERLND',
                                      t_code = t_code,
@@ -628,7 +729,7 @@ class hbnInterface:
             Summed time-series with ``attrs`` for ``'unit'`` and
             ``'constituent'``.
         """
-        t_cons = helpers.get_tcons(constituent,'RCHRES',units)
+        t_cons = constituents.get_tcons(constituent,'RCHRES',units)
         df = sum([self.get_multiple_timeseries('RCHRES',t_code,t_con) for t_con in t_cons])
         df.attrs['unit'] = units
         df.attrs['constituent'] = constituent
@@ -661,8 +762,14 @@ LOSS_MAP = {'Q':(['IVOL'],['ROVOL']),
        'N': ([ 'NO2INTOT', 'NO3INTOT'],['NO3OUTTOT','NO2OUTTOT']),
        'TKN':(['TAMINTOT','NTOTORGIN'],['TAMOUTTOT','NTOTORGOUT']),
        'OP': (['PO4INDIS'],['PO4OUTDIS'])}
-# HSPF numeric time-codes mapped to pandas frequency aliases.
-TCODES2FREQ = {1:'min',2:'h',3:'D',4:'M',5:'Y'}
+# HSPF numeric output levels mapped to pandas frequency aliases.
+TCODES2FREQ = {
+    1: "min",
+    2: pandas_freq(OutputLevel.HOURLY),
+    3: pandas_freq(OutputLevel.DAILY),
+    4: pandas_freq(OutputLevel.MONTHLY),
+    5: pandas_freq(OutputLevel.YEARLY),
+}
     
 class hbnClass:
     """Reader for a single HSPF binary output (HBN) file.
@@ -706,7 +813,7 @@ class hbnClass:
         self.tcodes = {'minutely':1,'hourly':2,'daily':3,'monthly':4,'yearly':5,
                        1:'minutely',2:'hourly',3:'daily',4:'monthly',5:'yearly',
                        'min':1,'h':2,'D':3,'M':4,'Y':5,'H':2,'ME':4,'YE':5}
-        self.pandas_tcodes = {1:'min',2:'h',3:'D',4:'ME',5:'YE'}
+        self.pandas_tcodes = TCODES2FREQ.copy()
         
         # The two indexes — pure Python dicts, no file references.
         self.mapn = {}
@@ -801,7 +908,7 @@ class hbnClass:
                         ln = unpack('I', body[slen:slen + 4])[0]
                         n = unpack(f'{ln}s', body[slen + 4:slen + 4 + ln])[0]\
                             .decode('ascii').strip()
-                        mapn[op, id_, activity].append(n.replace('-', ''))
+                        mapn[op, id_, activity].append(n)#.replace('-', ''))
                         slen += 4 + ln
                 
                 cpos = reclen + 28
@@ -1031,6 +1138,19 @@ class hbnClass:
         
         df.index.name = 'datetime'
         return df
+
+    def get_output(self,operation,opnid,activity,tcode):
+        summaryindx = f'{operation}_{activity}_{opnid:03d}_{tcode}'
+        if summaryindx in self.summaryindx:
+            df = self.data_frames[summaryindx].copy()
+            #df.index = df.index.shift(-1,TCODES2FREQ[tcode])
+        elif (operation, opnid, activity,tcode) in self.mapd.keys():
+            df =  self.read_data(operation,opnid,activity,tcode).copy()
+            #df.index = df.index.shift(-1,TCODES2FREQ[tcode])
+        else:
+            df = pd.DataFrame()
+        df.index.name = 'datetime'
+        return df
     
     def get_multiple_timeseries(self,t_opn,t_code,t_con,opnids = None,activity = None):
         """Retrieve a constituent across multiple segments, raising on empty results.
@@ -1132,7 +1252,7 @@ class hbnClass:
             dic[activity] = set([item for sublist in t_cons for item in sublist])
         return dic
     
-
+    
     def output_names(self):
         """Return constituent names grouped by operation and activity.
 
@@ -1201,7 +1321,43 @@ class hbnClass:
          """
          perlands =  [int(summary_indx.split('_')[-2]) for summary_indx in summary_indxs]
          return perlands
-     
+
+    def get_block(self, operation, activity, tcode):
+        """Read a block of time-series data for a given operation, activity, and time-code.
+
+        Parameters
+        ----------
+        operation : str
+            Operation type (``'PERLND'``, ``'IMPLND'``, or ``'RCHRES'``).
+        activity : str
+            HSPF activity name.
+        tcode : int or str
+            HSPF time-code or frequency string.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Concatenated DataFrame of all segments for the specified operation, activity, and time-code.
+        """
+        if isinstance(tcode, str):
+            tcode = self.tcodes[tcode]
+
+        df_list = []
+        for (opn, id_, act, tc), _ in self.mapd.items():
+            if opn == operation and act == activity and tc == tcode:
+                df = self.get_output(operation, id_, activity, tcode)
+                df['OPNID'] = id_
+                df.reset_index(drop=False, inplace=True)
+                #set opnid and datetime as first columns
+                if df is not None:
+                    df_list.append(df)
+
+        if df_list:
+            df = pd.concat(df_list, axis=0)
+            df = df[['OPNID', 'datetime'] + [col for col in df.columns if col not in ['OPNID', 'datetime']]]
+        else:
+            df = pd.DataFrame()
+        return df
 
 def merge_dicts(dicts):
     """Merge a list of dictionaries, combining sets at the leaf level.

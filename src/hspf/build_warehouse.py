@@ -1,6 +1,6 @@
 from hspf import reports
 from hspf.model.parsers import parseTable
-from hspf import warehouse
+from hspf.lake import warehouse
 import duckdb
 import pandas as pd
 from hspf.model import uci

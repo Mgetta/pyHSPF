@@ -38,28 +38,12 @@ from hspf.lake.catalogs.io import (
 )
 from hspf.lake.layout import LakeLayout
 from hspf.model.uci import UCI
-
+from hspf.core.types import EdgeRole, RoutingSource
 
 ROUTING_TRANSFERS_CATALOG_NAME = "routing_transfers"
 SCHEMA_VERSION = "lake-routing-transfers-catalog-v0"
 TRANSFER_KEY_PREFIX = "rt_"
 
-
-class RoutingSource(StrEnum):
-    """How a routing-transfer row was declared in the UCI."""
-
-    SCHEMATIC_MASS_LINK = "SCHEMATIC_MASS_LINK"
-    NETWORK = "NETWORK"
-    MANUAL = "MANUAL"
-
-
-class EdgeRole(StrEnum):
-    """High-level operation-to-operation routing role."""
-
-    LAND_TO_REACH = "LAND_TO_REACH"
-    LAND_TO_LAND = "LAND_TO_LAND"
-    REACH_TO_REACH = "REACH_TO_REACH"
-    UTILITY = "UTILITY"
 
 
 ROUTING_TRANSFERS_COLUMNS = (

@@ -22,6 +22,7 @@ import subprocess
 import sys
 import numpy as np
 import pandas as pd
+
 from hspf.model.parsers import Table
 from hspf.model.graph import reachNetwork
 
@@ -179,9 +180,9 @@ class UCI():
             table.parse()
             if block in ['PERLND','RCHRES','IMPLND','GENER','COPY']     :
                 table.replace(format_opnids(table.data,self.valid_opnids[block]))
-            elif block in ['EXT SOURCES']:
+            elif block in ['EXT SOURCES','NETWORK']:
                 table.replace(expand_extsources(table.data,self.valid_opnids))
-                
+            
         table_data = table.data.copy()
         if drop_comments:
             table_data =table_data[table_data['comments'] == '']

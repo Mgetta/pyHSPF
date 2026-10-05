@@ -19,7 +19,11 @@ ALLOCATION_SELECTOR = {'Q': {'input': ['IVOL'],
                        'TN': {'input': ['NO3INTOT','NO2INTOT'],
                               'output': ['NO2OUTTOT','NO3OUTTOT']},
                        'TKN': {'input': ['TAMINTOT','NTOTORGIN'],
-                              'output': ['TAMOUTTOT', 'NTOTORGOUT']}
+                              'output': ['TAMOUTTOT', 'NTOTORGOUT']},
+                       'TAM': {'input': ['TAMINTOT'],
+                               'output': ['TAMOUTTOT']},
+                       'BOD': {'input': ['BODINTOT'],
+                               'output': ['BODOUTTOT']}
                        }
 
 def channel_inflows(constituent,hbn,t_code,reach_ids = None):

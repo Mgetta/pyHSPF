@@ -4,7 +4,7 @@ Legacy loading functions — older implementations kept for backward compatibili
 """
 import numpy as np
 import pandas as pd
-from hspf.core import helpers
+from hspf.core import constituents
 
 from hspf.reports.nutrients import total_phosphorus
 from hspf.reports.utils import weighted_describe
@@ -53,7 +53,7 @@ def avg_subwatershed_loading(constituent,t_code,uci,hbn):
     """
     dfs = []
     for t_opn in ['PERLND','IMPLND']:
-        t_cons = helpers.get_tcons(constituent,t_opn,'lb')
+        t_cons = constituents.get_tcons(constituent,t_opn,'lb')
         df = sum([hbn.get_multiple_timeseries(t_opn=t_opn, 
                                             t_con= t_con, 
                                             t_code = t_code) for t_con in t_cons])
@@ -100,7 +100,7 @@ def monthly_avg_constituent_loading(constituent,uci,hbn):
     """
     dfs = []
     for t_opn in ['PERLND','IMPLND']:
-        t_cons = helpers.get_tcons(constituent,t_opn,'lb')
+        t_cons = constituents.get_tcons(constituent,t_opn,'lb')
         df = sum([hbn.get_multiple_timeseries(t_opn=t_opn, 
                                             t_con= t_con, 
                                             t_code = 'monthly') for t_con in t_cons])
@@ -212,7 +212,7 @@ def ann_avg_constituent_loading(constituent,uci,hbn):
     else:
         dfs = []
         for t_opn in ['PERLND','IMPLND']:
-            t_cons = helpers.get_tcons(constituent,t_opn)
+            t_cons = constituents.get_tcons(constituent,t_opn)
             df = sum([hbn.get_multiple_timeseries(t_opn=t_opn, 
                                                 t_con= t_con, 
                                                 t_code = 'yearly') for t_con in t_cons]).mean().reset_index() 

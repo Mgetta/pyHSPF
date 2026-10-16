@@ -1,0 +1,28 @@
+key,code,display_name,aliases
+sediment,SED,Sediment,TSS|SS
+total_phosphorus,TP,Total Phosphorus,
+total_nitrogen,TN,Total Nitrogen,
+total_ammonia,TAM,Total Ammonia,
+orthophosphate,PO4,Orthophosphate,OP
+nitrate,NO3,Nitrate,
+nitrite,NO2,Nitrite,
+nitrate_nitrite,NN,Nitrate + Nitrite,N
+ammonia,NH3,Ammonia,
+total_kjeldahl_nitrogen,TKN,Total Kjeldahl Nitrogen,
+biochemical_oxygen_demand,BOD,Biochemical Oxygen Demand,
+dissolved_oxygen,DO,Dissolved Oxygen,
+chlorophyll_a,CHLA,Chlorophyll a,
+water_temperature,WT,Water Temperature,
+water,W,Water,Q
+dissolved_orthophosphate,DPO4,Dissolved Orthophosphate,
+particulate_orthophosphate_sand,PO4SAND,Particulate Orthophosphate (Sand),
+particulate_orthophosphate_silt,PO4SILT,Particulate Orthophosphate (Silt),
+particulate_orthophosphate_clay,PO4CLAY,Particulate Orthophosphate (Clay),
+particulate_orthophosphate,PO4P,Particulate Orthophosphate,
+organic_refractory_phosphorus,ORP,Organic Refractory Phosphorus,
+organic_refractory_carbon,ORC,Organic Refractory Carbon,
+labile_oxygen_demand_phosphorus,LODP,Labile Oxygen Demand Phosphorus,
+dissolved_total_ammonia,DTAM,Dissolved Total Ammonia,
+dissolved_nitrate,DNO3,Dissolved Nitrate,
+organic_refractory_nitrogen,ORN,Organic Refractory Nitrogen,
+labile_oxygen_demand_nitrogen,LODN,Labile Oxygen Demand Nitrogen,

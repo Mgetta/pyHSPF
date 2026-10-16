@@ -1,0 +1,7 @@
+from_unit,to_unit,factor
+ton,lb,2000.0
+lb,mg,453592.37
+acrft,liter,1233481.84
+acrft,ft3,43560.0
+mg/l,ug/l,1000.0
+in,ft,0.0833333

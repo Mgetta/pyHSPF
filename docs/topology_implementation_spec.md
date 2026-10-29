@@ -219,7 +219,7 @@ src/hspf/core/types.py            gains the shared enums (move, not copy)
 src/hspf/model/graph.py           slimmed: nx view + traversal (Phase 3)
 src/hspf/lake/catalogs/routing.py consumer: run stamping + keys + IO (Phase 4)
 src/hspf/lake/catalogs/edges.py   consumer: derived connection catalog (Phase 4)
-src/hspf/uci_gis_validations.py   consumer via context adapter (Phase 5)
+src/hspf/validation/              consumer: checks, classification, runners (Phase 5)
 ```
 
 One module, not a package. With HSPF-native columns and no build-time
@@ -342,15 +342,15 @@ conventions above and §2.0). **No MASS-LINK join at this grain** — that
 happens once, in §2.3.3.
 
 **Recipe, SCHEMATIC side:** the raw SCHEMATIC rows, untouched except for
-two derived columns: `routing_source = "schematic"`, `source_row` = row
-index. No renames, no join — SCHEMATIC is already at connection grain.
+two derived columns: `routing_source = "SCHEMATIC_MASS_LINK"`, `source_row`
+= row index. No renames, no join — SCHEMATIC is already at connection grain.
 
 **Recipe, NETWORK side:** take the (parse-expanded) NETWORK frame with
 `TOPFST` renamed to `TVOLNO`, then collapse member grain to connection
 grain: `groupby(["SVOL", "SVOLNO", "TVOL", "TVOLNO"])`, keeping one row
 per group and masking `MFACTOR` to NA wherever the group's values are not
 all identical (`nunique(dropna=False) == 1` is the uniformity test).
-`routing_source = "network"`; `source_row` = the group's first row index.
+`routing_source = "NETWORK"`; `source_row` = the group's first row index.
 Mind that `groupby(...).first()` leaves the keys in the index
 (`reset_index()` before concat) and returns the first *non-null* value per
 column — acceptable here only because `MFACTOR` is masked separately.
@@ -362,7 +362,7 @@ values live in §2.3.3).
 
 | Column | Derivation |
 | --- | --- |
-| `routing_source` | `"schematic"` or `"network"` (`"manual"` reserved for lake cross-model rows) |
+| `routing_source` | `RoutingSource.SCHEMATIC_MASS_LINK.value` or `RoutingSource.NETWORK.value` (`RoutingSource.MANUAL.value` reserved for lake cross-model rows) |
 | `SVOL`, `SVOLNO`, `TVOL`, `TVOLNO` | verbatim / group key (NETWORK's `TOPFST` arrives renamed to `TVOLNO`) |
 | `AFACTR` | SCHEMATIC only; NA on network rows |
 | `MFACTOR` | network groups only (uniform value or NA) |
@@ -409,11 +409,11 @@ yields zero matches and makes every schematic row look unmatched.
 3. `effective_factor = AFACTR × MFACTOR`, treating blank MFACTOR as 1.0
    (HSPF convention — confirm whether the parser already applies the
    default; fill before multiplying if it does not); `routing_source =
-   "schematic"`.
+   "SCHEMATIC_MASS_LINK"`.
 
 **Recipe, NETWORK side:** each (parse-expanded) NETWORK row *is* a member
 transfer; rename `TOPFST → TVOLNO`, set `effective_factor = MFACTOR`,
-`routing_source = "network"`. Nothing else.
+`routing_source = "NETWORK"`. Nothing else.
 
 **Combine:** `concat([schematic × mass_links, network])`. Because both
 sides keep HSPF-native names, the shared columns align with no renaming;
@@ -556,8 +556,8 @@ class ModelTopology:
 
 **There is no `diagnostics()` method and no `rejected_rows` frame.**
 Topology's whole obligation to quality is *don't hide anything* — satisfied
-by the NA rule (§2.0). The judgments live in `uci_gis_validations.py`,
-which already owns these exact checks and their severities/waivers:
+by the NA rule (§2.0). The judgments live in the `hspf.validation`
+subpackage, which owns these exact checks and their severities/waivers:
 
 | Validation finds it by | Check |
 | --- | --- |
@@ -694,14 +694,15 @@ split.
 
 ### 2.8 Validation + future consumers (Phase 5)
 
-The `UciGisValidationContext` adapter becomes mechanical:
+The `hspf.validation` package consumes topology explicitly through artifact
+builders and runner arguments rather than through a context adapter:
 
-| Context method | Topology source |
+| Validation artifact/check input | Topology source |
 |---|---|
-| `opn_sequence()` | `operations` (rename columns) |
-| `rchres_edges()` | `topology.reach_edges()` |
-| `routing_edges()` / `land_to_reach_edges()` | `connections` filtered |
-| `schematic/network_member_transfers()` | `member_transfers` by `routing_source` |
+| `opn_sequence` | `operations[in_opn_sequence]` |
+| `rchres_edges` | `topology.reach_edges()` |
+| `routing_edges` / `land_to_reach_edges` | `connections` filtered or `topology.land_to_reach()` |
+| `schematic/network_member_transfers` | `member_transfers` by `routing_source` |
 | `ext_sources()` / precip assignments | `external_inputs` |
 | `ftable_ids()` / `geninfo_ids()` | `ftable_ids` / `operations` |
 

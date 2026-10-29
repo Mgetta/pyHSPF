@@ -1,0 +1,8 @@
+form,derivation,kind,temporal_agg,spatial_agg,numerator_form,denominator_constituent,denominator_form,description
+load,primitive,flux,sum,sum,load,NULL,NULL,Extensive mass or thermal energy flux over the interval
+flow,primitive,flux,sum,sum,flow,NULL,NULL,Extensive water volume flux or volumetric flow rate
+volume,primitive,state,mean,sum,volume,NULL,NULL,Instantaneous water storage volume in the control volume
+depth,primitive,state,mean,NULL,depth,NULL,NULL,Instantaneous water depth or storage depth (non-additive across space)
+conc,ratio,flux,mean,NULL,load,water,flow,Flow-weighted concentration (mass flux divided by water flux)
+temp,ratio,flux,mean,NULL,load,water,flow,Mass-weighted temperature (heat flux divided by water mass flux)
+potency,ratio,flux,mean,NULL,load,sediment,load,Potency of sorbed constituents to sediment

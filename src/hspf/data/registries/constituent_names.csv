@@ -1,4 +1,4 @@
-key,code,display_name,aliases
+constituent,code,display_name,aliases
 sediment,SED,Sediment,TSS|SS
 total_phosphorus,TP,Total Phosphorus,
 total_nitrogen,TN,Total Nitrogen,

@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from hspf import build_warehouse
+from hspf.lake import build_warehouse
 
 def transform_timeseries(opcode, A=None, B=None, c=None):
     """

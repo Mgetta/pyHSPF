@@ -1,10 +1,10 @@
 from hspf import reports
-from hspf.model.parsers import parseTable
+from hspf._model.parsers import parseTable
 from hspf.lake import warehouse
 import duckdb
 import pandas as pd
-from hspf.model import uci
-from hspf.model.uci import UCI
+from hspf._model import uci
+from hspf._model.uci import UCI
 from pathlib import Path
 
 

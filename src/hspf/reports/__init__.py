@@ -332,7 +332,6 @@ def _operation_metadata():
         Columns: ``TVOLNO``, ``SVOLNO``, ``SVOL``, ``AFACR``, ``MLNO``,
         ``LSID``, ``metzone``.
     """
-    from hspf.model import uci
     dfs = []
     for operation in ['PERLND', 'IMPLND', 'RCHRES']:
         df = uci.opnid_dict[operation].reset_index()

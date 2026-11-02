@@ -125,7 +125,7 @@ def get_dsns(uci,operation,opnid,smemn):
 def targets(uci):
     """Build a calibration target table from PERLND land covers.
 
-    Uses ``self.opnid_dict['PERLND']`` together with the SCHEMATIC table
+    Uses ``uci.simulated_opnids['PERLND']`` together with the SCHEMATIC table
     to compute the total contributing area for each unique land-cover
     type.  The result is a summary DataFrame suitable for calibration
     target specification.
@@ -145,7 +145,7 @@ def targets(uci):
             ``pd.NA`` for all others.
     """  
     geninfo = uci.table('PERLND','GEN-INFO')  
-    targets = uci.opnid_dict['PERLND'].loc[:,['LSID','landcover']] #.drop_duplicates(subset = 'landcover').loc[:,['LSID','landcover']].reset_index(drop = True)
+    targets = uci.simulated_opnids['PERLND'].loc[:,['LSID','landcover']] #.drop_duplicates(subset = 'landcover').loc[:,['LSID','landcover']].reset_index(drop = True)
     targets.columns = ['LSID','lc_number']
     schematic = uci.table('SCHEMATIC')
     schematic = schematic.astype({'TVOLNO': int, "SVOLNO": int, 'AFACTR':float})

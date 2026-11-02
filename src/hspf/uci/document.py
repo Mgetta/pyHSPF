@@ -1,27 +1,30 @@
 import numpy as np
 import pandas as pd
-from hspf.model.parsers import Table
-from hspf.model.graph import reachNetwork
-
-from hspf.model.UCI.parsing import reader, get_blocks, RUN_comments, build_uci
-from hspf.model.UCI.edits import format_opnids, expand_extsources
-from hspf.model.UCI.views import simulated_opnids, infer_metzones, get_filepaths, get_dsns, targets, masslinks
+from hspf._model.parsers import Table
 from pathlib import Path
 
+from hspf.uci.parsing import reader, get_blocks, RUN_comments, build_uci
+from hspf.uci.views import simulated_opnids, infer_metzones, get_filepaths, get_dsns, targets, masslinks
+from hspf.uci import topology
+from hspf.uci.graph import Network
 
 class UciDocument:
     def __init__(self, filepath):
-        self.filepath = filepath
-        self.name = Path(filepath).stem
+        self.filepath = Path(filepath)
+        self.name = self.filepath.stem
         self.lines = reader(filepath)
         self.blocks = get_blocks(self.lines)
         self.run_comments = RUN_comments(self.lines)
         self.uci = build_uci(self.lines) # UCI converted into a nested dictionary. # Could convert into a class with only tables? 
                 # Require to get valid opnids - Business rule
+        
+        self.simulated_opnids = simulated_opnids(self)
+        self.topology = topology.build_topology(self)
+        self.network = Network(self.topology)
 
-    @property
-    def simulated_opnids(self):
-        return simulated_opnids(self)
+
+        # legacy attribute for backward compatibility
+        self.opnid_dict = infer_metzones(self)
 
     def table(self,block,table_name = 'na',table_id = 0,drop_comments = True):
         """Return the parsed data for a UCI table as a DataFrame.
@@ -58,13 +61,17 @@ class UciDocument:
         table = self.uci[(block,table_name,table_id)] #[block][table_name][table_id]
         #TODO move the format_opnids into the Table class?
         if table.data is None:
-            table.parse()
-            if block in ['PERLND','RCHRES','IMPLND','GENER','COPY']     :
-                table.replace(format_opnids(table.data,self.simulated_opnids[block]))
-            elif block in ['EXT SOURCES','NETWORK']:
-                table.replace(expand_extsources(table.data,self.simulated_opnids))
-            
+            if table.policy.normalizer is not None:
+                simulated_opnids = self.simulated_opnids
+            else:
+                simulated_opnids = None
+            table.parse(simulated_opnids)
+
+
         table_data = table.data.copy()
+        if table.policy.key_column is not None:
+            table_data = table_data.set_index(table.policy.key_column)
+    
         if drop_comments:
             table_data =table_data[table_data['comments'] == '']
             table_data = table_data.drop('comments',axis = 1)       
@@ -205,6 +212,8 @@ class UciDocument:
             lines += [block]
             for key in keys:
                 table = self.uci[key]
+                if table.mutated: # Only serilize if table was mutated
+                    table.write()
                 if key[1] == 'na':
                     lines += table.lines
                 else:

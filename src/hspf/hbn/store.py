@@ -3,14 +3,16 @@ from dataclasses import dataclass
 from collections import defaultdict
 import pandas as pd
 from pathlib import Path
+import warnings
 
-from .reader import HbnFile, HbnRecord, HbnRecordKey
-from hspf.core.types import EntityType, Activity, OutputLevel, EntityRef, Block
+from hspf.hbn.reader import HbnFile, HbnRecord, HbnRecordKey
+from hspf import series
+from hspf.core.types import TIMESTEP_LABELS, EntityType, Activity, OutputLevel, EntityRef, Block
 
 #named tuple
 
 
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 @dataclass
 class RecordLocation:
@@ -52,6 +54,34 @@ class HbnStore:
 
         self._records = self._get_records()
         self._cache: dict[HbnRecordKey, pd.DataFrame] = {}
+        self._stripped_tcons = self._get_tcons()
+
+    def _record_key(self, operation: str, entity_id: int, activity: str, output_level: int) -> HbnRecordKey:
+        return HbnRecordKey(
+            entity=EntityRef(EntityType(operation), entity_id),
+            activity=Activity(activity),
+            output_level=OutputLevel(output_level),
+        )
+
+    def _get_tcons(self):
+        # tcons_map = defaultdict(dict)  # dict preserves insertion order and deduplicates
+        # for key, loc in self._records.items():
+        #     op = key.entity.entity_type
+        #     for col in loc.record.columns:
+        #         tcons_map[(op, col.replace("-", ""))][col] = None
+        # return {k: list(v) for k, v in tcons_map.items()}
+
+        tcons_map = {}
+        for _, record_location in self._records.items():
+            for col in record_location.record.columns:
+                col_stripped = col.replace('-', '')
+                if col_stripped not in tcons_map.keys():
+                    tcons_map[col_stripped] = [col]
+                elif col not in tcons_map[col_stripped]:
+                    tcons_map[col_stripped].append(col)
+                else:
+                    pass
+        return tcons_map
 
 
     def _get_records(self):
@@ -68,8 +98,10 @@ class HbnStore:
             self._cache[record_key] = self._records[record_key].decode()
         cached = self._cache[record_key]
         return cached
+
+
     
-    def infer_opnids(self,t_opn, t_cons,activity,tcode = 5):
+    def _infer_opnids(self,t_opn, t_cons,activity,tcode = 5):
         """Infer operation segment IDs that contain a given constituent.
 
         Parameters
@@ -93,16 +125,56 @@ class HbnStore:
         activity = Activity(activity)
         output_level = OutputLevel(tcode)
 
-        for record_key, record_location in self._records.items():
-            if (t_cons in record_location.record.columns) & (record_key.entity.entity_type == operation) & (record_key.activity == activity) & (record_key.output_level == output_level):
-                result.append(record_key.entity)
+        matching_records = self._filter_records(t_opn, t_cons, activity, tcode)
+        # 1. Try t_cons assuming it is the exact name
+        result = [
+            key.entity.entity_id
+            for key, loc in matching_records
+            if t_cons in loc.record.columns
+        ]
+
         if result:
+            alternatives = [c for c in self._stripped_tcons.get(t_cons, []) if c != t_cons]
+            if alternatives:
+                warnings.warn(
+                    f"Matched '{t_cons}' directly. If you wanted {alternatives}, "
+                    f"enter the hyphenated name explicitly.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             return result
-        else:
-            raise ValueError(f"No matching operation segment IDs found for operation '{t_opn}', constituent '{t_cons}', and activity '{activity}'")
+
+        # 2. Exact name not found -> try the stripped name
+        if t_cons in self._stripped_tcons:
+            candidates = self._stripped_tcons[t_cons]
+            if len(candidates) > 1:
+                raise ValueError(
+                    f"Constituent '{t_cons}' is ambiguous in stripped form. Specify one of {candidates}"
+                )
+            real_name = candidates[0]
+            result = [
+                key.entity.entity_id
+                for key, loc in matching_records
+                if real_name in loc.record.columns
+            ]
+            if result:
+                return result
+
+        raise ValueError(
+            f"No matching operation segment IDs found for operation '{t_opn}', "
+            f"constituent '{t_cons}', and activity '{activity}'"
+        )    
+
+    def _filter_records(self, t_opn, t_cons, activity = None, tcode=5):
+
+        matching_records = [(key, loc) for key, loc in self._records.items()
+            if key.entity.entity_type == EntityType(t_opn) \
+            and (activity is None or key.activity == Activity(activity)) \
+            and key.output_level == OutputLevel(tcode)]
+
+        return matching_records
     
-    
-    def infer_activity(self,t_opn, t_cons):  
+    def _infer_activity(self,t_opn, t_cons):  
         """Infer the HSPF activity that contains a given constituent.
 
         Parameters
@@ -123,42 +195,79 @@ class HbnStore:
         AssertionError
             If the constituent is found under more than one activity.
         """
-        result = [k[-1] for k,v in self.mapn.items() if (t_cons in v) & (k[0] == t_opn)]
-        if len(result) == 0:
-            result = ''
-        else:#     return print('No Constituent-Activity relationship found')
-            assert(len(set(result)) == 1)
-            result = result[0]
-        return result
+        result = []
+        operation = EntityType(t_opn)
 
-    
+        matching_records = self._filter_records(t_opn, t_cons)
+
+
+        # 1. Try t_cons assuming it is the exact name
+        result = {
+            key.activity
+            for key, loc in matching_records
+            if t_cons in loc.record.columns
+        }
+
+        if result:
+            alternatives = [c for c in self._stripped_tcons.get(t_cons, []) if c != t_cons]
+            if alternatives:
+                warnings.warn(
+                    f"Matched '{t_cons}' directly. If you wanted {alternatives}, "
+                    f"enter the hyphenated name explicitly.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+        elif t_cons in self._stripped_tcons:
+            # 2. Exact name not found -> try the stripped name
+            candidates = self._stripped_tcons[t_cons]
+            if len(candidates) > 1:
+                raise ValueError(
+                    f"Constituent '{t_cons}' is ambiguous in stripped form. Specify one of {candidates}"
+                )
+            real_name = candidates[0]
+            result = {
+                key.activity
+                for key, loc in matching_records
+                if real_name in loc.record.columns
+            }
+
+        if len(result) == 1:
+            return result.pop()
+        elif len(result) > 1:
+            raise ValueError(f"Constituent '{t_cons}' found under multiple activities: {result}")
+        else:
+            raise ValueError(f"No matching activity found for operation '{t_opn}' and constituent '{t_cons}'")
+
+        
     def output_dictionary(self):
-        """Retrieve the output dictionary from all underlying HBN files.
+        # """Retrieve the output dictionary from all underlying HBN files.
 
-        Returns
-        -------
-        dict
-            Combined output dictionary from each HBN file.
-        """
-        output_dicts = [hbn.output_dictionary for hbn in self.hbns]
-        combined_dict = {}
-        for d in output_dicts:
-            combined_dict.update(d)
-        return combined_dict
+        # Returns
+        # -------
+        # dict
+        #     Combined output dictionary from each HBN file.
+        # """
+        # output_dicts = [hbn.output_dictionary for hbn in self.files]
+        # combined_dict = {}
+        # for d in output_dicts:
+        #     combined_dict.update(d)
+        # return combined_dict
+        raise NotImplementedError("The output_dictionary method is not implemented.")
 
     def mapd(self):
-        """Map all underlying HBN files.
+        # """Map all underlying HBN files.
 
-        Returns
-        -------
-        dictionary of mmap.mmap
-            Memory-mapped file objects for each HBN file.
-        """
-        # merge the dictionaries from each hbnClass into a single dictionary
-        merged_dict = {}
-        for hbn in self.hbns:
-            merged_dict |= hbn.mapd
-        return merged_dict
+        # Returns
+        # -------
+        # dictionary of mmap.mmap
+        #     Memory-mapped file objects for each HBN file.
+        # """
+        # # merge the dictionaries from each hbnClass into a single dictionary
+        # merged_dict = {}
+        # for hbn in self.files:
+        #     merged_dict |= hbn.mapd
+        # return merged_dict
+        raise NotImplementedError("The mapd method is not implemented.")
     
     def record(self, operation, opnid, activity, tcode):
         """Read the output for a specific operation, opnid, activity, and tcode from all HBN files and concatenate.
@@ -189,6 +298,7 @@ class HbnStore:
             activity=Activity(activity),
             output_level=OutputLevel(tcode),
         )
+
         return self._decoded(record_key)
 
     def series(self, operation, opnid, activity, tcode, constituent):
@@ -217,199 +327,187 @@ class HbnStore:
         ValueError
             If no data is found for the given query parameters.
         """
-        
-        return self.record(operation, opnid, activity, tcode)[constituent]
+
+        record = self.record(operation, opnid, activity, tcode)
+
+        if (constituent in record.columns):
+            series = record[constituent]
+        elif (constituent in self._stripped_tcons.keys()):
+            if len(self._stripped_tcons[constituent]) > 1:
+                raise ValueError(f"Constituent '{constituent}' is ambiguous in stripped form. Specify one of {self._stripped_tcons[constituent]}")
+            constituent = self._stripped_tcons[constituent][0]
+            series = record[constituent]
+        else:
+            raise ValueError(f"Constituent '{constituent}' not found in any record for operation '{operation}'.")
+
+
+        return series
     
-#     def get_block(self, operation, activity, tcode):
-#         """Read a single HBN block from all files and concatenate.
+    # def get_block(self, operation, activity, tcode):
+    #     """Read a single HBN block from all files and concatenate.
 
-#         Parameters
-#         ----------
-#         operation : str
-#             HSPF operation type (``'PERLND'``, ``'IMPLND'``, or
-#             ``'RCHRES'``).
+    #     Parameters
+    #     ----------
+    #     operation : str
+    #         HSPF operation type (``'PERLND'``, ``'IMPLND'``, or
+    #         ``'RCHRES'``).
 
-#         activity : str
-#             HSPF activity name (e.g. ``'HYDR'``).  Inferred when ``None``.
-#         tcode : int or str
-#             HSPF time-code or frequency string.
+    #     activity : str
+    #         HSPF activity name (e.g. ``'HYDR'``).  Inferred when ``None``.
+    #     tcode : int or str
+    #         HSPF time-code or frequency string.
 
-#         Returns
-#         -------
-#         pandas.DataFrame
-#             Block of data concatenated from each HBN file.
+    #     Returns
+    #     -------
+    #     pandas.DataFrame
+    #         Block of data concatenated from each HBN file.
 
-#         Raises
-#         ------
-#         ValueError
-#             If no data is found for the given query parameters.
-#         """
-#         df_list = [hbn.get_block(operation, activity, tcode) for hbn in self.hbns]
-#         df = pd.concat(df_list, axis=0)
-#         if df.empty:
-#             raise ValueError(f"No data found for {operation} {activity} {tcode}")
-#         return df
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If no data is found for the given query parameters.
+    #     """
+    #     df_list = [hbn.get_block(operation, activity, tcode) for hbn in self.files]
+    #     df = pd.concat(df_list, axis=0)
+    #     if df.empty:
+    #         raise ValueError(f"No data found for {operation} {activity} {tcode}")
+    #     return df
 
-#     def iter_blocks(self):
-#         """Retrieve all unique blocks across the HBN files.
+    # def iter_blocks(self):
+    #     """Retrieve all unique blocks across the HBN files.
 
-#         Returns
-#         -------
-#         set of tuples
-#             Each tuple contains (operation, activity, tcode) representing a unique block.
-#         """
+    #     Returns
+    #     -------
+    #     set of tuples
+    #         Each tuple contains (operation, activity, tcode) representing a unique block.
+    #     """
         
-#         blocks = [(operation, activity, int(tcode)) for operation, _, activity, tcode  in self.mapd().keys()]
-#         return set(blocks)
+    #     blocks = [(operation, activity, int(tcode)) for operation, _, activity, tcode  in self.mapd().keys()]
+    #     return set(blocks)
+
     
-#     def get_time_series(self, t_opn, t_cons, t_code, opnid, activity = None):
-#         """Retrieve a single constituent time-series concatenated across files.
 
-#         Parameters
-#         ----------
-#         t_opn : str
-#             Operation type (``'PERLND'``, ``'IMPLND'``, or ``'RCHRES'``).
-#         t_cons : str
-#             Constituent name stored in the HBN file.
-#         t_code : int or str
-#             HSPF time-code or frequency string.
-#         opnid : int
-#             Operation segment ID.
-#         activity : str, optional
-#             HSPF activity name (e.g. ``'HYDR'``).  Inferred when
-#             ``None``.
+    def get_multiple_timeseries(self,t_opn,t_code,t_con,opnids = None,activity = None,axis = 1,long_format = False):
+        """Retrieve a constituent across multiple segments, concatenated across files.
 
-#         Returns
-#         -------
-#         pandas.DataFrame
-#             Time-series concatenated column-wise from each HBN file.
+        Parameters
+        ----------
+        t_opn : str
+            Operation type (``'PERLND'``, ``'IMPLND'``, or ``'RCHRES'``).
+        t_code : int or str
+            HSPF time-code or frequency string.
+        t_con : str
+            Constituent name stored in the HBN file.
+        opnids : list of int, optional
+            Segment IDs to include.  If ``None``, all available IDs are
+            used.
+        activity : str, optional
+            HSPF activity name.  Inferred when ``None``.
+        axis : int, optional
+            Concatenation axis (default ``1``).
+        long_format : bool, optional
+            If ``True``, melt the result into long format with columns
+            ``'OPNID'``, ``'value'``, ``'TIMESERIES'``, and
+            ``'OPERATION'``.
 
-#         Raises
-#         ------
-#         ValueError
-#             If no data is found for the given query parameters.
-#         """
-#         df = pd.concat([hbn._get_time_series(t_opn, t_cons, t_code, opnid, activity) for hbn in self.hbns],axis = 1)
-#         if df.empty:
-#             raise ValueError(f"No data found for {t_opn} {t_cons} {t_code} {opnid} {activity}")
-        
-#         if long_format:
-#             df = df.reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID',value_name = t_con)
-#             df.rename(columns = {'index':'datetime'},inplace = True)
-#             df['OPERATION'] = t_opn
-#         return df
-        
-#     def get_multiple_timeseries(self,t_opn,t_code,t_con,opnids = None,activity = None,axis = 1,long_format = False):
-#         """Retrieve a constituent across multiple segments, concatenated across files.
+        Returns
+        -------
+        pandas.DataFrame
+            Wide or long-format DataFrame of the requested time-series.
 
-#         Parameters
-#         ----------
-#         t_opn : str
-#             Operation type (``'PERLND'``, ``'IMPLND'``, or ``'RCHRES'``).
-#         t_code : int or str
-#             HSPF time-code or frequency string.
-#         t_con : str
-#             Constituent name stored in the HBN file.
-#         opnids : list of int, optional
-#             Segment IDs to include.  If ``None``, all available IDs are
-#             used.
-#         activity : str, optional
-#             HSPF activity name.  Inferred when ``None``.
-#         axis : int, optional
-#             Concatenation axis (default ``1``).
-#         long_format : bool, optional
-#             If ``True``, melt the result into long format with columns
-#             ``'OPNID'``, ``'value'``, ``'TIMESERIES'``, and
-#             ``'OPERATION'``.
+        Raises
+        ------
+        ValueError
+            If no data is found for the given query parameters.
+        """
+        if isinstance(t_code, str):
+            t_code = TIMESTEP_LABELS[t_code]
 
-#         Returns
-#         -------
-#         pandas.DataFrame
-#             Wide or long-format DataFrame of the requested time-series.
+        if activity is None:
+            activity = self._infer_activity(t_opn, t_con)
 
-#         Raises
-#         ------
-#         ValueError
-#             If no data is found for the given query parameters.
-#         """
-#         df = pd.concat([hbn._get_multiple_timeseries(t_opn,t_code,t_con,opnids,activity) for hbn in self.hbns],axis = 1)
-#         if df.empty:
-#             raise ValueError(f"No data found for {t_opn} {t_con} {t_code} {opnids} {activity}")
-        
-#         if long_format:
-#             df = df.reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID',value_name = 'value')
-#             df.rename(columns = {'index':'datetime'},inplace = True)
-#             df['TIMESERIES'] = t_con
-#             df['OPERATION'] = t_opn
-#         return df
+        if opnids is None:
+            opnids = self._infer_opnids(t_opn,t_con,activity,t_code)
 
-#     def get_perlnd_constituent(self,constituent,perlnd_ids = None,time_step = 5):
-#         """Retrieve a summed pervious-land constituent time-series.
+        df = [self.series(t_opn, opnid, activity, t_code,t_con) for opnid in opnids]
+        df = pd.concat(df,axis = axis)
+        df.columns = opnids
 
-#         Parameters
-#         ----------
-#         constituent : str
-#             High-level constituent abbreviation.
-#         perlnd_ids : list of int, optional
-#             Reserved; currently unused.
-#         time_step : int or str, optional
-#             HSPF time-code (default ``5`` = yearly).
+        if long_format:
+            df = df.reset_index().melt(id_vars = ['datetime'],var_name = 'OPNID',value_name = 'value')
+            df.rename(columns = {'index':'datetime'},inplace = True)
+            df['TIMESERIES'] = t_con
+            df['OPERATION'] = t_opn
+        return df
 
-#         Returns
-#         -------
-#         pandas.DataFrame
-#             Summed constituent time-series across PERLND segments.
-#         """
-#         return get_simulated_perlnd_constituent(self,constituent,time_step)
+    
+    def get_perlnd_constituent(self,constituent,perlnd_ids = None,time_step = 5):
+        """Retrieve a summed pervious-land constituent time-series.
 
-#     def get_implnd_constituent(self,constituent,implnd_ids = None,time_step = 5):
-#         """Retrieve a summed impervious-land constituent time-series.
+        Parameters
+        ----------
+        constituent : str
+            High-level constituent abbreviation.
+        perlnd_ids : list of int, optional
+            Reserved; currently unused.
+        time_step : int or str, optional
+            HSPF time-code (default ``5`` = yearly).
 
-#         Parameters
-#         ----------
-#         constituent : str
-#             High-level constituent abbreviation.
-#         implnd_ids : list of int, optional
-#             Reserved; currently unused.
-#         time_step : int or str, optional
-#             HSPF time-code (default ``5`` = yearly).
+        Returns
+        -------
+        pandas.DataFrame
+            Summed constituent time-series across PERLND segments.
+        """
+        return series.get_simulated_perlnd_constituent(self,constituent,time_step)
 
-#         Returns
-#         -------
-#         pandas.DataFrame
-#             Summed constituent time-series across IMPLND segments.
-#         """
-#         return get_simulated_implnd_constituent(self,constituent,time_step)
+    def get_implnd_constituent(self,constituent,implnd_ids = None,time_step = 5):
+        """Retrieve a summed impervious-land constituent time-series.
+
+        Parameters
+        ----------
+        constituent : str
+            High-level constituent abbreviation.
+        implnd_ids : list of int, optional
+            Reserved; currently unused.
+        time_step : int or str, optional
+            HSPF time-code (default ``5`` = yearly).
+
+        Returns
+        -------
+        pandas.DataFrame
+            Summed constituent time-series across IMPLND segments.
+        """
+        return series.get_simulated_implnd_constituent(self,constituent,time_step)
 
         
-#     def get_reach_constituent(self,constituent,reach_ids,time_step,unit = None):
-#         """Retrieve a reach constituent, dispatching to flow or temperature helpers.
+    def get_reach_constituent(self,constituent,reach_ids,time_step,unit = None):
+        """Retrieve a reach constituent, dispatching to flow or temperature helpers.
 
-#         Parameters
-#         ----------
-#         constituent : str
-#             ``'Q'`` for flow, ``'WT'`` for water temperature, or any
-#             water-quality constituent abbreviation.
-#         reach_ids : list of int
-#             Reach segment IDs.
-#         time_step : int or str
-#             HSPF time-code or frequency string.
-#         unit : str, optional
-#             Desired output unit (passed through to the underlying
-#             retrieval function).
+        Parameters
+        ----------
+        constituent : str
+            ``'Q'`` for flow, ``'WT'`` for water temperature, or any
+            water-quality constituent abbreviation.
+        reach_ids : list of int
+            Reach segment IDs.
+        time_step : int or str
+            HSPF time-code or frequency string.
+        unit : str, optional
+            Desired output unit (passed through to the underlying
+            retrieval function).
 
-#         Returns
-#         -------
-#         pandas.DataFrame
-#             Single-column DataFrame of the requested constituent.
-#         """
-#         if constituent == 'Q':
-#             df = get_simulated_flow(self,time_step,reach_ids,unit = unit)
-#         elif constituent == 'WT':
-#             df = get_simulated_temperature(self,time_step,reach_ids)
-#         else:     
-#             df = get_simulated_reach_constituent(self,constituent,time_step,reach_ids,unit)
-#         return df.to_frame()
+        Returns
+        -------
+        pandas.DataFrame
+            Single-column DataFrame of the requested constituent.
+        """
+        if constituent == 'Q':
+            df = series.get_simulated_flow(self,time_step,reach_ids,unit = unit)
+        elif constituent == 'WT':
+            df = series.get_simulated_temperature(self,time_step,reach_ids)
+        else:     
+            df = series.get_simulated_reach_constituent(self,constituent,time_step,reach_ids,unit)
+        return df.to_frame()
     
 #     def output_names(self):
 #         """Return available output names merged across all HBN files.
@@ -419,7 +517,7 @@ class HbnStore:
 #         dict
 #             Nested dictionary ``{operation: {activity: set_of_names}}``.
 #         """
-#         dics =  [hbn.output_names() for hbn in self.hbns]
+#         dics =  [hbn.output_names() for hbn in self.files]
 #         return merge_dicts(dics)
 #         # for dic in dics:
 #         #     for operation, vals in dic.items():
@@ -454,7 +552,7 @@ class HbnStore:
 #             constituent names.
 #         """
 #         dd = defaultdict(set)    
-#         dics =  [hbn.mapn for hbn in self.hbns]
+#         dics =  [hbn.mapn for hbn in self.files]
 #         for dic in dics:
 #             for key, vals in dic.items():
 #                 [dd[key].add(val) for val in vals]

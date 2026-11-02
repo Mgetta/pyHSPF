@@ -1,28 +1,12 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Oct 13 09:26:05 2022
-
-@author: mfratki
-"""
 from pathlib import Path
 import os.path
 import subprocess
-import concurrent.futures
-from hspf.model.uci import UCI
-from hspf.model import hbn
+from hspf.uci.document import UciDocument
+from hspf.hbn.store import HbnStore
 from hspf.reports import ReportsAccessor
-from hspf.model.wdm import wdmInterface
-from hspf.model import wdmReader
+from hspf.wdm import wdmInterface, readWDM
 from hspf.outputs import outputWriter
- 
-
-
-winHSPF = str(Path(__file__).resolve().parent) + '\\bin\\WinHSPFLt\\WinHspfLt.exe'
-
-
-# Only for accessing information regarding a specific uci_file
-# Trying to segregate manipulating the uci file and information about the uci file
-
+from hspf import runner
 
 class hspfModel():
     winHSPF = str(Path(__file__).resolve().parent) + '\\bin\\WinHSPFLt\\WinHspfLt.exe'
@@ -34,7 +18,7 @@ class hspfModel():
                       #wdm_files:list = None,
                       #hbn_files:str = None):
         # Inputs
-        self.uci = UCI(uci_file)
+        self.uci = UciDocument(uci_file)
         self.hbn_paths= []
         self.wdm_paths = []
         self.uci_file = Path(uci_file).resolve()
@@ -42,7 +26,7 @@ class hspfModel():
         self.validate_uci(run_model = run_model)
         
         
-        self.hbns = hbn.hbnInterface(self.hbn_paths)
+        self.hbns = HbnStore(self.hbn_paths)
         try:
             self.wdms = wdmInterface(self.wdm_paths)
         except:
@@ -54,13 +38,13 @@ class hspfModel():
 
         
     def _reinitialize(self,uci_file:str,run_model:bool = False):
-        self.uci = UCI(uci_file)
+        self.uci = UciDocument(uci_file)
         self.hbn_paths= []
         self.wdm_paths = []
         self.uci_file = Path(uci_file).resolve()
         self.validate_uci(run_model = run_model)
 
-        self.hbns = hbn.hbnInterface(self.hbn_paths)
+        self.hbns = HbnStore(self.hbn_paths)
         try:
             self.wdms = wdmInterface(self.wdm_paths)
         except:
@@ -108,27 +92,26 @@ class hspfModel():
         else:
             self.run_model()
 
-    def run_model(self,new_uci_file = None,):
+    def run_model(self,new_uci_file = None, wait_for_completion=True):
         
         if new_uci_file is None:
             new_uci_file = self.uci_file
+        runner.run_model(new_uci_file, 
+                         wait_for_completion = wait_for_completion)
         
-        # new_uci_file = self.model_path.joinpath(uci_name)
-        # self.uci.write(new_uci_file)
-
-        subprocess.run([winHSPF,self.uci_file.as_posix()]) #, stdout=subprocess.PIPE, creationflags=0x08000000)
-        self._reinitialize(new_uci_file,run_model = False)
+        self._reinitialize(new_uci_file,
+                           run_model = False)
 
     def load_hbn(self,hbn_name):
-        self.hbns[hbn_name] = hbn.hbnClass(self.uci_file.parent.joinpath(hbn_name).as_posix())
+        self.hbns[hbn_name] = HbnStore(self.uci_file.parent.joinpath(hbn_name).as_posix())
 
     def load_uci(self,uci_file,run_model:bool = False):
-        self.uci = UCI(uci_file)
+        self.uci = UciDocument(uci_file)
         self.validate_uci(run_model = run_model)
     
     def convert_wdms(self):
         for wdm_file in self.wdm_paths:
-            wdmReader.readWDM(wdm_file,
+            readWDM(wdm_file,
                               wdm_file.parent.joinpath(wdm_file.name.replace('.wdm','.hdf5').replace('.WDM','hdf5')))
         self._load_wdms()
     
@@ -192,76 +175,3 @@ class hspfModel():
                     table.loc[index,'FILENAME'] = Path(os.path.relpath(file_path.name, start = self.uci_file.parent)).as_posix()
         self.uci.replace_table(table,'FILES')
 
-
-
-def run_uci(uci_file:str, ):
-    """
-    convenience function to run a single model uci file.
-    """
-    print(f"Starting model: {uci_file}")
-    subprocess.run([winHSPF, uci_file]) 
-    print(f"Completed model: {uci_file}")
-
-
-def run_batch_files(file_list, max_concurrent=4):
-    """
-    Takes a list of .uci file paths and runs them N at a time.
-    """
-    # Create a pool of workers (threads)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent) as executor:
-        # Submit all jobs to the pool
-        future_to_file = {
-            executor.submit(run_uci, uci_file): uci_file 
-            for uci_file in file_list
-        }
-        
-        # Monitor completion (optional, but good for error catching)
-        for future in concurrent.futures.as_completed(future_to_file):
-            uci_file = future_to_file[future]
-            try:
-                future.result() # This will raise exceptions if run_uci failed
-            except Exception as exc:
-                print(f"File {uci_file} generated an exception: {exc}")
-                
-
-# class runManager():
-#     def __init__()
-    
-#     self.requests = {'original': 0,'copy0':0,'copy1':0,'copy2':0}
-#     self.childs = {'original':None,
-#                 'copy0':None,
-#                 'copy1':None,
-#                 'copy2':None}
-    
-#     def original_run(self):
-#         table = self.table('FILES',drop_comments = False)
-#         # Assumes duplicate uci are in uci/copy/
-#         wdm_files = [ (index,name.split('/')[-1]) for index,name in enumerate(table['FILENAME'])
-#                  if name.split('.')[-1] in ['ech','out','wdm']]
-#         for file in wdm_files:
-#             table.iloc[file[0], table.columns.get_loc('FILENAME')] = '../wdms/' + file[1]
-    
-#         hbn_files =  [ (index,name.split('/')[-1]) for index,name in enumerate(table['FILENAME'])
-#                  if name.split('.')[-1] in ['hbn']]
-#         for file in hbn_files:
-#             table.iloc[file[0], table.columns.get_loc('FILENAME')] = '../hbns/' + file[1]
-        
-#         self.uci['FILES']['na']['table'][0] = table
-#         self.update_lines('FILES')
-        
-#     def duplicate_run(self,copy): #copy1,copy2,copy3 ... copy7 only options
-#         table = self.table('FILES',drop_comments = False)
-        
-#         # Assumes duplicate uci are in uci/copy/
-#         wdm_files = [ (index,name.split('/')[-1]) for index,name in enumerate(table['FILENAME'])
-#                  if name.split('.')[-1] in ['ech','out','wdm']]
-#         for file in wdm_files:
-#             table.iloc[file[0], table.columns.get_loc('FILENAME')] = '../../wdms/' + copy + '/' + file[1]
-    
-#         hbn_files =  [ (index,name.split('/')[-1]) for index,name in enumerate(table['FILENAME'])
-#                  if name.split('.')[-1] in ['hbn']]
-#         for file in hbn_files:
-#             table.iloc[file[0], table.columns.get_loc('FILENAME')] = '../../hbns/' + file[1]
-         
-#         self.uci['FILES']['na']['table'][0] = table
-#         self.update_lines('FILES')

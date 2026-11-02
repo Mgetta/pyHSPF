@@ -14,8 +14,6 @@ import networkx as nx
 import pandas as pd
 
 from hspf.core.types import EdgeRole, OperationKey, RoutingSource
-from hspf.model import topology
-from hspf.model import topology
 
 
 OPERATIONS_COLUMNS = tuple(
@@ -87,6 +85,7 @@ class ModelTopology:
     external_inputs: pd.DataFrame
     ftable_ids: frozenset[int]
 
+
     def operation_keys(self, *, running_only: bool = True) -> set[OperationKey]:
         frame = self.operations
         if running_only:
@@ -130,30 +129,76 @@ class ModelTopology:
 
     def precip_assignments(self) -> pd.DataFrame:
         frame = self.external_inputs
-        return frame.copy() if frame.empty else frame.loc[frame["target_member"] == "PREC"].copy()
+        return frame.copy() if frame.empty else frame.loc[frame["TMEMN"] == "PREC"].copy()
+
+    def schematic_connections(self) -> pd.DataFrame:
+        return self.connections.loc[
+            self.connections["routing_source"] == RoutingSource.SCHEMATIC_MASS_LINK.value
+        ].copy()
+
+    def network_connections(self) -> pd.DataFrame:
+        return self.connections.loc[
+            self.connections["routing_source"] == RoutingSource.NETWORK.value
+        ].copy()
+
+    def schematic_member_transfers(self) -> pd.DataFrame:
+        return self.member_transfers.loc[
+            self.member_transfers["routing_source"] == RoutingSource.SCHEMATIC_MASS_LINK.value
+        ].copy()
+
+    def network_member_transfers(self) -> pd.DataFrame:
+        return self.member_transfers.loc[
+            self.member_transfers["routing_source"] == RoutingSource.NETWORK.value
+        ].copy()
+
+def _infer_pqual_names(uci, transfer: pd.DataFrame) -> pd.DataFrame:
+    transfer['hbn_name'] = transfer['SMEMN'].copy()
+    mask = transfer['hbn_name'].isin(['IOQUAL', 'SOQUAL', 'POQUAL', 'AOQUAL'])
+    sub = transfer.loc[mask]
+
+    transfer.loc[mask, 'hbn_name'] = [
+        f"{smemn}-{uci.table(svol, 'QUAL-PROPS', int(sb1) - 1).iloc[0]['QUALID']}"
+        for smemn, svol, sb1 in zip(sub['hbn_name'], sub['SVOL'], sub['SMEMSB1'])
+    ]
+    return transfer
+
 
 
 def build_topology(uci: Any) -> ModelTopology:
 
     schematic = uci.table('SCHEMATIC')
     schematic['MLNO'] = schematic['MLNO'].str.strip()
-    schematic['routing_source'] = 'schematic'
+    schematic['routing_source'] = RoutingSource.SCHEMATIC_MASS_LINK.value
 
-    network = uci.table('NETWORK') if 'NETWORK' in uci.block_names() else pd.DataFrame()
-    network.rename(columns = {'TOPFST':'TVOLNO'}, inplace=True)
-    network['effective_factor'] = network['MFACTOR'].copy()
-    network['routing_source'] = 'network'
+    if 'NETWORK' in uci.block_names():
+        network = uci.table('NETWORK') if 'NETWORK' in uci.block_names() else pd.DataFrame()
+        network.rename(columns = {'TOPFST':'TVOLNO'}, inplace=True)
+        network['effective_factor'] = network['MFACTOR'].copy()
+        network['routing_source'] = RoutingSource.NETWORK.value
+        network = _infer_pqual_names(uci, network)
+
+        grouped = network.groupby(['TVOL', 'TVOLNO', 'SVOL', 'SVOLNO'])
+        network_connections = grouped.first()
+        is_identical = grouped['MFACTOR'].nunique(dropna=False) == 1
+        network_connections['MFACTOR'] = network_connections['MFACTOR'].where(is_identical, pd.NA)
+        network_connections = network_connections.reset_index()
+        network_connections['effective_factor'] = network_connections['MFACTOR'].copy()
+    else:
+        network = pd.DataFrame()
+        network_connections = pd.DataFrame()
+
     ext_sources = uci.table('EXT SOURCES')
+    ext_sources.rename(columns = {'TOPFST':'TVOLNO'}, inplace=True)
     ext_sources['SVOL'] = ext_sources['SVOL'].str.upper().replace({'WDM': 'WDM1'})
 
     files = uci.table('FILES')
     files['FTYPE'] = files['FTYPE'].str.upper().replace({'WDM': 'WDM1'})
 
     opn_sequence = uci.table('OPN SEQUENCE')
-    geninfo = pd.concat([uci.table(operation, "GEN-INFO").assign(OPERATION=operation) for operation in ['PERLND','IMPLND','RCHRES']])
-    geninfo = geninfo[['LSID','NEXITS','LKFG','RCHID','OPERATION']].reset_index()
+    geninfo = pd.concat([uci.table(operation, "GEN-INFO").assign(OPERATION=operation).reset_index(drop=False) for operation in ['PERLND','IMPLND','RCHRES']])
+    geninfo = geninfo[['OPNID','LSID','NEXITS','LKFG','RCHID','OPERATION']]
     geninfo['has_geninfo'] = True
-    gener_opcode = uci.table('GENER', 'OPCODE').reset_index() if 'GENER' in uci.block_names() else pd.DataFrame()
+    gener_opcode = uci.table('GENER', 'OPCODE').reset_index(drop=False) if 'GENER' in uci.block_names() else pd.DataFrame()
     gener_opcode['has_gener_opcode'] = True
     gener_opcode['OPERATION'] = 'GENER'
     ftable_names = tuple(uci.table_names('FTABLES'))
@@ -176,20 +221,26 @@ def build_topology(uci: Any) -> ModelTopology:
     mass_links = pd.concat(mass_links, ignore_index=True)
     mass_links['MLNO'] = mass_links['MLNO'].astype("string")
     mass_links['table_name'] = mass_links['table_name'].astype("string")
+    mass_links = _infer_pqual_names(uci, mass_links)
 
     schematic_masslinks = pd.merge(schematic, mass_links, on=['MLNO', 'SVOL', 'TVOL'], how='left',suffixes=['_schematic','_masslink'])
     schematic_masslinks['TMEMSB1'] = _prefer(schematic_masslinks['TMEMSB1_schematic'], schematic_masslinks['TMEMSB1_masslink'])
-    schematic_masslinks['TMEMSB2'] = _prefer(schematic_masslinks['TMEMSB2_schematic'], schematic_masslinks['TMEMSB2_masslink'])
-    schematic_masslinks['effective_factor'] = schematic_masslinks['AFACTR']*schematic_masslinks['MFACTOR']
-
+    schematic_masslinks['TMEMSB2'] = _prefer(schematic_masslinks['TMEMSB2_schematic'], schematic_masslinks['TMEMSB2_masslink'])    
+    # Fill default multipliers (1.0) before computing effective_factor
+    schematic_masslinks["AFACTR"] = schematic_masslinks["AFACTR"].astype(float).fillna(1.0)
+    schematic_masslinks["MFACTOR"] = schematic_masslinks["MFACTOR"].astype(float).fillna(1.0)
+    schematic_masslinks["effective_factor"] = (schematic_masslinks["AFACTR"] * schematic_masslinks["MFACTOR"])
+    
     member_transfers = pd.concat([network, schematic_masslinks], ignore_index=True)
 
-    grouped = network.groupby(['TVOL', 'TVOLNO', 'SVOL', 'SVOLNO'])
-    network_connections = grouped.first()
-    is_identical = grouped['MFACTOR'].nunique(dropna=False) == 1
-    network_connections['MFACTOR'] = network_connections['MFACTOR'].where(is_identical, pd.NA)
-    network_connections = network_connections.reset_index()
-    network_connections['effective_factor'] = network_connections['MFACTOR'].copy()
+    # Normalize blank subscripts to '1' so joins against catalog/inflow_targets succeed
+    # TODO move this normalization step earlier in the data processing pipeline
+    for sub_col in ("SMEMSB1", "SMEMSB2", "TMEMSB1", "TMEMSB2"):
+        if sub_col in member_transfers.columns:
+            member_transfers[sub_col] = (
+                member_transfers[sub_col].fillna("1").astype(str).str.strip().replace("", "1")
+            )
+
     connections = pd.concat([schematic,network_connections])
     connections = connections.reset_index(drop=True)
 
@@ -205,6 +256,16 @@ def build_topology(uci: Any) -> ModelTopology:
         ftable_ids = ftable_ids,
     )
 
+
+#TODO: Expand ROFLOW rows in mass-links or member transfer
+'''
+case: svol == GENER, sgrpn == OUTPUT
+    - calculate timeseries for the output from GENER
+
+
+
+'''
+#TODO: Add opcode and k to gener rows
 
 
 def infer_edge_role(source_operation: Any, target_operation: Any) -> EdgeRole:
@@ -222,9 +283,13 @@ def afactr_semantics(source_operation: Any) -> str:
 
 
 def network_area_basis(row: pd.Series) -> bool:
-    return row.get("routing_source") == RoutingSource.NETWORK.value and infer_edge_role(row.get("source_operation"), row.get("target_operation")) == EdgeRole.LAND_TO_REACH
+    source_operation = row.get("SVOL", row.get("source_operation"))
+    target_operation = row.get("TVOL", row.get("target_operation"))
+    return (
+        row.get("routing_source") == RoutingSource.NETWORK.value
+        and infer_edge_role(source_operation, target_operation) == EdgeRole.LAND_TO_REACH
+    )
 
 
 def _prefer(first: pd.Series, second: pd.Series) -> pd.Series:
     return first.where(first.notna() & (first.astype(str).str.strip() != ""), second)
-

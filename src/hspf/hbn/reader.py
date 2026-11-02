@@ -141,7 +141,7 @@ class HbnFile:
                         ln = unpack('I', body[slen:slen + 4])[0]
                         n = unpack(f'{ln}s', body[slen + 4:slen + 4 + ln])[0]\
                             .decode('ascii').strip()
-                        mapn[op, id_, activity].append(n)#.replace('-', ''))
+                        mapn[op, id_, activity].append(n)#.replace('-', '')) #BENAL1 and BENAL-1 break this 
                         slen += 4 + ln
                 
                 cpos = reclen + 28

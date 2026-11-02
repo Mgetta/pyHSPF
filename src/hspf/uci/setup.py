@@ -1,14 +1,17 @@
-    
+from pathlib import Path    
+
+import pandas as pd
+import numpy as np
 
 from hspf.core.types import OutputLevel
-
+from hspf.uci import edits
 
 DEFAULT_OUTPUT = OutputLevel.MONTHLY
 N_HBNS = 5
 DEFUALT_CONSTITUENTS = ['Q','WT','TSS','N','TKN','OP','BOD']
 
 
-def initialize(self,name = None, default_output = DEFAULT_OUTPUT,n=None,reach_ids = None, constituents = None):
+def initialize(uci,name = None, default_output = DEFAULT_OUTPUT,n=None,reach_ids = None, constituents = None):
     """Perform a full initialisation of the UCI binary-output configuration.
 
     Creates new BINO entries in the FILES table, configures BINARY-INFO
@@ -40,7 +43,7 @@ def initialize(self,name = None, default_output = DEFAULT_OUTPUT,n=None,reach_id
     """
     
     if name is None:
-        name = self.name
+        name = uci.name
     
     if constituents is None:
         constituents = DEFUALT_CONSTITUENTS
@@ -51,12 +54,12 @@ def initialize(self,name = None, default_output = DEFAULT_OUTPUT,n=None,reach_id
         n = N_HBNS
 
     # Note that the order of these function calls matters
-    setup_files(self,name,n)
-    setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids,constituents = constituents)
-    setup_geninfo(self)
-    setup_qualid(self)
+    setup_files(uci,name,n)
+    setup_binaryinfo(uci,default_output = default_output,reach_ids = reach_ids,constituents = constituents)
+    setup_geninfo(uci)
+    setup_qualid(uci)
 
-def initialize_binary_info(self,default_output = 4,reach_ids = None,constituents = None):
+def initialize_binary_info(uci,default_output = 4,reach_ids = None,constituents = None):
     """Initialise only the BINARY-INFO and GEN-INFO tables.
 
     A lighter-weight alternative to :meth:`initialize` that skips FILES
@@ -78,8 +81,8 @@ def initialize_binary_info(self,default_output = 4,reach_ids = None,constituents
     """
     if constituents is None:
         constituents = ['Q','WT','TSS','N','TKN','OP','BOD']
-    setup_binaryinfo(self,default_output = default_output,reach_ids = reach_ids,constituents=constituents)
-    setup_geninfo(self)
+    setup_binaryinfo(uci,default_output = default_output,reach_ids = reach_ids,constituents=constituents)
+    setup_geninfo(uci)
 
 
 def setup_qualid(uci):
@@ -124,7 +127,7 @@ def setup_qualid(uci):
             assert len(table['QUALID'].unique()) == 1, f"Multiple QUALIDs found in {uci.name}: {table['QUALID'].unique()}"
             assert(set(table['QUALID'].unique()).issubset(set(QUALID_MAP.keys()))), f"Unknown QUALID found in {uci.name}: {set(table['QUALID'].unique()) - set(QUALID_MAP.keys())}"
             qualid = table['QUALID'].iloc[0]
-            uci.update_table(QUALID_MAP[qualid],key[0],'QUAL-PROPS',key[2],columns = 'QUALID',operator = 'set')
+            edits.update_table(uci,QUALID_MAP[qualid],key[0],'QUAL-PROPS',key[2],columns = 'QUALID',operator = 'set')
 
 def setup_files(uci,name,n = 5):
     """Initialise the FILES table with new binary output (BINO) entries.
@@ -222,9 +225,9 @@ def setup_geninfo(uci):
                 for opnid,bino_num in zip(opnids,bino_nums):
                     if len(opnid) > 0:
                         if operation == 'RCHRES': #TODO convert BUNITE to BUNIT1 to get rid of this if statement
-                            uci.update_table(bino_num,'RCHRES','GEN-INFO',0,opnids = opnid,columns = 'BUNITE',operator = 'set')
+                            edits.update_table(uci, bino_num,'RCHRES','GEN-INFO',0,opnids = opnid,columns = 'BUNITE',operator = 'set')
                         else:
-                            uci.update_table(bino_num,operation,'GEN-INFO',0,opnids = opnid,columns = 'BUNIT1',operator = 'set')
+                            edits.update_table(uci, bino_num,operation,'GEN-INFO',0,opnids = opnid,columns = 'BUNIT1',operator = 'set')
 
 
 
@@ -269,23 +272,23 @@ def setup_binaryinfo(uci,default_output = 4,reach_ids = None,constituents = None
                         'TP': ['OXRXPR','NUTRPR','PLNKPR']}
     
     # Initialize Binary-Info
-    uci.update_table(default_output,'PERLND','BINARY-INFO',0,
+    edits.update_table(uci, default_output,'PERLND','BINARY-INFO',0,
                      columns = ['AIRTPR', 'SNOWPR', 'PWATPR', 'SEDPR', 'PSTPR', 'PWGPR', 'PQALPR','MSTLPR', 'PESTPR', 'NITRPR', 'PHOSPR', 'TRACPR'],
                      operator = 'set')
-    uci.update_table(default_output,'IMPLND','BINARY-INFO',0,
+    edits.update_table(uci, default_output,'IMPLND','BINARY-INFO',0,
                      columns = ['ATMPPR', 'SNOWPR', 'IWATPR', 'SLDPR', 'IWGPR', 'IQALPR'],
                      operator = 'set')
-    uci.update_table(default_output,'RCHRES','BINARY-INFO',0, 
+    edits.update_table(uci, default_output,'RCHRES','BINARY-INFO',0, 
                      columns = ['HYDRPR', 'ADCAPR', 'CONSPR', 'HEATPR', 'SEDPR', 'GQLPR', 'OXRXPR', 'NUTRPR', 'PLNKPR', 'PHCBPR'],
                      operator = 'set')
         
-    uci.update_table(default_output,'PERLND','BINARY-INFO',0,columns = ['SNOWPR','SEDPR','PWATPR','PQALPR'],operator = 'set')
-    uci.update_table(default_output,'IMPLND','BINARY-INFO',0,columns = ['SNOWPR','IWATPR','SLDPR','IQALPR'],operator = 'set')
-    uci.update_table(default_output,'RCHRES','BINARY-INFO',0,columns = ['HYDRPR','SEDPR','HEATPR','OXRXPR','NUTRPR','PLNKPR'],operator = 'set')
+    edits.update_table(uci, default_output,'PERLND','BINARY-INFO',0,columns = ['SNOWPR','SEDPR','PWATPR','PQALPR'],operator = 'set')
+    edits.update_table(uci, default_output,'IMPLND','BINARY-INFO',0,columns = ['SNOWPR','IWATPR','SLDPR','IQALPR'],operator = 'set')
+    edits.update_table(uci, default_output,'RCHRES','BINARY-INFO',0,columns = ['HYDRPR','SEDPR','HEATPR','OXRXPR','NUTRPR','PLNKPR'],operator = 'set')
     if reach_ids is not None:
         if constituents is None:
-             uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = ['SEDPR','OXRXPR','NUTRPR','PLNKPR','HEATPR','HYDRPR'],opnids = reach_ids,operator = 'set')
+             edits.update_table(uci, 2,'RCHRES','BINARY-INFO',0,columns = ['SEDPR','OXRXPR','NUTRPR','PLNKPR','HEATPR','HYDRPR'],opnids = reach_ids,operator = 'set')
         else:
             for constituent in constituents:
-                uci.update_table(2,'RCHRES','BINARY-INFO',0,columns = CONSTITUENT_MAP[constituent],opnids = reach_ids,operator = 'set')
+                edits.update_table(uci, 2,'RCHRES','BINARY-INFO',0,columns = CONSTITUENT_MAP[constituent],opnids = reach_ids,operator = 'set')
 

@@ -1,13 +1,16 @@
 
 from abc import ABC, abstractmethod
-import numpy as np
-import pandas as pd
-from typing import Union
+from dataclasses import dataclass
+from typing import Iterable
 from pathlib import Path
 import math
 
-from hspf.model.UCI.schema import resolve_schema
-parseTable = pd.read_csv(Path(__file__).parent.parent.parent/'data/ParseTable.csv',
+import numpy as np
+import pandas as pd
+
+
+from hspf.uci.schema import resolve_schema, get_block_names, get_table_names
+parseTable = pd.read_csv(Path(__file__).parent.parent/'data/ParseTable.csv',
                           dtype = {'width': 'Int64',
                                   'start': 'Int64',
                                   'stop': 'Int64',
@@ -137,6 +140,7 @@ def get_blocks(lines):
     """
     dic = {}
     shift = len(lines)-1
+    block_names = set(parseTable['block'].tolist()) #list(get_block_names())
     for index,line in enumerate(reversed(lines)):
         if '***' in line:
             pass
@@ -144,7 +148,7 @@ def get_blocks(lines):
             line,number = split_number(line.strip()) # Sensitive method to separate numbers
             line_strip = line.strip() + number
             if line_strip.startswith('END'):
-                if (line_strip[4:] in parseTable['block'].values): # | (line_strip[4:] in structure['block'].values):
+                if (line_strip[4:] in block_names): # | (line_strip[4:] in structure['block'].values):
                     current_name = line_strip[4:]                
                     dic[current_name] = {}
                     dic[current_name]['indcs'] = [shift-index]
@@ -194,6 +198,8 @@ def build_uci(lines):
     keys = []
     tables = []
     for k,v in blocks.items():
+        #TODO: actually use the schema definition.
+        #policy = resolve_policy(k)
         if 'na' in parseTable[parseTable['block']==k]['table'].unique():
             table = Table(k,'na')
             table.lines = lines[v['indcs'][1]:v['indcs'][0]+1][1:-1]
@@ -270,41 +276,41 @@ class Table():
         self.supplemental = False
         
     
-        self.parser = parserSelector[self.block]
+        self.policy = BLOCK_POLICIES[self.block]
+        self.mutated = False
         #self.updater = Updater
     
-    def _delimiters(self):
-        return delimiters(self.block,self.name)
-    
-    def parse(self):
-        self.data = self.parser.parse(self.block,self.name,self.lines)
-        
+    def parse(self, simulated_opnids: Iterable[int] | None):
+        self.data = self.policy.parser.parse(self.block,self.name,self.lines)
+        if self.policy.normalizer is not None:
+            self.data = self.policy.normalizer(self,simulated_opnids)
+
     def write(self): # specify values
-        self.lines = self.parser.write(self.block,self.name,self.data)        
+        self.lines = self.policy.parser.write(self.block,self.name,self.data)        
     
     def replace(self,data): #replace an entire table 
         self.data = data.copy()
-        self.write()
+        self.mutated = True
     
     def set_value(self,rows,columns,value,axis = 0):
         self.data.loc[rows,columns] = value
-        self.write()
-    
+        self.mutated = True
+
     def mul(self,rows,columns,value,axis = 0):
         self.data.loc[rows,columns] = self.data.loc[rows,columns].mul(value,axis)
-        self.write()
+        self.mutated = True
         
     def add(self,rows,columns,value,axis = 0):
         self.data.loc[rows,columns] = self.data.loc[rows,columns].add(value,axis)
-        self.write()
+        self.mutated = True
         
     def sub(self,rows,columns,value,axis = 0 ):
         self.data.loc[rows,columns] = self.data.loc[rows,columns].sub(value,axis)
-        self.write()
+        self.mutated = True
         
     def div(self,rows,columns,value,axis = 0):
         self.data.loc[rows,columns] = self.data.loc[rows,columns].div(value,axis)
-        self.write()
+        self.mutated = True
 
 
 class defaultParser(Parser):
@@ -413,34 +419,6 @@ class globalParser(Parser):
     
     def write(block,table_name,table):
         raise NotImplementedError()
-
-parserSelector = {'GLOBAL':globalParser,
-                'FILES':standardParser,
-                'OPN SEQUENCE':opnsequenceParser,
-                'PERLND':standardParser,
-                'IMPLND':standardParser,
-                'RCHRES':standardParser,
-                'COPY':standardParser,
-                'PLTGEN':standardParser,
-                'DISPLY':defaultParser,
-                'DURANL':defaultParser,
-                'GENER':standardParser,
-                'MUTSIN':defaultParser,
-                'BMPRAC':defaultParser,
-                'REPORT':defaultParser,
-                'FTABLES':standardParser,
-                'EXT SOURCES':standardParser,
-                'NETWORK':standardParser,
-                'SCHEMATIC':standardParser,
-                'MASS-LINK': standardParser,
-                'EXT TARGETS':standardParser,
-                'PATHNAMES':defaultParser,
-                'FORMATS':defaultParser,
-                'SHADE':defaultParser,
-                'SPEC-ACTIONS':defaultParser,
-                'MONTH-DATA':standardParser,
-                'CATEGORY':defaultParser}
-
 
 def parse_lines2(lines,starts,stops,dtypes):
     comments = []
@@ -656,3 +634,196 @@ def format_line(line, starts, stops, dtypes):
            
 #     return ''.join(formatted_line)
 
+
+
+def resolve_policy(block_name):
+    """Return the BlockPolicy for a given block name."""
+    return BLOCK_POLICIES.get(block_name.upper())
+
+
+# Expanding opnid-opnid in tables
+def format_opnids(table:Table,simulated_opnids:dict):
+    """Expand range-style OPNID entries and filter to valid operation IDs.
+
+    UCI tables sometimes encode a range of operation IDs as a single row with
+    an OPNID value like ``'1 5'`` (meaning IDs 1 through 5 inclusive).  This
+    function expands such rows into one row per ID, filters the result to only
+    those IDs present in *simulated_opnids*, and sets OPNID as the DataFrame index.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        Parsed table data that includes an ``OPNID`` column.  Comment rows
+        (where ``OPNID`` is empty) are preserved.
+    simulated_opnids : list of int
+        The set of active operation IDs for the block being processed
+        (typically one of the per-operation lists from ``UCI.simulated_opnids``).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Expanded and filtered table with ``OPNID`` (integer) as the index.
+    """
+    simulated_opnids = simulated_opnids[table.block]
+    data = table.data
+    
+    indexes = data.loc[data[~(data['OPNID'] == '')].index,'OPNID']
+    for index, value in indexes.items():
+        try:
+            #table.loc[index,'OPNID'] = int(value[0])
+            int(value)
+        except ValueError:
+            value = value.split()
+            opnids = np.arange(int(value[0]),int(value[1])+1)
+            opnids = [opnid for opnid in opnids if opnid in simulated_opnids]
+            if len(opnids) == 0: # incase the x-x mapping covers no valid opnids
+                data.drop(index,inplace = True)
+            else:
+                df = pd.DataFrame([data.loc[index]]*len(opnids))
+                df['OPNID'] = opnids
+                # The insertion method takes advantage of the fact
+                # that Pandas does not automatically reset indexes.
+                data = insert_rows(index,data,df,reset_index = False)
+    
+    
+    #data.loc[data.index[data['OPNID'] == ''],'OPNID'] = pd.NA
+    data['OPNID'] = pd.to_numeric(data['OPNID']).astype('Int64')
+    
+    
+    # Only keep rows that are being simulated    
+    data = data.loc[(data['OPNID'].isin(simulated_opnids)) | (data['OPNID'].isna())]
+    #data = data.set_index('OPNID',drop = True)
+    return data.reset_index(drop=True)
+
+def expand_extsources(table:Table,simulated_opnids:dict):
+    """Expand range-style EXT SOURCES entries and filter to valid operation IDs.
+
+    EXT SOURCES rows may specify a range of target operation IDs via
+    ``TOPFST`` and ``TOPLST`` columns.  This function expands such rows into
+    one row per operation ID, sets ``TOPLST`` to ``pd.NA`` for expanded rows,
+    and then removes rows for operation IDs not present in *simulated_opnids* for
+    their respective ``TVOL`` operation.
+
+    Parameters
+    ----------
+    table : hspf.parser.parsers.Table
+        Parsed EXT SOURCES table containing at minimum the columns
+        ``TOPFST``, ``TOPLST``, and ``TVOL``.
+    simulated_opnids : dict
+        Mapping of operation name (e.g. ``'PERLND'``) to a list of active
+        integer operation IDs (typically ``UCI.simulated_opnids``).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Expanded and filtered EXT SOURCES table with a reset integer index.
+    """
+    start_column = 'TOPFST'
+    end_column = 'TOPLST'
+    data = table.data
+    indexes = data.loc[~data[end_column].isna()]#[[start_column,end_column,'']]
+
+    for index, row in indexes.iterrows():
+        opnids = np.arange(int(row[start_column]),int(row[end_column])+1)
+        opnids = [opnid for opnid in opnids if opnid in simulated_opnids[row['TVOL']]]
+
+        if len(opnids) == 0: # incase the x-x mapping covers no valid opnids
+            data.drop(index,inplace = True)
+        else:
+            df = pd.DataFrame([data.loc[index]]*len(opnids))
+            df[start_column] = opnids
+            df[end_column] = pd.NA
+            df = df.astype(data.dtypes.to_dict())
+            # The insertion method takes advantage of the fact
+            # that Pandas does not automatically reset indexes.
+            data = insert_rows(index,data,df,reset_index = False)
+    
+    
+    #table.loc[table.index[table['OPNID'] == ''],'OPNID'] = pd.NA
+    data[start_column] = pd.to_numeric(data[start_column]).astype('Int64')
+    data[end_column] = pd.to_numeric(data[end_column]).astype('Int64')
+    data = data.reset_index(drop = True)
+
+    opnids = sum(list(simulated_opnids.values()), []) #Note slow method for collapsing lists but fine for this case
+    data = data.loc[(data['TOPFST'].isin(opnids) )| (data['TOPFST'].isna())]
+    
+    # Only keep rows that are being simulated    
+    for operation in simulated_opnids.keys():
+        data = data.drop(data.loc[(data['TVOL'] == operation) & ~(data['TOPFST'].isin(simulated_opnids[operation]))].index)
+    
+    return data
+
+
+def insert_rows(insertion_point,a,b,drop = True,reset_index = True):    
+    """Insert DataFrame *b* into DataFrame *a* at *insertion_point*.
+
+    Parameters
+    ----------
+    insertion_point : int
+        Index label in *a* at which to insert *b*.  All rows of *a* with
+        label ``<= insertion_point`` precede *b*; rows with label
+        ``> insertion_point`` follow it.
+    a : pandas.DataFrame
+        Base DataFrame.
+    b : pandas.DataFrame
+        Rows to insert.
+    drop : bool, optional
+        When ``True`` (default), the row at *insertion_point* is dropped
+        from *a* before inserting *b*.
+    reset_index : bool, optional
+        When ``True`` (default), reset the integer index of the result.
+        Set to ``False`` to preserve original index labels (used by
+        :func:`format_opnids` and :func:`expand_extsources`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Combined DataFrame with *b* inserted at the specified position.
+    """
+    if drop: a = a.drop(insertion_point)
+    df = pd.concat([a.loc[:insertion_point], b, a.loc[insertion_point:]])
+    if reset_index: df = df.reset_index(drop=True)
+    return df
+
+
+
+@dataclass(frozen=True)
+class BlockPolicy:
+    block: str
+    parser: Parser
+    key_column: str
+    normalizer: callable
+    implemented: bool
+    numbered_tables: bool
+    single_table: bool
+
+
+BLOCK_POLICIES = {
+    # BLOCK:               'block'    parser      key   norm   imp   num   sing
+    'GLOBAL': BlockPolicy('GLOBAL', globalParser, None, None, True, False, True),
+    'FILES': BlockPolicy('FILES', standardParser, None, None, True, False, True),
+    'OPN SEQUENCE': BlockPolicy('OPN SEQUENCE', opnsequenceParser, None, None, True, False, True),
+    'PERLND': BlockPolicy('PERLND', standardParser, 'OPNID', format_opnids, True, False, False),
+    'IMPLND': BlockPolicy('IMPLND', standardParser, 'OPNID', format_opnids, True, False, False),
+    'RCHRES': BlockPolicy('RCHRES', standardParser, 'OPNID', format_opnids, True, False, False),
+    'COPY': BlockPolicy('COPY', standardParser, 'OPNID', format_opnids, True, False, False),
+    'PLTGEN': BlockPolicy('PLTGEN', standardParser, None, None, True, False, False),
+    'DISPLY': BlockPolicy('DISPLY', defaultParser, None, None, False, False, False),
+    'DURANL': BlockPolicy('DURANL', defaultParser, None, None, False, False, False),
+    'GENER': BlockPolicy('GENER', standardParser, 'OPNID', format_opnids, True, False, False),
+    'MUTSIN': BlockPolicy('MUTSIN', defaultParser, None, None, False, False, False),
+    'BMPRAC': BlockPolicy('BMPRAC', defaultParser, None, None, False, False, False),
+    'REPORT': BlockPolicy('REPORT', defaultParser, None, None, False, False, False),
+    'FTABLES': BlockPolicy('FTABLES', standardParser, None, None, True, True, False),
+    'EXT SOURCES': BlockPolicy('EXT SOURCES', standardParser, None, expand_extsources, True, False, True),
+    'NETWORK': BlockPolicy('NETWORK', standardParser, None, expand_extsources, True, False, True),
+    'SCHEMATIC': BlockPolicy('SCHEMATIC', standardParser, None, None, True, False, True),
+    'MASS-LINK': BlockPolicy('MASS-LINK', standardParser, None, None, True, True, False),
+    'EXT TARGETS': BlockPolicy('EXT TARGETS', standardParser, None, expand_extsources, True, False, True),
+    'PATHNAMES': BlockPolicy('PATHNAMES', defaultParser, None, None, False, False, False),
+    'FORMATS': BlockPolicy('FORMATS', defaultParser, None, None, False, False, False),
+    'SHADE': BlockPolicy('SHADE', defaultParser, None, None, False, False, False),
+    'SPEC-ACTIONS': BlockPolicy('SPEC-ACTIONS', defaultParser, None, None, False, False, True),
+    'MONTH-DATA': BlockPolicy('MONTH-DATA', standardParser, None, None, True, True, False),
+    'CATEGORY': BlockPolicy('CATEGORY', defaultParser, None, None, False, False, False),
+}

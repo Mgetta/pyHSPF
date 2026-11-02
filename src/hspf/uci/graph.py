@@ -7,12 +7,8 @@ Created on Thu Feb  6 14:50:45 2025
 
 import networkx as nx
 import pandas as pd
-import numpy as np
-import math
-from itertools import chain
 
-from hspf.model import uci
-from hspf.model.topology import ModelTopology, afactr_semantics
+from hspf.uci.topology import ModelTopology, afactr_semantics
 from hspf.core.types import OperationKey
 
 def create_graph(topology: ModelTopology,
@@ -119,8 +115,15 @@ class Network():
         return downstream
         
 
+    def reach_graph(self):
+        '''
+        Returns a subgraph of the model graph containing only reach nodes.
 
-    def calibration_order(self,reach_nodes = None):
+        '''
+        reach_nodes = [node for node in self.G if node.operation == 'RCHRES']
+        return self.G.subgraph(reach_nodes).copy()
+
+    def calibration_order(self,reach_ids = None):
         '''
         Determines the order in which the model reaches should be calibrated to
         prevent upstream influences. Primarily helpful when calibrating sediment and
@@ -128,9 +131,11 @@ class Network():
         '''
         
         # No need to .copy() anymore since we aren't deleting nodes
-        if reach_nodes is None:
-            reach_nodes = [node for node in self.G if node.operation == 'RCHRES']
-        sub_G = self.G.subgraph(reach_nodes) 
+        G = self.reach_graph()
+        if reach_ids is not None:
+            sub_G = G.subgraph([OperationKey('RCHRES', reach_id) for reach_id in reach_ids])
+        else:
+            sub_G = G
         
         order = []
         for generation in nx.topological_generations(sub_G):
@@ -198,7 +203,7 @@ class Network():
                                  how='left')
 
         if reach_ids is not None:
-            subwatersheds = subwatersheds.loc[subwatersheds.index.isin(reach_ids)]
+            subwatersheds = subwatersheds.loc[subwatersheds['TVOLNO'].isin(reach_ids)]
         
         subwatersheds.set_index('TVOLNO', inplace=True)
         return subwatersheds    
@@ -243,7 +248,7 @@ class Network():
     def drainage_area_landcover(self,reach_ids,upstream_reach_ids = None, group = True):
         catchment_ids = watershed_reach_ids(self.G,reach_ids,upstream_reach_ids)
         catchments = self.subwatersheds(catchment_ids)
-        areas = catchments.groupby(['SVOL','SVOLNO','LSID'])['area'].sum()
+        areas = catchments.groupby(['SVOL','SVOLNO','LSID'])['AFACTR'].sum()
         if group:  
             areas = areas.groupby(['SVOL','LSID']).sum()
         return areas

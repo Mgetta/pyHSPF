@@ -33,7 +33,7 @@ import pandas as pd
 # Data path — same CSV your current code uses, no changes to the file
 # ---------------------------------------------------------------------------
 
-_CSV_PATH = Path(__file__).parent.parent.parent / 'data' / 'ParseTable.csv'
+_CSV_PATH = Path(__file__).parent.parent / 'data' / 'ParseTable.csv'
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +113,6 @@ class TableSchema:
     block: str
     table: str
     columns: tuple  # tuple[ColumnSpec, ...]
-    index_col: Optional[str] = None
 
     @property
     def line_width(self) -> int:
@@ -153,36 +152,6 @@ class TableSchema:
 
 
 # ---------------------------------------------------------------------------
-# Configuration — which blocks index by OPNID
-# ---------------------------------------------------------------------------
-
-OPNID_INDEXED_BLOCKS = frozenset({
-    'PERLND', 'IMPLND', 'RCHRES', 'COPY', 'GENER',
-})
-
-# Blocks whose table names in the UCI file carry a user-defined trailing
-# number (e.g. "FTABLE42", "MASS-LINK3", "MONTH-DATA5").  The CSV stores
-# a single canonical name without any number.  When resolving a schema we
-# need to strip the trailing digits to recover that canonical name.
-#
-# NOT every block does this — PERLND tables like "PWAT-PARM2" have the "2"
-# baked into the CSV as part of the canonical name.  Only the blocks listed
-# here use user-assigned instance numbers.
-NUMBERED_TABLE_BLOCKS = frozenset({
-    'FTABLES',
-    'MASS-LINK',
-    'MONTH-DATA',
-})
-
-CUSTOM_BLOCKS = frozenset({'GLOBAL', 'OPN SEQUENCE'})
-
-UNIMPLEMENTED_BLOCKS = frozenset({
-    'DISPLY', 'DURANL', 'MUTSIN', 'BMPRAC', 'REPORT',
-    'PATHNAMES', 'FORMATS', 'SHADE', 'SPEC-ACTIONS', 'CATEGORY',
-})
-
-
-# ---------------------------------------------------------------------------
 # load_schemas() — build the SCHEMAS dict from ParseTable.csv
 # ---------------------------------------------------------------------------
 
@@ -195,8 +164,7 @@ def load_schemas(csv_path: Path) -> dict:
         dtype={'width': 'Int64', 'start': 'Int64',
                'stop': 'Int64', 'space': 'Int64'},
     )
-
-    df = df.loc[~df['block'].isin(UNIMPLEMENTED_BLOCKS | CUSTOM_BLOCKS)]
+    df = df.dropna(subset = ['column','dtype','start','stop'])
     schemas = {}
 
     for (block, table), grp in df.groupby(['block', 'table']):
@@ -217,13 +185,11 @@ def load_schemas(csv_path: Path) -> dict:
                        start=last_stop, stop=last_stop),
         )
 
-        index_col = 'OPNID' if block in OPNID_INDEXED_BLOCKS else None
 
         schemas[(block, table)] = TableSchema(
             block=block,
             table=table,
             columns=cols,
-            index_col=index_col,
         )
 
     return schemas
@@ -300,20 +266,23 @@ def resolve_schema(block: str, table_name: str) -> TableSchema:
     KeyError
         If no schema exists for the resolved key.
     """
-    if block in NUMBERED_TABLE_BLOCKS:
-        canonical = _strip_instance_number(table_name)
-        key = (block, canonical)
-    else:
-        key = (block, table_name)
+
+
+    key = (block, table_name)
 
     try:
         return SCHEMAS[key]
     except KeyError:
-        raise KeyError(
-            f"No schema found for block='{block}', table='{table_name}' "
-            f"(resolved key={key}). "
-            f"Check that ParseTable.csv has rows for this combination."
-        ) from None
+        try:
+            canonical = _strip_instance_number(table_name)
+            key = (block, canonical)
+            return SCHEMAS[key]
+        except KeyError:
+            raise KeyError(
+                f"No schema found for block='{block}', table='{table_name}' "
+                f"(resolved key={key}). "
+                f"Check that ParseTable.csv has rows for this combination."
+            ) from None
 
 
 # ---------------------------------------------------------------------------

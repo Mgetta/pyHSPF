@@ -7,33 +7,8 @@ from enum import Enum, IntEnum, StrEnum
 from typing import ClassVar, NamedTuple
 
 
-class OutputLevel(IntEnum):
-    """HSPF output levels written to HBN files. 
-    2 means "every PIVL intervals" whose true duration is INDELT × PIVL; 3/4/5 are day/month/year 
-    For MPCA models, 2 is typically used for hourly outputs."""
+MAX_OPNID = 999
 
-    HOURLY = 2
-    DAILY = 3
-    MONTHLY = 4
-    YEARLY = 5
-
-
-TimeStep = OutputLevel
-
-
-TIMESTEP_LABELS: dict[OutputLevel, str] = {
-    OutputLevel.HOURLY: "hourly",
-    OutputLevel.DAILY: "daily",
-    OutputLevel.MONTHLY: "monthly",
-    OutputLevel.YEARLY: "yearly",
-}
-
-PANDAS_FREQ: dict[OutputLevel, str] = {
-    OutputLevel.HOURLY: "h",
-    OutputLevel.DAILY: "D",
-    OutputLevel.MONTHLY: "ME",
-    OutputLevel.YEARLY: "YE",
-}
 
 
 class OperationType(str, Enum):
@@ -51,34 +26,6 @@ class OperationType(str, Enum):
     BMPRAC = "BMPRAC"
     REPORT = "REPORT"
 
-
-class EntityType(str, Enum):
-    """Operation types that own HBN output series."""
-
-    PERLND = "PERLND"
-    IMPLND = "IMPLND"
-    RCHRES = "RCHRES"
-
-
-OPERATIONS = tuple(entity_type.value for entity_type in EntityType)
-MAX_OPNID = 999
-
-
-class RoutingSource(StrEnum):
-    """How a routing-transfer row was declared in the UCI."""
-
-    SCHEMATIC_MASS_LINK = "SCHEMATIC_MASS_LINK"
-    NETWORK = "NETWORK"
-    MANUAL = "MANUAL"
-
-
-class EdgeRole(StrEnum):
-    """High-level operation-to-operation routing role."""
-
-    LAND_TO_REACH = "LAND_TO_REACH"
-    LAND_TO_LAND = "LAND_TO_LAND"
-    REACH_TO_REACH = "REACH_TO_REACH"
-    UTILITY = "UTILITY"
 
 class Activity(str, Enum):
     """HSPF activity/module names used in output blocks."""
@@ -110,6 +57,62 @@ class Activity(str, Enum):
     PLANK = "PLANK"
     PHCARB = "PHCARB"
 
+
+
+OPERATIONS = tuple(entity_type.value for entity_type in OperationType)
+
+
+
+class EntityType(str, Enum):
+    """Operation types that own HBN output series."""
+
+    PERLND = "PERLND"
+    IMPLND = "IMPLND"
+    RCHRES = "RCHRES"
+
+
+class OutputLevel(IntEnum):
+    """HSPF output levels written to HBN files. 
+    2 means "every PIVL intervals" whose true duration is INDELT × PIVL; 3/4/5 are day/month/year 
+    For MPCA models, 2 is typically used for hourly outputs."""
+
+    HOURLY = 2
+    DAILY = 3
+    MONTHLY = 4
+    YEARLY = 5
+
+
+TIMESTEP_LABELS: dict[str, OutputLevel] = {
+    "hourly": OutputLevel.HOURLY,
+    "daily": OutputLevel.DAILY,
+    "monthly": OutputLevel.MONTHLY,
+    "yearly": OutputLevel.YEARLY,
+}
+
+PANDAS_FREQ: dict[OutputLevel, str] = {
+    OutputLevel.HOURLY: "h",
+    OutputLevel.DAILY: "D",
+    OutputLevel.MONTHLY: "ME",
+    OutputLevel.YEARLY: "YE",
+}
+
+
+
+class RoutingSource(StrEnum):
+    """How a routing-transfer row was declared in the UCI."""
+
+    SCHEMATIC_MASS_LINK = "SCHEMATIC_MASS_LINK"
+    NETWORK = "NETWORK"
+    MANUAL = "MANUAL"
+
+
+class EdgeRole(StrEnum):
+    """High-level operation-to-operation routing role."""
+
+    LAND_TO_REACH = "LAND_TO_REACH"
+    LAND_TO_LAND = "LAND_TO_LAND"
+    REACH_TO_REACH = "REACH_TO_REACH"
+    UTILITY = "UTILITY"
 
 VALID_ACTIVITIES: dict[EntityType, frozenset[Activity]] = {
     EntityType.PERLND: frozenset(
@@ -248,11 +251,9 @@ class UnitSystem(IntEnum):
 
 class VariableKind(str, Enum):
     """Physical kind used by the variable lexicon."""
-
     FLUX = "flux"
     STATE = "state"
-    CONCENTRATION = "concentration"
-    TEMPERATURE = "temperature"
+
 
 
 class AggregationMethod(str, Enum):
@@ -262,7 +263,6 @@ class AggregationMethod(str, Enum):
     MEAN = "MEAN"
     LAST = "LAST"
     WEIGHTED_MEAN = "WEIGHTED_MEAN"
-
 
 def _coerce_enum(enum_type: type[Enum], value: Enum | str) -> Enum:
     if isinstance(value, enum_type):
